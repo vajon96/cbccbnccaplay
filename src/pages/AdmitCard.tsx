@@ -228,7 +228,7 @@ export function AdmitCard() {
               </p>
               <p className="text-[8px] text-gray-300 mt-1">
                 Generated on {new Date().toLocaleString()} | CBCC BNCC Enrollment System
-              </p>
+              </p> 
             </div>
           </div>
         </div>
