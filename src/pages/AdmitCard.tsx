@@ -211,21 +211,15 @@ export function AdmitCard() {
               <hr className="border-black mb-4" />
               <h4 className="text-sm font-bold font-montserrat uppercase mb-3">Important Instructions for Candidates</h4>
               <ul className="text-[11px] leading-relaxed space-y-1.5 list-disc pl-5 text-justify">
-                <li>This admit card must be brought to the examination hall.</li>
-                <li>Candidates must arrive in a neat, clean, and well-presented manner.</li>
-                <li>Proper preparation for both the written and physical tests is required.</li>
-                <li>Male candidates must maintain a proper haircut and wear disciplined attire.</li>
-                <li>If a physical test is conducted, candidates must bring tracksuit and sports shoes.</li>
-                <li>Candidates must report within the specified time.</li>
-                <li>Any form of disorder, misconduct, or indiscipline will not be tolerated.</li>
+               <p>
+This admit card must be presented at the examination hall. Candidates must arrive in a neat, clean, and well-groomed condition. Proper preparation for both written and physical tests is mandatory. Male candidates must maintain a proper haircut and wear disciplined attire. For physical tests, candidates must bring a tracksuit and sports shoes. Candidates must report within the specified time; late entry may not be permitted. Any form of misconduct, disorder, or indiscipline will result in disqualification.
+</p>
               </ul>
             </div>
 
             {/* Footer */}
             <div className="mt-6 pt-4 border-t border-gray-200 text-center relative z-10">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                System Generated – No Signature Required
-              </p>
+        
               <p className="text-[8px] text-gray-300 mt-1">
                 Generated on {new Date().toLocaleString()} | CBCC BNCC Enrollment System
               </p>
