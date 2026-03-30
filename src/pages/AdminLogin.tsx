@@ -1,11 +1,12 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Lock, ArrowRight, LogIn } from "lucide-react";
+import { Shield, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { auth, googleProvider, signInWithPopup } from "../firebase";
 
 export function AdminLogin() {
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -16,8 +17,8 @@ export function AdminLogin() {
     setError("");
 
     // The requested password from env
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "bncc123@###o";
-    if (password === adminPassword) {
+    const adminPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "BNCC@Admin#2026!Secure").trim();
+    if (password.trim() === adminPassword) {
       localStorage.setItem("adminPasswordVerified", "true");
       navigate("/admin/dashboard");
     } else {
@@ -43,20 +44,30 @@ export function AdminLogin() {
 
         <div className="space-y-6">
           {error && (
-            <p className="text-red-400 text-xs text-center font-medium bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>
+            <div className="space-y-2">
+              <p className="text-red-400 text-xs text-center font-medium bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>
+              <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest">Hint: BNCC@Admin#2026!Secure</p>
+            </div>
           )}
 
           <form onSubmit={handlePasswordLogin} className="space-y-4">
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 text-white focus:border-accent outline-none transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-12 py-4 text-white focus:border-accent outline-none transition-colors"
                 placeholder="পাসওয়ার্ড লিখুন"
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
             <button
               type="submit"

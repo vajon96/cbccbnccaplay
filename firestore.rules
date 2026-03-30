@@ -98,13 +98,11 @@ service cloud.firestore {
                       request.resource.data.status == 'Pending' &&
                       request.resource.data.attendanceStatus == 'Absent';
       
-      // Admins can read, update, and delete
-      allow read: if isAdmin();
-      allow update: if isAdmin() && isValidApplicant(request.resource.data);
-      allow delete: if isAdmin();
+      // Access allowed for dashboard operations
+      // NOTE: Since Google Auth was removed per user request, these are now public.
+      allow read, update, delete: if true;
 
       // Public can read their own admit card if they have the ID
-      // (This is a simplified approach, ideally we'd use auth for applicants too)
       allow get: if true; 
     }
 

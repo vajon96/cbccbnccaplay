@@ -3,24 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { 
   Users, CheckCircle, XCircle, Clock, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
-  QrCode, Scan, Calendar, Camera, X, LogIn
+  QrCode, Scan, Calendar, Camera, X
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { Html5QrcodeScanner } from "html5-qrcode";
-import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, auth, googleProvider, signInWithPopup, onAuthStateChanged, signOut, Timestamp, handleFirestoreError, OperationType } from "../firebase";
+import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType } from "../firebase";
 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [attendanceFilter, setAttendanceFilter] = useState("All");
   const [showScanner, setShowScanner] = useState(false);
   const [scannedApplicant, setScannedApplicant] = useState<any>(null);
-  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,22 +26,6 @@ export function AdminDashboard() {
       navigate("/admin");
       return;
     }
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || "sajondey102@gmail.com";
-      if (currentUser && currentUser.email === adminEmail) {
-        setUser(currentUser);
-      } else {
-        setUser(null);
-      }
-      setAuthLoading(false);
-    });
-
-    return () => unsubscribeAuth();
-  }, [navigate]);
-
-  useEffect(() => {
-    if (!user) return;
 
     const q = query(collection(db, "applicants"), orderBy("createdAt", "desc"));
     const path = "applicants";
@@ -61,28 +42,9 @@ export function AdminDashboard() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [navigate]);
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || "sajondey102@gmail.com";
-      if (result.user.email !== adminEmail) {
-        setError("আপনার এই ড্যাশবোর্ড অ্যাক্সেস করার অনুমতি নেই।");
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.error("Login error:", err);
-      setError("লগইন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
+  const handleLogout = () => {
     localStorage.removeItem("adminPasswordVerified");
     navigate("/admin");
   };
@@ -104,7 +66,18 @@ export function AdminDashboard() {
   }, [showScanner]);
 
   const onScanSuccess = async (decodedText: string) => {
-    const id = decodedText.replace("BNCC-", "").split("-")[0];
+    let id = "";
+    try {
+      // Try to parse as JSON first (new format)
+      const data = JSON.parse(decodedText);
+      id = data.id;
+    } catch (e) {
+      // Fallback to old format or raw ID
+      id = decodedText;
+    }
+
+    if (!id) return;
+
     const path = `applicants/${id}`;
     try {
       const docRef = doc(db, "applicants", id);
@@ -118,7 +91,7 @@ export function AdminDashboard() {
         });
         setScannedApplicant({ ...applicant, id });
       } else {
-        alert("আবেদনকারী পাওয়া যায়নি!");
+        alert("আবেদনকারী পাওয়া যায়নি! (ID: " + id + ")");
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
@@ -186,8 +159,6 @@ export function AdminDashboard() {
     link.click();
   };
 
-
-
   const filteredApplicants = applicants.filter(app => {
     const matchesSearch = app.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           app.collegeId.toLowerCase().includes(searchTerm.toLowerCase());
@@ -202,45 +173,6 @@ export function AdminDashboard() {
     approved: applicants.filter(a => a.status === 'Approved').length,
     present: applicants.filter(a => a.attendanceStatus === 'Present').length,
   };
-
-  if (authLoading) return <div className="flex items-center justify-center h-screen text-white">যাচাই করা হচ্ছে...</div>;
-
-  if (!user) {
-    return (
-      <div className="min-h-[80vh] flex items-center justify-center px-4">
-        <div className="max-w-md w-full glass-card p-10 rounded-[2.5rem] space-y-8 text-center">
-          <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto">
-            <Shield className="w-8 h-8 text-accent" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">Google লগইন প্রয়োজন</h1>
-          <p className="text-slate-400 text-sm">ড্যাশবোর্ডের তথ্য দেখতে আপনার Google অ্যাকাউন্ট দিয়ে লগইন করুন</p>
-          
-          {error && (
-            <p className="text-red-400 text-xs font-medium bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>
-          )}
-
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full py-4 bg-white text-primary font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-slate-100 transition-all disabled:opacity-50"
-          >
-            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-            Google দিয়ে লগইন করুন
-          </button>
-
-          <button
-            onClick={() => {
-              localStorage.removeItem("adminPasswordVerified");
-              navigate("/admin");
-            }}
-            className="text-slate-500 text-sm hover:text-white transition-colors"
-          >
-            আবার পাসওয়ার্ড দিন
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (loading) return <div className="flex items-center justify-center h-screen text-white">তথ্য লোড হচ্ছে...</div>;
 
