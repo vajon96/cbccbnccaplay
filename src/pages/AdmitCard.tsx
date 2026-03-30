@@ -89,7 +89,7 @@ export function AdmitCard() {
           }}
         >
           {/* Outer Border */}
-          <div className="w-full h-full border-2 border-black rounded-[5px] p-8 relative flex flex-col">
+          <div className="w-full h-full border-2 border-black rounded-[5px] p-6 relative flex flex-col">
             
             {/* Watermark */}
             <div className="absolute inset-0 flex items-center justify-center opacity-[0.05] pointer-events-none">
@@ -137,7 +137,7 @@ export function AdmitCard() {
             <hr className="border-black mb-6" />
 
             {/* Candidate Section */}
-            <div className="flex justify-between items-start mb-8 relative z-10">
+            <div className="flex justify-between items-start mb-6 relative z-10">
               <div className="flex flex-col items-center gap-2">
                 <div className="w-[1.5in] h-[2in] border border-black overflow-hidden bg-gray-50 flex items-center justify-center">
                   {applicant.photo ? (
@@ -174,7 +174,7 @@ export function AdmitCard() {
             </div>
 
             {/* Candidate Information Section */}
-            <div className="mb-8 relative z-10">
+            <div className="mb-6 relative z-10">
               <div className="grid grid-cols-1 gap-y-3">
                 {[
                   { label: "Name", value: applicant.fullName },
@@ -193,24 +193,17 @@ export function AdmitCard() {
               </div>
             </div>
 
-            {/* Examination Details */}
-            <div className="mb-8 relative z-10">
+            {/* Examination Notice */}
+            <div className="mb-6 relative z-10">
               <hr className="border-black mb-4" />
-              <h4 className="text-sm font-bold font-montserrat uppercase mb-3 text-[#4B5320]">Examination Details</h4>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase">Exam Date</span>
-                  <span className="text-sm font-bold">To be announced</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase">Time</span>
-                  <span className="text-sm font-bold">08:00 AM</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase">Venue</span>
-                  <span className="text-sm font-bold">College Ground</span>
-                </div>
-              </div>
+              <h4 className="text-sm font-bold font-montserrat uppercase mb-3 text-[#4B5320]">Examination Notice</h4>
+              <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                The examination date will be announced through the Platoon Officer’s official Facebook page. 
+                Please stay updated by following the official link: 
+                <a href="https://www.facebook.com/cbcc.bncc" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline ml-1">
+                  https://www.facebook.com/cbcc.bncc
+                </a>
+              </p>
             </div>
 
             {/* Important Instructions */}
