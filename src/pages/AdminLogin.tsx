@@ -16,9 +16,13 @@ export function AdminLogin() {
     setLoading(true);
     setError("");
 
-    // The requested password from env
-    const adminPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "BNCC@Admin#2026!Secure").trim();
-    if (password.trim() === adminPassword) {
+    // The requested password from env and fallback
+    const envPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "").trim();
+    const fallbackPassword = "BNCC@Admin#2026!Secure";
+    
+    const inputPassword = password.trim();
+    
+    if (inputPassword === fallbackPassword || (envPassword && inputPassword === envPassword)) {
       localStorage.setItem("adminPasswordVerified", "true");
       navigate("/admin/dashboard");
     } else {
@@ -46,7 +50,6 @@ export function AdminLogin() {
           {error && (
             <div className="space-y-2">
               <p className="text-red-400 text-xs text-center font-medium bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>
-              <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest">Hint: BNCC@Admin#2026!Secure</p>
             </div>
           )}
 

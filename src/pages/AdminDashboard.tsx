@@ -13,6 +13,7 @@ import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [attendanceFilter, setAttendanceFilter] = useState("All");
@@ -36,8 +37,10 @@ export function AdminDashboard() {
       }));
       setApplicants(applicantsData);
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      setError(null);
+    }, (err) => {
+      console.error("Firestore onSnapshot error:", err);
+      setError("ডেটা লোড করতে সমস্যা হচ্ছে। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ অথবা ফায়ারবেস কনফিগারেশন চেক করুন।");
       setLoading(false);
     });
 
@@ -176,6 +179,22 @@ export function AdminDashboard() {
 
   if (loading) return <div className="flex items-center justify-center h-screen text-white">তথ্য লোড হচ্ছে...</div>;
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen text-white p-4 text-center space-y-4">
+        <XCircle className="w-16 h-16 text-red-500" />
+        <h2 className="text-xl font-bold">ত্রুটি ঘটেছে!</h2>
+        <p className="text-slate-400 max-w-md">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-6 py-2 bg-accent text-primary font-bold rounded-xl hover:bg-white transition-all"
+        >
+          আবার চেষ্টা করুন
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-12 space-y-8">
       {/* Header */}
@@ -292,7 +311,16 @@ export function AdminDashboard() {
                         )}
                       </div>
                       <div>
-                        <p className="font-bold text-white">{app.fullName}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-white">{app.fullName}</p>
+                          <button 
+                            onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
+                            className="text-accent hover:text-white transition-colors"
+                            title="Download Admit Card"
+                          >
+                            <Download className="w-3 h-3" />
+                          </button>
+                        </div>
                         <p className="text-xs text-slate-500">{app.mobile || "No Mobile"}</p>
                       </div>
                     </div>
@@ -330,6 +358,13 @@ export function AdminDashboard() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
+                        className="p-2 hover:bg-accent/10 text-slate-500 hover:text-accent rounded-lg transition-colors"
+                        title="Download Admit Card"
+                      >
+                        <Download className="w-5 h-5" />
+                      </button>
                       <button
                         onClick={() => updateStatus(app.id, undefined as any, app.attendanceStatus === 'Present' ? 'Absent' : 'Present')}
                         className={`p-2 rounded-lg transition-colors ${

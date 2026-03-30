@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { Download, Printer, CheckCircle, Shield } from "lucide-react";
 import jsPDF from "jspdf";
@@ -8,6 +8,7 @@ import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebas
 
 export function AdmitCard() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const [applicant, setApplicant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -33,6 +34,16 @@ export function AdmitCard() {
 
     fetchApplicant();
   }, [id]);
+
+  useEffect(() => {
+    if (applicant && searchParams.get("download") === "true") {
+      // Small delay to ensure QR code and images are rendered
+      const timer = setTimeout(() => {
+        handleDownloadPDF();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [applicant, searchParams]);
 
   const handleDownloadPDF = async () => {
     if (!cardRef.current) return;
