@@ -4,7 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Download, Printer, Shield, CheckCircle } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { db, doc, getDoc } from "../firebase";
+import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
 
 export function AdmitCard() {
   const { id } = useParams();
@@ -15,6 +15,7 @@ export function AdmitCard() {
   useEffect(() => {
     const fetchApplicant = async () => {
       if (!id) return;
+      const path = `applicants/${id}`;
       try {
         const docRef = doc(db, "applicants", id);
         const docSnap = await getDoc(docRef);
@@ -24,7 +25,7 @@ export function AdmitCard() {
           console.error("No such document!");
         }
       } catch (error) {
-        console.error("Error fetching applicant:", error);
+        handleFirestoreError(error, OperationType.GET, path);
       } finally {
         setLoading(false);
       }

@@ -15,8 +15,9 @@ export function AdminLogin() {
     setLoading(true);
     setError("");
 
-    // The requested password: bncc123@###o
-    if (password === "bncc123@###o") {
+    // The requested password from env
+    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "bncc123@###o";
+    if (password === adminPassword) {
       localStorage.setItem("adminPasswordVerified", "true");
       navigate("/admin/dashboard");
     } else {

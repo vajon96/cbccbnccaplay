@@ -31,7 +31,8 @@ export function AdminDashboard() {
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser && currentUser.email === "sajondey102@gmail.com") {
+      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || "sajondey102@gmail.com";
+      if (currentUser && currentUser.email === adminEmail) {
         setUser(currentUser);
       } else {
         setUser(null);
@@ -67,7 +68,8 @@ export function AdminDashboard() {
     setError("");
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      if (result.user.email !== "sajondey102@gmail.com") {
+      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || "sajondey102@gmail.com";
+      if (result.user.email !== adminEmail) {
         setError("আপনার এই ড্যাশবোর্ড অ্যাক্সেস করার অনুমতি নেই।");
         await signOut(auth);
       }

@@ -42,15 +42,46 @@ export function EnrollmentForm() {
     }
   };
 
-  const capturePhoto = () => {
+  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    });
+  };
+
+  const capturePhoto = async () => {
     if (videoRef.current && canvasRef.current) {
       const context = canvasRef.current.getContext("2d");
       if (context) {
         canvasRef.current.width = videoRef.current.videoWidth;
         canvasRef.current.height = videoRef.current.videoHeight;
         context.drawImage(videoRef.current, 0, 0);
-        const photoData = canvasRef.current.toDataURL("image/jpeg");
-        setFormData({ ...formData, photo: photoData });
+        const photoData = canvasRef.current.toDataURL("image/jpeg", 0.9);
+        const compressedPhoto = await compressImage(photoData);
+        setFormData({ ...formData, photo: compressedPhoto });
         
         // Stop camera
         const stream = videoRef.current.srcObject as MediaStream;
@@ -62,15 +93,29 @@ export function EnrollmentForm() {
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("ছবির সাইজ ৫ মেগাবাইটের বেশি হতে পারবে না।");
+        return;
+      }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, photo: reader.result as string });
+      reader.onloadend = async () => {
+        const compressedPhoto = await compressImage(reader.result as string);
+        setFormData({ ...formData, photo: compressedPhoto });
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleSubmit = async () => {
+    // Basic validation
+    const requiredFields = ['fullName', 'fatherName', 'motherName', 'dob', 'collegeId', 'roll', 'session', 'photo'];
+    const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
+    
+    if (missingFields.length > 0) {
+      alert("অনুগ্রহ করে সকল প্রয়োজনীয় তথ্য এবং ছবি প্রদান করুন।");
+      return;
+    }
+
     setLoading(true);
     const id = `BNCC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const path = `applicants/${id}`;
