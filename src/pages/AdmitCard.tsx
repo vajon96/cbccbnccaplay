@@ -1,240 +1,391 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
-import { Download, Printer, CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import { Download, Printer, CheckCircle, Shield, AlertCircle, Loader2 } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
 
+// Types
+interface Applicant {
+  id: string;
+  fullName: string;
+  dob: string;
+  roll: string;
+  class: string;
+  mobile: string;
+  photo?: string;
+  status?: string;
+  collegeId?: string;
+}
+
+interface QRData {
+  id: string;
+  name: string;
+  collegeId?: string;
+  status?: string;
+}
+
+// Constants
+const COLLEGE_NAME = "COX'S BAZAR CITY COLLEGE";
+const BNCC_PLATOON = "BNCC PLATOON (ARMY WING)";
+const ADMIT_CARD_YEAR = "2025";
+const WATERMARK_IMAGE = "https://i.ibb.co/Fb3R6wR/Bncc-logo.png";
+const COLLEGE_LOGO = "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png";
+const BNCC_LOGO = "https://i.ibb.co/Fb3R6wR/Bncc-logo.png";
+const FACEBOOK_URL = "https://www.facebook.com/cbcc.bncc";
+
+// Helper Components
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center h-screen">
+    <Loader2 className="w-8 h-8 animate-spin text-[#4B5320]" />
+  </div>
+);
+
+const ErrorMessage = ({ message }: { message: string }) => (
+  <div className="flex flex-col items-center justify-center h-screen gap-4">
+    <AlertCircle className="w-12 h-12 text-red-500" />
+    <p className="text-lg text-red-500">{message}</p>
+  </div>
+);
+
+const InfoField = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-baseline">
+    <span className="w-48 font-bold text-sm uppercase font-montserrat">{label}</span>
+    <span className="mx-2 font-bold">:</span>
+    <span className="flex-grow font-medium text-sm border-b border-dotted border-gray-400 pb-0.5">
+      {value || "N/A"}
+    </span>
+  </div>
+);
+
+const InstructionItem = ({ children }: { children: React.ReactNode }) => (
+  <li className="text-[11px] leading-relaxed list-disc ml-5 text-justify">
+    {children}
+  </li>
+);
+
 export function AdmitCard() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const [applicant, setApplicant] = useState<any>(null);
+  const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  // Fetch applicant data
   useEffect(() => {
     const fetchApplicant = async () => {
-      if (!id) return;
+      if (!id) {
+        setError("No applicant ID provided");
+        setLoading(false);
+        return;
+      }
+
       try {
         const docRef = doc(db, "applicants", id);
         const docSnap = await getDoc(docRef);
+        
         if (docSnap.exists()) {
-          setApplicant({ id: docSnap.id, ...docSnap.data() });
+          setApplicant({ id, ...docSnap.data() } as Applicant);
+        } else {
+          setError("Applicant not found");
         }
       } catch (error) {
+        console.error("Error fetching applicant:", error);
         handleFirestoreError(error, OperationType.GET, `applicants/${id}`);
+        setError("Failed to load applicant data. Please try again.");
       } finally {
         setLoading(false);
       }
     };
+
     fetchApplicant();
   }, [id]);
 
-  // Automatically trigger download if URL param is present
+  // Handle automatic download
   useEffect(() => {
-    if (applicant && searchParams.get("download") === "true") {
-      const timer = setTimeout(() => handleDownloadPDF(), 2000);
+    if (applicant && searchParams.get("download") === "true" && !isDownloading) {
+      const timer = setTimeout(() => {
+        handleDownloadPDF();
+      }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [applicant, searchParams]);
+  }, [applicant, searchParams, isDownloading]);
 
+  // Generate QR code data
+  const getQRData = useCallback((): QRData => ({
+    id: applicant?.id || "",
+    name: applicant?.fullName || "",
+    collegeId: applicant?.collegeId,
+    status: applicant?.status
+  }), [applicant]);
+
+  // Handle PDF download
   const handleDownloadPDF = async () => {
     if (!cardRef.current || !applicant) return;
-    setIsGenerating(true);
-
+    
+    setIsDownloading(true);
+    
     try {
       const canvas = await html2canvas(cardRef.current, {
-        scale: 3, // Higher scale for professional print quality
-        useCORS: true,
-        allowTaint: true,
+        scale: 3, // Increased for better quality
         backgroundColor: "#ffffff",
+        useCORS: true,
         logging: false,
+        windowWidth: cardRef.current.scrollWidth,
+        windowHeight: cardRef.current.scrollHeight,
+        onclone: (clonedDoc, element) => {
+          // Ensure all images are loaded in the cloned document
+          const images = element.getElementsByTagName('img');
+          return Promise.all(Array.from(images).map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise((resolve) => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            });
+          }));
+        }
       });
-
-      const imgData = canvas.toDataURL("image/png", 1.0);
+      
+      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
-        format: "a4",
+        format: "a4"
       });
-
-      const imgProps = pdf.getImageProperties(imgData);
+      
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Admit_Card_${applicant.fullName.replace(/\s+/g, "_")}.pdf`);
-    } catch (err) {
-      console.error("PDF Generation Error:", err);
-      alert("Failed to generate PDF. Please try the Print button instead.");
+      pdf.save(`Admit_Card_${applicant.fullName.replace(/\s+/g, '_')}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      setError("Failed to generate PDF. Please try again.");
     } finally {
-      setIsGenerating(false);
+      setIsDownloading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-green-500" />
-        <p className="text-slate-400 animate-pulse">আবেদন তথ্য লোড হচ্ছে...</p>
-      </div>
-    );
-  }
+  // Handle print
+  const handlePrint = () => {
+    window.print();
+  };
 
-  if (!applicant) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen text-white gap-4">
-        <AlertCircle className="w-16 h-16 text-red-500" />
-        <h2 className="text-2xl font-bold">Applicant Not Found</h2>
-        <p className="text-slate-400">The record you are looking for does not exist.</p>
-      </div>
-    );
-  }
+  // Loading and error states
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
+  if (!applicant) return <ErrorMessage message="Applicant not found" />;
+
+  // Applicant information fields
+  const infoFields = [
+    { label: "Name", value: applicant.fullName },
+    { label: "Date of Birth", value: applicant.dob },
+    { label: "Roll Number", value: applicant.roll },
+    { label: "Application ID", value: applicant.id },
+    { label: "Department / Group", value: applicant.class },
+    { label: "Mobile Number", value: applicant.mobile }
+  ];
+
+  // Instructions list
+  const instructions = [
+    "This admit card must be brought to the examination hall.",
+    "Candidates must arrive in a neat, clean, and well-presented manner.",
+    "Proper preparation for both the written and physical tests is required.",
+    "Male candidates must maintain a proper haircut and wear disciplined attire.",
+    "If a physical test is conducted, candidates must bring tracksuit and sports shoes.",
+    "Candidates must report within the specified time.",
+    "Any form of disorder, misconduct, or indiscipline will not be tolerated."
+  ];
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12 space-y-8">
-      {/* CSS for Print Mode */}
-      <style>{`
-        @media print {
-          body { background: white !important; margin: 0; padding: 0; }
-          .print-hidden { display: none !important; }
-          .print-area { 
-            box-shadow: none !important; 
-            border: none !important; 
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-          }
-        }
-      `}</style>
-
-      <div className="text-center space-y-4 print-hidden">
+      {/* Success Message */}
+      <div className="text-center space-y-4 print:hidden">
         <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
           <CheckCircle className="w-10 h-10 text-green-500" />
         </div>
         <h1 className="text-3xl font-bold text-white">আবেদন সফল হয়েছে!</h1>
-        <p className="text-slate-400">আপনার প্রবেশপত্রটি ডাউনলোড বা প্রিন্ট করে সংরক্ষণ করুন।</p>
+        <p className="text-slate-400">আপনার প্রবেশপত্রটি ডাউনলোড করে সংরক্ষণ করুন।</p>
       </div>
 
       {/* Admit Card Preview */}
       <div className="flex justify-center overflow-x-auto pb-8 no-scrollbar">
-        <div 
+        <div
           ref={cardRef}
-          className="print-area w-[210mm] min-h-[297mm] bg-white text-black relative shadow-2xl flex-shrink-0"
-          style={{ padding: "15mm" }}
+          className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-2xl flex-shrink-0"
+          style={{
+            fontFamily: "'Roboto', sans-serif",
+            padding: "1in"
+          }}
         >
-          <div className="w-full h-full border-[3px] border-[#4B5320] rounded-sm p-8 relative flex flex-col min-h-[267mm]">
-            
+          {/* Outer Border */}
+          <div className="w-full h-full border-2 border-black rounded-[5px] p-6 relative flex flex-col">
             {/* Watermark */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-[0.07] pointer-events-none">
-              <img 
-                src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
-                alt="Watermark" 
-                className="w-[350px] grayscale" 
+            <div className="absolute inset-0 flex items-center justify-center opacity-[0.05] pointer-events-none">
+              <img
+                src={WATERMARK_IMAGE}
+                alt="Watermark"
+                className="w-[300px] h-auto grayscale"
+                referrerPolicy="no-referrer"
+                loading="lazy"
               />
             </div>
 
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8 relative z-10">
-              <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" className="w-20 h-20 object-contain" alt="College" crossOrigin="anonymous" />
-              <div className="text-center flex-grow">
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">COX’S BAZAR CITY COLLEGE</h2>
-                <h3 className="text-lg font-bold text-[#4B5320] uppercase">BNCC PLATOON (ARMY WING)</h3>
-                <div className="mt-3 inline-block bg-[#4B5320] text-white py-1 px-6 rounded-sm">
-                  <h1 className="text-xl font-bold uppercase tracking-widest">ADMIT CARD 2025</h1>
-                </div>
+            {/* Army Green Header Strip */}
+            <div className="absolute top-0 left-0 w-full h-2 bg-[#4B5320] rounded-t-[3px]"></div>
+
+            {/* Header Section */}
+            <div className="flex items-center justify-between mb-6 relative z-10">
+              <div className="w-20 h-20 flex items-center justify-center">
+                <img
+                  src={COLLEGE_LOGO}
+                  alt="College Logo"
+                  className="max-h-full max-w-full object-contain"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                />
               </div>
-              <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" className="w-20 h-20 object-contain" alt="BNCC" crossOrigin="anonymous" />
+              <div className="text-center flex-grow px-4">
+                <h2 className="text-xl font-bold font-montserrat uppercase leading-tight">
+                  {COLLEGE_NAME}
+                </h2>
+                <h3 className="text-base font-semibold font-montserrat text-[#4B5320] uppercase leading-tight">
+                  {BNCC_PLATOON}
+                </h3>
+                <div className="mt-2 inline-block border-y-2 border-black py-1 px-4">
+                  <h1 className="text-2xl font-extrabold font-montserrat uppercase tracking-wider">
+                    ADMIT CARD {ADMIT_CARD_YEAR}
+                  </h1>
+                </div>
+                <p className="text-[10px] font-medium italic mt-1 text-gray-600">
+                  "Computer Generated Admit Card (No Signature Required)"
+                </p>
+              </div>
+              <div className="w-20 h-20 flex items-center justify-center">
+                <img
+                  src={BNCC_LOGO}
+                  alt="BNCC Logo"
+                  className="max-h-full max-w-full object-contain"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                />
+              </div>
             </div>
 
-            <div className="flex justify-between items-start mb-10 relative z-10 border-b-2 border-gray-100 pb-8">
-              <div className="space-y-4 flex-grow">
-                {[
-                  { label: "Candidate Name", value: applicant.fullName },
-                  { label: "Application ID", value: applicant.id, highlight: true },
-                  { label: "College Roll", value: applicant.roll },
-                  { label: "Department", value: applicant.class },
-                  { label: "Date of Birth", value: applicant.dob },
-                  { label: "Mobile", value: applicant.mobile },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center">
-                    <span className="w-40 font-bold text-xs uppercase text-gray-500">{item.label}</span>
-                    <span className="mx-2">:</span>
-                    <span className={`text-sm font-bold ${item.highlight ? 'text-red-600' : 'text-gray-900'}`}>
-                      {item.value}
-                    </span>
+            <hr className="border-black mb-6" />
+
+            {/* Candidate Section */}
+            <div className="flex justify-between items-start mb-6 relative z-10">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-[1.5in] h-[2in] border border-black overflow-hidden bg-gray-50 flex items-center justify-center">
+                  {applicant.photo ? (
+                    <img
+                      src={applicant.photo}
+                      className="w-full h-full object-cover"
+                      alt="Candidate"
+                      referrerPolicy="no-referrer"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="text-xs text-gray-400">No Photo</span>
+                  )}
+                </div>
+                <span className="text-[10px] font-bold uppercase">Candidate Photo</span>
+              </div>
+
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-[1.5in] h-[2in] border border-black p-4 flex flex-col items-center justify-center bg-white">
+                  <QRCodeSVG
+                    value={JSON.stringify(getQRData())}
+                    size={100}
+                    level="H"
+                    includeMargin={false}
+                  />
+                  <div className="mt-4 text-center">
+                    <p className="text-[10px] font-bold leading-none">ID: {applicant.id}</p>
                   </div>
+                </div>
+                <span className="text-[10px] font-bold uppercase">Verification QR</span>
+              </div>
+            </div>
+
+            {/* Candidate Information Section */}
+            <div className="mb-6 relative z-10">
+              <div className="grid grid-cols-1 gap-y-3">
+                {infoFields.map((field, index) => (
+                  <InfoField key={index} {...field} />
                 ))}
               </div>
-
-              <div className="flex flex-col gap-4">
-                <div className="w-[1.4in] h-[1.7in] border-2 border-gray-200 rounded p-1 bg-white">
-                  <img 
-                    src={applicant.photo || "https://via.placeholder.com/150"} 
-                    className="w-full h-full object-cover rounded-sm" 
-                    alt="Candidate"
-                    crossOrigin="anonymous"
-                  />
-                </div>
-                <div className="flex flex-col items-center p-2 border-2 border-dashed border-gray-200 rounded">
-                  <QRCodeSVG value={applicant.id || "N/A"} size={70} />
-                  <span className="text-[9px] mt-1 font-mono">{applicant.id}</span>
-                </div>
-              </div>
             </div>
 
-            {/* Notice Section */}
-            <div className="mb-8 p-4 bg-gray-50 border-l-4 border-[#4B5320]">
-              <h4 className="text-sm font-bold uppercase text-[#4B5320] mb-1">Examination Notice</h4>
-              <p className="text-xs text-gray-700 leading-relaxed">
-                Exam dates and seat plans will be published on our official page. 
-                Keep this card safe. Link: <span className="font-bold text-blue-700">facebook.com/cbcc.bncc</span>
+            {/* Examination Notice */}
+            <div className="mb-6 relative z-10">
+              <hr className="border-black mb-4" />
+              <h4 className="text-sm font-bold font-montserrat uppercase mb-3 text-[#4B5320]">
+                Examination Notice
+              </h4>
+              <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                The examination date will be announced through the Platoon Officer's official Facebook page.
+                Please stay updated by following the official link:
+                <a
+                  href={FACEBOOK_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline ml-1 hover:text-blue-800"
+                >
+                  {FACEBOOK_URL}
+                </a>
               </p>
             </div>
 
-            {/* Instructions */}
-            <div className="flex-grow">
-              <h4 className="text-xs font-bold uppercase mb-3 border-b border-black inline-block">General Instructions</h4>
-              <ul className="text-[10.5px] leading-relaxed space-y-1.5 list-decimal pl-4 text-gray-800">
-                <li>Candidates must bring a printed copy of this admit card.</li>
-                <li>Report at least 30 minutes before the scheduled time.</li>
-                <li>Male candidates must have a clean "Army Cut" hairstyle.</li>
-                <li>Wear clean college uniform or sports attire as instructed.</li>
-                <li>Electronic gadgets (smartwatches, mobile phones) are strictly prohibited.</li>
-                <li>Misconduct will lead to immediate disqualification.</li>
+            {/* Important Instructions */}
+            <div className="mt-auto relative z-10">
+              <hr className="border-black mb-4" />
+              <h4 className="text-sm font-bold font-montserrat uppercase mb-3">
+                Important Instructions for Candidates
+              </h4>
+              <ul className="space-y-1.5">
+                {instructions.map((instruction, index) => (
+                  <InstructionItem key={index}>
+                    {instruction}
+                  </InstructionItem>
+                ))}
               </ul>
             </div>
 
             {/* Footer */}
-            <div className="mt-auto pt-6 flex justify-between items-end">
-              <div className="text-[9px] text-gray-400">
-                <p>Generated: {new Date().toLocaleString()}</p>
-                <p>Verification Hash: {btoa(applicant.id).substring(0, 12)}</p>
-              </div>
-              <div className="text-center border-t border-black px-6 pt-1">
-                <p className="text-[10px] font-bold">Authorized Digital Signature</p>
-                <p className="text-[8px] text-gray-500 tracking-tighter">BNCC PLATOON COMMANDER, CBCC</p>
-              </div>
+            <div className="mt-6 pt-4 border-t border-gray-200 text-center relative z-10">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                System Generated – No Signature Required
+              </p>
+              <p className="text-[8px] text-gray-300 mt-1">
+                Generated on {new Date().toLocaleString()} | CBCC BNCC Enrollment System
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex flex-wrap justify-center gap-4 print-hidden pb-20">
+      {/* Actions */}
+      <div className="flex justify-center gap-4 print:hidden">
         <button
-          disabled={isGenerating}
           onClick={handleDownloadPDF}
-          className="flex items-center gap-2 px-8 py-4 bg-[#4B5320] text-white font-bold rounded-xl hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50"
+          disabled={isDownloading}
+          className="flex items-center gap-2 px-8 py-4 bg-[#4B5320] text-white font-bold rounded-xl hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-          {isGenerating ? "Generating..." : "Download PDF"}
+          {isDownloading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Download className="w-5 h-5" />
+          )}
+          {isDownloading ? "Generating PDF..." : "Download PDF"}
         </button>
         <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-8 py-4 bg-white text-gray-900 font-bold rounded-xl hover:bg-gray-100 transition-all shadow-xl border border-gray-200"
+          onClick={handlePrint}
+          className="flex items-center gap-2 px-8 py-4 glass text-white font-bold rounded-xl hover:bg-white/10 transition-all shadow-lg"
         >
           <Printer className="w-5 h-5" /> Print Card
         </button>
