@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #002147;
+  --color-accent: #C5A059;
+  --color-bg-dark: #0B0F19;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", sans-serif;
+}
+
+body {
+  @apply bg-bg-dark text-slate-200 font-sans selection:bg-accent selection:text-primary;
+}
+
+h1, h2, h3, h4, .font-display {
+  @apply font-display;
+}
+
+.glass {
+  @apply backdrop-blur-md bg-white/5 border border-white/10;
+}
+
+.glass-card {
+  @apply backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl;
+}
+
+.glow-hover:hover {
+  @apply shadow-[0_0_20px_rgba(197,160,89,0.2)];
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-accent to-white;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

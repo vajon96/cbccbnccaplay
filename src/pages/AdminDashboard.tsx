@@ -1,0 +1,420 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { 
+  Users, CheckCircle, XCircle, Clock, Download, Trash2, 
+  Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
+  QrCode, Scan, Calendar, Camera, X
+} from "lucide-react";
+import * as XLSX from "xlsx";
+import JSZip from "jszip";
+import { Html5QrcodeScanner } from "html5-qrcode";
+
+export function AdminDashboard() {
+  const [applicants, setApplicants] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [attendanceFilter, setAttendanceFilter] = useState("All");
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannedApplicant, setScannedApplicant] = useState<any>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem("adminToken");
+    if (!token) {
+      navigate("/admin");
+      return;
+    }
+    fetchApplicants();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (showScanner) {
+      const scanner = new Html5QrcodeScanner(
+        "reader",
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        /* verbose= */ false
+      );
+
+      scanner.render(onScanSuccess, onScanFailure);
+
+      return () => {
+        scanner.clear().catch(error => console.error("Failed to clear scanner", error));
+      };
+    }
+  }, [showScanner]);
+
+  const onScanSuccess = async (decodedText: string) => {
+    try {
+      // Assuming QR code contains the ID directly or in BNCC-ID format
+      const id = decodedText.replace("BNCC-", "").split("-")[0];
+      const response = await fetch("/api/admin/mark-attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setScannedApplicant(data.applicant);
+        fetchApplicants();
+      } else {
+        alert(data.error || "Failed to mark attendance");
+      }
+    } catch (error) {
+      console.error("Scan error:", error);
+    }
+  };
+
+  const onScanFailure = (error: any) => {
+    // console.warn(`Code scan error = ${error}`);
+  };
+
+  const fetchApplicants = async () => {
+    try {
+      const response = await fetch("/api/admin/applicants");
+      const data = await response.json();
+      setApplicants(data);
+      setLoading(false);
+    } catch (error) {
+      console.error("Failed to fetch:", error);
+    }
+  };
+
+  const updateStatus = async (id: number, status?: string, attendanceStatus?: string) => {
+    try {
+      await fetch(`/api/admin/applicants/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, attendanceStatus })
+      });
+      fetchApplicants();
+    } catch (error) {
+      console.error("Update failed:", error);
+    }
+  };
+
+  const deleteApplicant = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this record?")) return;
+    try {
+      await fetch(`/api/admin/applicants/${id}`, { method: "DELETE" });
+      fetchApplicants();
+    } catch (error) {
+      console.error("Delete failed:", error);
+    }
+  };
+
+  const exportToExcel = () => {
+    const dataToExport = applicants.map(({ photo, ...rest }) => ({
+      ...rest,
+      attendanceTime: rest.attendanceTime ? new Date(rest.attendanceTime).toLocaleString() : "N/A",
+      createdAt: new Date(rest.createdAt).toLocaleString()
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Applicants_Attendance");
+    XLSX.writeFile(workbook, `BNCC_Attendance_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const downloadPhotosZip = async () => {
+    const zip = new JSZip();
+    applicants.forEach((app) => {
+      if (app.photo) {
+        const base64Data = app.photo.split(",")[1];
+        zip.file(`${app.fullName}_${app.collegeId}.jpg`, base64Data, { base64: true });
+      }
+    });
+    const content = await zip.generateAsync({ type: "blob" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(content);
+    link.download = "Applicant_Photos.zip";
+    link.click();
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("adminToken");
+    navigate("/admin");
+  };
+
+  const filteredApplicants = applicants.filter(app => {
+    const matchesSearch = app.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          app.collegeId.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "All" || app.status === statusFilter;
+    const matchesAttendance = attendanceFilter === "All" || app.attendanceStatus === attendanceFilter;
+    return matchesSearch && matchesStatus && matchesAttendance;
+  });
+
+  const stats = {
+    total: applicants.length,
+    pending: applicants.filter(a => a.status === 'Pending').length,
+    approved: applicants.filter(a => a.status === 'Approved').length,
+    present: applicants.filter(a => a.attendanceStatus === 'Present').length,
+  };
+
+  if (loading) return <div className="flex items-center justify-center h-screen">Loading Dashboard...</div>;
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12 space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white">অ্যাডমিন ড্যাশবোর্ড</h1>
+          <p className="text-slate-400">সকল আবেদনকারী এবং তাদের স্ট্যাটাস পরিচালনা করুন</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={exportToExcel}
+            className="flex items-center gap-2 px-5 py-2.5 glass rounded-xl text-sm font-bold hover:bg-white/10"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-green-400" /> Excel এক্সপোর্ট
+          </button>
+          <button
+            onClick={downloadPhotosZip}
+            className="flex items-center gap-2 px-5 py-2.5 glass rounded-xl text-sm font-bold hover:bg-white/10"
+          >
+            <Archive className="w-4 h-4 text-accent" /> ফটো জিপ (ZIP)
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-sm font-bold hover:bg-red-500/20"
+          >
+            <LogOut className="w-4 h-4" /> লগআউট
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-blue-400" },
+          { label: "পেন্ডিং", value: stats.pending, icon: Clock, color: "text-yellow-400" },
+          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-green-400" },
+          { label: "উপস্থিত", value: stats.present, icon: Scan, color: "text-accent" }
+        ].map((stat, i) => (
+          <div key={i} className="glass-card p-6 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <stat.icon className={`w-5 h-5 ${stat.color}`} />
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Stats</span>
+            </div>
+            <p className="text-2xl font-bold text-white">{stat.value}</p>
+            <p className="text-xs text-slate-400">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-grow">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <input
+            type="text"
+            placeholder="নাম অথবা কলেজ আইডি দিয়ে খুঁজুন..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white focus:border-accent outline-none"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowScanner(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-accent text-primary rounded-xl text-sm font-bold hover:bg-white transition-all"
+          >
+            <QrCode className="w-4 h-4" /> QR স্ক্যানার
+          </button>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-accent outline-none text-sm"
+          >
+            <option value="All">সকল স্ট্যাটাস</option>
+            <option value="Pending">পেন্ডিং</option>
+            <option value="Approved">অনুমোদিত</option>
+            <option value="Rejected">বাতিল</option>
+          </select>
+          <select
+            value={attendanceFilter}
+            onChange={(e) => setAttendanceFilter(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-accent outline-none text-sm"
+          >
+            <option value="All">উপস্থিতি (সকল)</option>
+            <option value="Present">উপস্থিত (Present)</option>
+            <option value="Absent">অনুপস্থিত (Absent)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-white/5 border-b border-white/10">
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">আবেদনকারী</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">একাডেমিক তথ্য</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">স্ট্যাটাস</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">উপস্থিতি</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase text-right">অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filteredApplicants.map((app) => (
+                <tr key={app.id} className="hover:bg-white/[0.02] transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10">
+                        {app.photo ? (
+                          <img src={app.photo} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <Users className="w-full h-full p-2 text-slate-600" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-bold text-white">{app.fullName}</p>
+                        <p className="text-xs text-slate-500">{app.mobile || "No Mobile"}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-sm text-slate-300">{app.class} | Roll: {app.roll}</p>
+                    <p className="text-xs text-slate-500">ID: {app.collegeId}</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      app.status === 'Approved' ? 'bg-green-500/10 text-green-400' :
+                      app.status === 'Rejected' ? 'bg-red-500/10 text-red-400' :
+                      'bg-yellow-500/10 text-yellow-400'
+                    }`}>
+                      {app.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className={`inline-flex items-center gap-1.5 font-bold text-[10px] uppercase ${
+                        app.attendanceStatus === 'Present' ? 'text-accent' : 'text-slate-500'
+                      }`}>
+                        {app.attendanceStatus === 'Present' ? (
+                          <><CheckCircle className="w-3 h-3" /> Present</>
+                        ) : (
+                          <><Clock className="w-3 h-3" /> Absent</>
+                        )}
+                      </span>
+                      {app.attendanceTime && (
+                        <span className="text-[9px] text-slate-600 mt-0.5">
+                          {new Date(app.attendanceTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => updateStatus(app.id, undefined as any, app.attendanceStatus === 'Present' ? 'Absent' : 'Present')}
+                        className={`p-2 rounded-lg transition-colors ${
+                          app.attendanceStatus === 'Present' ? 'text-accent hover:bg-accent/10' : 'text-slate-500 hover:bg-white/5'
+                        }`}
+                        title={app.attendanceStatus === 'Present' ? "Mark Absent" : "Mark Present"}
+                      >
+                        <Scan className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => updateStatus(app.id, 'Approved')}
+                        className="p-2 hover:bg-green-500/10 text-slate-500 hover:text-green-400 rounded-lg transition-colors"
+                        title="Approve"
+                      >
+                        <CheckCircle className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => updateStatus(app.id, 'Rejected')}
+                        className="p-2 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-lg transition-colors"
+                        title="Reject"
+                      >
+                        <XCircle className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => deleteApplicant(app.id)}
+                        className="p-2 hover:bg-red-500/10 text-slate-500 hover:text-red-500 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {filteredApplicants.length === 0 && (
+          <div className="p-12 text-center">
+            <Users className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+            <p className="text-slate-500">কোনো আবেদনকারী পাওয়া যায়নি।</p>
+          </div>
+        )}
+      </div>
+
+      {/* QR Scanner Modal */}
+      {showScanner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#000814] border border-white/10 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-accent" />
+                </div>
+                <h2 className="text-xl font-bold text-white">QR এটেনডেন্স স্ক্যানার</h2>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowScanner(false);
+                  setScannedApplicant(null);
+                }}
+                className="p-2 hover:bg-white/5 rounded-full text-slate-400"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {!scannedApplicant ? (
+                <div className="space-y-4">
+                  <div id="reader" className="overflow-hidden rounded-2xl border-2 border-accent/20"></div>
+                  <p className="text-center text-sm text-slate-400">প্রবেশপত্রের QR কোডটি ক্যামেরার সামনে ধরুন</p>
+                </div>
+              ) : (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                  <div className="flex items-center gap-4 p-4 bg-accent/10 border border-accent/20 rounded-2xl">
+                    <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-accent">
+                      <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">{scannedApplicant.fullName}</h3>
+                      <p className="text-accent font-bold text-sm uppercase tracking-wider">উপস্থিতি সফল!</p>
+                      <p className="text-xs text-slate-400 mt-1">ID: {scannedApplicant.collegeId}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-white/5 rounded-xl">
+                      <p className="text-[10px] uppercase text-slate-500 font-bold">Class</p>
+                      <p className="text-white font-bold">{scannedApplicant.class}</p>
+                    </div>
+                    <div className="p-4 bg-white/5 rounded-xl">
+                      <p className="text-[10px] uppercase text-slate-500 font-bold">Roll</p>
+                      <p className="text-white font-bold">{scannedApplicant.roll}</p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setScannedApplicant(null)}
+                    className="w-full py-4 bg-accent text-primary font-bold rounded-xl hover:bg-white transition-all"
+                  >
+                    পরবর্তী স্ক্যান করুন
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

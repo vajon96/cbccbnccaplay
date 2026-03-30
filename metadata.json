@@ -1,0 +1,7 @@
+{
+  "name": "Cox's Bazar City College BNCC Enrollment System",
+  "description": "A modern, professional enrollment system for BNCC cadets at Cox's Bazar City College featuring multi-step forms, admit card generation, and an admin portal.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
