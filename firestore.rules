@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: applicants
+    // Document ID: auto-generated
+    // Fields:
+    //   - fullName: string (required)
+    //   - fatherName: string (required)
+    //   - motherName: string (required)
+    //   - dob: string (required)
+    //   - gender: string (required)
+    //   - bloodGroup: string (required)
+    //   - collegeId: string (required)
+    //   - class: string (required)
+    //   - roll: string (required)
+    //   - session: string (required)
+    //   - mobile: string (optional)
+    //   - email: string (optional)
+    //   - photo: string (required, base64)
+    //   - status: string (enum: Pending, Approved, Rejected)
+    //   - attendanceStatus: string (enum: Present, Absent)
+    //   - attendanceTime: timestamp (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: admin_config
+    // Document ID: configId
+    // Fields:
+    //   - key: string (required)
+    //   - value: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "sajondey102@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string &&
+        (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidApplicant(data) {
+      return hasRequiredFields(['fullName', 'fatherName', 'motherName', 'dob', 'gender', 'bloodGroup', 'collegeId', 'class', 'roll', 'session', 'photo', 'status', 'attendanceStatus', 'createdAt']) &&
+             data.fullName is string && data.fullName.size() > 0 && data.fullName.size() < 100 &&
+             data.fatherName is string && data.fatherName.size() > 0 && data.fatherName.size() < 100 &&
+             data.motherName is string && data.motherName.size() > 0 && data.motherName.size() < 100 &&
+             data.dob is string && data.dob.size() > 0 &&
+             data.gender is string && data.gender in ['Male', 'Female', 'Other'] &&
+             data.bloodGroup is string && data.bloodGroup.size() > 0 &&
+             data.collegeId is string && data.collegeId.size() > 0 &&
+             data.class is string && data.class.size() > 0 &&
+             data.roll is string && data.roll.size() > 0 &&
+             data.session is string && data.session.size() > 0 &&
+             data.photo is string && data.photo.size() > 0 &&
+             data.status in ['Pending', 'Approved', 'Rejected'] &&
+             data.attendanceStatus in ['Present', 'Absent'] &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /applicants/{applicantId} {
+      // Anyone can create an application
+      allow create: if isValidApplicant(request.resource.data) && 
+                      request.resource.data.status == 'Pending' &&
+                      request.resource.data.attendanceStatus == 'Absent';
+      
+      // Admins can read, update, and delete
+      allow read: if isAdmin();
+      allow update: if isAdmin() && isValidApplicant(request.resource.data);
+      allow delete: if isAdmin();
+
+      // Public can read their own admit card if they have the ID
+      // (This is a simplified approach, ideally we'd use auth for applicants too)
+      allow get: if true; 
+    }
+
+    match /admin_config/{configId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

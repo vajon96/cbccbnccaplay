@@ -4,6 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Download, Printer, Shield, CheckCircle } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { db, doc, getDoc } from "../firebase";
 
 export function AdmitCard() {
   const { id } = useParams();
@@ -12,12 +13,24 @@ export function AdmitCard() {
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch(`/api/applicant/${id}`)
-      .then(res => res.json())
-      .then(data => {
-        setApplicant(data);
+    const fetchApplicant = async () => {
+      if (!id) return;
+      try {
+        const docRef = doc(db, "applicants", id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setApplicant(docSnap.data());
+        } else {
+          console.error("No such document!");
+        }
+      } catch (error) {
+        console.error("Error fetching applicant:", error);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchApplicant();
   }, [id]);
 
   const handleDownloadPDF = async () => {
@@ -52,7 +65,7 @@ export function AdmitCard() {
       <div className="flex justify-center">
         <div 
           ref={cardRef}
-          className="w-[210mm] min-h-[148mm] bg-white text-black p-8 border-[12px] border-primary relative overflow-hidden shadow-2xl"
+          className="print-area w-[210mm] min-h-[148mm] bg-white text-black p-8 border-[12px] border-primary relative overflow-hidden shadow-2xl"
           style={{ fontFamily: "'Inter', sans-serif" }}
         >
           {/* Watermark */}
@@ -63,7 +76,7 @@ export function AdmitCard() {
           {/* Header */}
           <div className="flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
             <div className="w-20 h-20 flex items-center justify-center">
-              <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo" className="h-full w-auto" />
+              <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo" className="h-full w-auto" referrerPolicy="no-referrer" />
             </div>
             <div className="text-center flex-grow px-4">
               <h2 className="text-2xl font-black text-primary uppercase tracking-tight">Cox's Bazar City College</h2>
@@ -71,7 +84,7 @@ export function AdmitCard() {
               <p className="text-[10px] font-bold text-slate-500 mt-1">ADMIT CARD - RECRUITMENT {new Date().getFullYear()}</p>
             </div>
             <div className="w-20 h-20 flex items-center justify-center">
-              <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" className="h-full w-auto" />
+              <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" className="h-full w-auto" referrerPolicy="no-referrer" />
             </div>
           </div>
 
@@ -79,11 +92,11 @@ export function AdmitCard() {
           <div className="grid grid-cols-12 gap-8 relative z-10">
             <div className="col-span-12 flex justify-between items-start mb-4">
               <div className="w-32 aspect-[3/4] bg-slate-100 border-2 border-primary rounded-lg overflow-hidden shadow-md">
-                <img src={applicant.photo} className="w-full h-full object-cover" alt="Applicant" />
+                <img src={applicant.photo} className="w-full h-full object-cover" alt="Applicant" referrerPolicy="no-referrer" />
               </div>
               <div className="p-3 bg-white border-2 border-primary rounded-lg flex flex-col items-center shadow-md">
-                <QRCodeSVG value={`BNCC-${applicant.id}-${applicant.collegeId}`} size={100} />
-                <span className="text-[10px] font-bold mt-2 text-primary">ID: BNCC-{applicant.id}</span>
+                <QRCodeSVG value={applicant.id} size={100} />
+                <span className="text-[10px] font-bold mt-2 text-primary">ID: {applicant.id}</span>
               </div>
             </div>
 

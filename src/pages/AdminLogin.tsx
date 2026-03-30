@@ -1,7 +1,8 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Lock, ArrowRight } from "lucide-react";
+import { Shield, Lock, ArrowRight, LogIn } from "lucide-react";
 import { motion } from "framer-motion";
+import { auth, googleProvider, signInWithPopup } from "../firebase";
 
 export function AdminLogin() {
   const [password, setPassword] = useState("");
@@ -9,30 +10,19 @@ export function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e: FormEvent) => {
+  const handlePasswordLogin = (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    try {
-      const response = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem("adminToken", data.token);
-        navigate("/admin/dashboard");
-      } else {
-        setError("ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।");
-      }
-    } catch (err) {
-      setError("সার্ভার ত্রুটি। পরে চেষ্টা করুন।");
-    } finally {
-      setLoading(false);
+    // The requested password: bncc123@###o
+    if (password === "bncc123@###o") {
+      localStorage.setItem("adminPasswordVerified", "true");
+      navigate("/admin/dashboard");
+    } else {
+      setError("ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।");
     }
+    setLoading(false);
   };
 
   return (
@@ -50,8 +40,12 @@ export function AdminLogin() {
           <p className="text-slate-400 text-sm">ড্যাশবোর্ড অ্যাক্সেস করতে পাসওয়ার্ড দিন</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div className="space-y-2">
+        <div className="space-y-6">
+          {error && (
+            <p className="text-red-400 text-xs text-center font-medium bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>
+          )}
+
+          <form onSubmit={handlePasswordLogin} className="space-y-4">
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
               <input
@@ -63,20 +57,15 @@ export function AdminLogin() {
                 required
               />
             </div>
-          </div>
-
-          {error && (
-            <p className="text-red-400 text-xs text-center font-medium">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-accent text-primary font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-white transition-all disabled:opacity-50"
-          >
-            {loading ? "লগইন হচ্ছে..." : "লগইন করুন"} <ArrowRight className="w-5 h-5" />
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-accent text-primary font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-white transition-all disabled:opacity-50"
+            >
+              {loading ? "যাচাই হচ্ছে..." : "পাসওয়ার্ড দিয়ে এগিয়ে যান"} <ArrowRight className="w-5 h-5" />
+            </button>
+          </form>
+        </div>
       </motion.div>
     </div>
   );

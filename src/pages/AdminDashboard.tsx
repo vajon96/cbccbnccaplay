@@ -3,30 +3,87 @@ import { useNavigate } from "react-router-dom";
 import { 
   Users, CheckCircle, XCircle, Clock, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
-  QrCode, Scan, Calendar, Camera, X
+  QrCode, Scan, Calendar, Camera, X, LogIn
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, auth, googleProvider, signInWithPopup, onAuthStateChanged, signOut, Timestamp, handleFirestoreError, OperationType } from "../firebase";
 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [attendanceFilter, setAttendanceFilter] = useState("All");
   const [showScanner, setShowScanner] = useState(false);
   const [scannedApplicant, setScannedApplicant] = useState<any>(null);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem("adminToken");
-    if (!token) {
+    const passwordVerified = localStorage.getItem("adminPasswordVerified");
+    if (!passwordVerified) {
       navigate("/admin");
       return;
     }
-    fetchApplicants();
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser && currentUser.email === "sajondey102@gmail.com") {
+        setUser(currentUser);
+      } else {
+        setUser(null);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribeAuth();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(collection(db, "applicants"), orderBy("createdAt", "desc"));
+    const path = "applicants";
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const applicantsData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      }));
+      setApplicants(applicantsData);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user.email !== "sajondey102@gmail.com") {
+        setError("আপনার এই ড্যাশবোর্ড অ্যাক্সেস করার অনুমতি নেই।");
+        await signOut(auth);
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("লগইন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    localStorage.removeItem("adminPasswordVerified");
+    navigate("/admin");
+  };
 
   useEffect(() => {
     if (showScanner) {
@@ -45,23 +102,24 @@ export function AdminDashboard() {
   }, [showScanner]);
 
   const onScanSuccess = async (decodedText: string) => {
+    const id = decodedText.replace("BNCC-", "").split("-")[0];
+    const path = `applicants/${id}`;
     try {
-      // Assuming QR code contains the ID directly or in BNCC-ID format
-      const id = decodedText.replace("BNCC-", "").split("-")[0];
-      const response = await fetch("/api/admin/mark-attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id })
-      });
-      const data = await response.json();
-      if (data.success) {
-        setScannedApplicant(data.applicant);
-        fetchApplicants();
+      const docRef = doc(db, "applicants", id);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const applicant = docSnap.data();
+        await updateDoc(docRef, {
+          attendanceStatus: "Present",
+          attendanceTime: Timestamp.now()
+        });
+        setScannedApplicant({ ...applicant, id });
       } else {
-        alert(data.error || "Failed to mark attendance");
+        alert("আবেদনকারী পাওয়া যায়নি!");
       }
     } catch (error) {
-      console.error("Scan error:", error);
+      handleFirestoreError(error, OperationType.WRITE, path);
     }
   };
 
@@ -69,37 +127,33 @@ export function AdminDashboard() {
     // console.warn(`Code scan error = ${error}`);
   };
 
-  const fetchApplicants = async () => {
+  const updateStatus = async (id: string, status?: string, attendanceStatus?: string) => {
+    const path = `applicants/${id}`;
     try {
-      const response = await fetch("/api/admin/applicants");
-      const data = await response.json();
-      setApplicants(data);
-      setLoading(false);
+      const docRef = doc(db, "applicants", id);
+      const updates: any = {};
+      if (status) updates.status = status;
+      if (attendanceStatus) {
+        updates.attendanceStatus = attendanceStatus;
+        if (attendanceStatus === "Present") {
+          updates.attendanceTime = Timestamp.now();
+        } else {
+          updates.attendanceTime = null;
+        }
+      }
+      await updateDoc(docRef, updates);
     } catch (error) {
-      console.error("Failed to fetch:", error);
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
-  const updateStatus = async (id: number, status?: string, attendanceStatus?: string) => {
+  const deleteApplicant = async (id: string) => {
+    if (!confirm("আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?")) return;
+    const path = `applicants/${id}`;
     try {
-      await fetch(`/api/admin/applicants/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, attendanceStatus })
-      });
-      fetchApplicants();
+      await deleteDoc(doc(db, "applicants", id));
     } catch (error) {
-      console.error("Update failed:", error);
-    }
-  };
-
-  const deleteApplicant = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this record?")) return;
-    try {
-      await fetch(`/api/admin/applicants/${id}`, { method: "DELETE" });
-      fetchApplicants();
-    } catch (error) {
-      console.error("Delete failed:", error);
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -130,10 +184,7 @@ export function AdminDashboard() {
     link.click();
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("adminToken");
-    navigate("/admin");
-  };
+
 
   const filteredApplicants = applicants.filter(app => {
     const matchesSearch = app.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -150,7 +201,46 @@ export function AdminDashboard() {
     present: applicants.filter(a => a.attendanceStatus === 'Present').length,
   };
 
-  if (loading) return <div className="flex items-center justify-center h-screen">Loading Dashboard...</div>;
+  if (authLoading) return <div className="flex items-center justify-center h-screen text-white">যাচাই করা হচ্ছে...</div>;
+
+  if (!user) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-4">
+        <div className="max-w-md w-full glass-card p-10 rounded-[2.5rem] space-y-8 text-center">
+          <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto">
+            <Shield className="w-8 h-8 text-accent" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">Google লগইন প্রয়োজন</h1>
+          <p className="text-slate-400 text-sm">ড্যাশবোর্ডের তথ্য দেখতে আপনার Google অ্যাকাউন্ট দিয়ে লগইন করুন</p>
+          
+          {error && (
+            <p className="text-red-400 text-xs font-medium bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>
+          )}
+
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full py-4 bg-white text-primary font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-slate-100 transition-all disabled:opacity-50"
+          >
+            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+            Google দিয়ে লগইন করুন
+          </button>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem("adminPasswordVerified");
+              navigate("/admin");
+            }}
+            className="text-slate-500 text-sm hover:text-white transition-colors"
+          >
+            আবার পাসওয়ার্ড দিন
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) return <div className="flex items-center justify-center h-screen text-white">তথ্য লোড হচ্ছে...</div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12 space-y-8">

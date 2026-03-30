@@ -2,6 +2,7 @@ import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield } from "lucide-react";
+import { db, collection, setDoc, doc, Timestamp, handleFirestoreError, OperationType } from "../firebase";
 
 export function EnrollmentForm() {
   const [step, setStep] = useState(1);
@@ -71,18 +72,21 @@ export function EnrollmentForm() {
 
   const handleSubmit = async () => {
     setLoading(true);
+    const id = `BNCC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const path = `applicants/${id}`;
     try {
-      const response = await fetch("/api/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
-      });
-      const data = await response.json();
-      if (data.success) {
-        navigate(`/admit-card/${data.id}`);
-      }
+      const applicantData = {
+        ...formData,
+        id,
+        status: "Pending",
+        attendanceStatus: "Absent",
+        createdAt: Timestamp.now(),
+      };
+
+      await setDoc(doc(db, "applicants", id), applicantData);
+      navigate(`/admit-card/${id}`);
     } catch (error) {
-      console.error("Submission failed:", error);
+      handleFirestoreError(error, OperationType.WRITE, path);
     } finally {
       setLoading(false);
     }
