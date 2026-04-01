@@ -8,17 +8,27 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-16">
           {/* Brand Section */}
           <div className="md:col-span-4 space-y-8">
-            <div className="flex items-center gap-4">
-              <img 
-                src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
-                alt="BNCC Logo" 
-                className="h-12 w-auto grayscale brightness-200"
-                referrerPolicy="no-referrer"
-              />
-              <div className="flex flex-col">
-                <span className="text-2xl font-black tracking-tighter leading-none font-montserrat">BNCC</span>
-                <span className="micro-label !text-white/40 !text-[8px] mt-1">National Cadet Corps</span>
-              </div>
+            <div className="flex items-center gap-6">
+              <a href="https://cbcc.edu.bd/" target="_blank" rel="noopener noreferrer">
+                <img 
+                  src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" 
+                  alt="Cox's Bazar City College Logo" 
+                  className="h-12 w-auto grayscale brightness-200 hover:grayscale-0 transition-all"
+                  referrerPolicy="no-referrer"
+                />
+              </a>
+              <a href="https://bncc.info/" target="_blank" rel="noopener noreferrer">
+                <img 
+                  src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
+                  alt="BNCC Logo" 
+                  className="h-12 w-auto grayscale brightness-200 hover:grayscale-0 transition-all"
+                  referrerPolicy="no-referrer"
+                />
+              </a>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-2xl font-black tracking-tighter leading-none font-montserrat">BNCC PLATOON</span>
+              <span className="micro-label !text-white/40 !text-[8px] mt-1">Cox's Bazar City College</span>
             </div>
             <p className="text-white/40 text-sm leading-relaxed font-light max-w-xs">
               Building future leaders through discipline, unity, and service to the nation. The premier youth organization of Bangladesh.

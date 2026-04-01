@@ -138,10 +138,10 @@ export function Admin2Dashboard() {
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-900">অপেক্ষা করুন...</div>;
 
   return (
-    <div className="min-h-screen bg-[#F0E6D2] py-12 px-4">
+    <div className="min-h-screen bg-sand py-12 px-4">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-[#4B5D16] p-8 rounded-[2rem] text-white shadow-xl">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-primary p-8 rounded-[2rem] text-white shadow-xl">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20">
               <Shield className="w-8 h-8" />
@@ -155,14 +155,14 @@ export function Admin2Dashboard() {
             <button
               onClick={exportAttendance}
               disabled={exporting}
-              className="flex items-center gap-2 px-6 py-3 bg-[#C3B091] text-[#4B5D16] font-bold rounded-xl hover:bg-[#b3a081] transition-all disabled:opacity-50 shadow-lg"
+              className="flex items-center gap-2 px-6 py-3 bg-accent text-white font-bold rounded-xl hover:bg-accent/90 transition-all disabled:opacity-50 shadow-lg"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               রিপোর্ট ডাউনলোড
             </button>
             <button
               onClick={handleLogout}
-              className="p-3 bg-[#A83232] text-white rounded-xl hover:bg-[#962d2d] transition-all shadow-lg"
+              className="p-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all border border-white/20"
               title="লগআউট"
             >
               <LogOut className="w-5 h-5" />
@@ -173,22 +173,22 @@ export function Admin2Dashboard() {
         {/* Main Content */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Scanner Section */}
-          <div className="glass-card p-8 rounded-[2.5rem] space-y-6 bg-white/80 backdrop-blur-md border border-white/50 shadow-xl">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-sand shadow-xl space-y-6">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-[#4B5D16]/10 rounded-xl flex items-center justify-center">
-                <Camera className="w-5 h-5 text-[#4B5D16]" />
+              <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center">
+                <Camera className="w-5 h-5 text-primary" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900">QR স্ক্যানার</h2>
+              <h2 className="text-xl font-bold text-black">QR স্ক্যানার</h2>
             </div>
             
             <div className="relative">
-              <div id="reader-admin2" className="overflow-hidden rounded-3xl border-4 border-[#4B5D16]/20 bg-slate-900 shadow-inner"></div>
+              <div id="reader-admin2" className="overflow-hidden rounded-3xl border-4 border-primary bg-black shadow-inner"></div>
               <div className="absolute inset-0 pointer-events-none border-[16px] border-transparent rounded-3xl">
                 <div className="w-full h-full border-2 border-white/20 rounded-xl"></div>
               </div>
             </div>
             
-            <div className="flex items-center justify-center gap-2 text-[#4B5D16] font-bold bg-[#4B5D16]/5 py-3 rounded-xl">
+            <div className="flex items-center justify-center gap-2 text-primary font-bold bg-primary/10 py-3 rounded-xl">
               <QrCode className="w-5 h-5" />
               <p className="text-sm">ক্যামেরার সামনে QR কোডটি ধরুন</p>
             </div>
@@ -197,7 +197,7 @@ export function Admin2Dashboard() {
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 bg-[#A83232]/10 border border-[#A83232]/20 rounded-xl text-[#A83232] text-sm font-bold text-center"
+                className="p-4 bg-accent/10 border border-accent/20 rounded-xl text-accent text-sm font-bold text-center"
               >
                 {error}
               </motion.div>
@@ -213,14 +213,14 @@ export function Admin2Dashboard() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="h-full flex flex-col items-center justify-center p-12 text-center space-y-4 bg-white/40 rounded-[2.5rem] border border-white/50 border-dashed"
+                  className="h-full flex flex-col items-center justify-center p-12 text-center space-y-4 bg-white/60 rounded-[2.5rem] border border-sand border-dashed"
                 >
-                  <div className="w-20 h-20 bg-slate-200/50 rounded-full flex items-center justify-center">
-                    <User className="w-10 h-10 text-slate-400" />
+                  <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
+                    <User className="w-10 h-10 text-primary/30" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-500">স্ক্যান করার জন্য অপেক্ষা করছি...</h3>
-                    <p className="text-sm text-slate-400">সফল স্ক্যান হলে এখানে তথ্য প্রদর্শিত হবে</p>
+                    <h3 className="text-lg font-bold text-black/40">স্ক্যান করার জন্য অপেক্ষা করছি...</h3>
+                    <p className="text-sm text-black/30">সফল স্ক্যান হলে এখানে তথ্য প্রদর্শিত হবে</p>
                   </div>
                 </motion.div>
               ) : (
@@ -229,12 +229,12 @@ export function Admin2Dashboard() {
                   initial={{ opacity: 0, scale: 0.9, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9, y: -20 }}
-                  className="glass-card p-8 rounded-[2.5rem] bg-white shadow-2xl border-2 border-[#4B5D16]/10 relative overflow-hidden"
+                  className="p-8 rounded-[2.5rem] bg-white shadow-2xl border border-sand relative overflow-hidden"
                 >
                   {/* Success Badge */}
                   <div className="absolute top-6 right-6">
                     <div className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest ${
-                      scannedApplicant.alreadyPresent ? 'bg-amber-100 text-amber-700' : 'bg-[#4B5D16]/10 text-[#4B5D16]'
+                      scannedApplicant.alreadyPresent ? 'bg-amber-100 text-amber-700' : 'bg-primary/20 text-primary'
                     }`}>
                       <CheckCircle className="w-4 h-4" />
                       {scannedApplicant.alreadyPresent ? 'ইতিমধ্যেই উপস্থিত' : 'উপস্থিত'}
@@ -243,41 +243,41 @@ export function Admin2Dashboard() {
 
                   <div className="flex flex-col items-center text-center space-y-6">
                     <div className="relative">
-                      <div className="w-32 h-32 rounded-3xl overflow-hidden border-4 border-[#4B5D16]/20 shadow-lg">
+                      <div className="w-32 h-32 rounded-3xl overflow-hidden border-4 border-primary shadow-lg">
                         {scannedApplicant.photo ? (
                           <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
                         ) : (
-                          <div className="w-full h-full bg-slate-100 flex items-center justify-center">
-                            <User className="w-12 h-12 text-slate-300" />
+                          <div className="w-full h-full bg-sand/20 flex items-center justify-center">
+                            <User className="w-12 h-12 text-black/20" />
                           </div>
                         )}
                       </div>
                       <motion.div 
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        className="absolute -bottom-2 -right-2 w-10 h-10 bg-[#4B5D16] text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white"
+                        className="absolute -bottom-2 -right-2 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white"
                       >
                         <CheckCircle className="w-5 h-5" />
                       </motion.div>
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-2xl font-bold text-slate-900">{scannedApplicant.fullNameEnglish || scannedApplicant.fullNameBangla}</h3>
-                      <p className="text-[#4B5D16] font-bold text-sm tracking-widest uppercase">ID: {scannedApplicant.id}</p>
+                      <h3 className="text-2xl font-bold text-black">{scannedApplicant.fullNameEnglish || scannedApplicant.fullNameBangla}</h3>
+                      <p className="text-primary font-bold text-sm tracking-widest uppercase">ID: {scannedApplicant.id}</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 w-full">
-                      <div className="p-4 bg-[#F0E6D2] rounded-2xl border border-[#C3B091]/30">
-                        <p className="text-[10px] uppercase text-[#4B5D16] font-bold mb-1">Class / Group</p>
-                        <p className="text-slate-900 font-bold">{scannedApplicant.studyStatus}</p>
+                      <div className="p-4 bg-sand/30 rounded-2xl border border-sand">
+                        <p className="text-[10px] uppercase text-black/40 font-bold mb-1">Class / Group</p>
+                        <p className="text-black font-bold">{scannedApplicant.studyStatus}</p>
                       </div>
-                      <div className="p-4 bg-[#F0E6D2] rounded-2xl border border-[#C3B091]/30">
-                        <p className="text-[10px] uppercase text-[#4B5D16] font-bold mb-1">Roll Number</p>
-                        <p className="text-slate-900 font-bold">{scannedApplicant.classRoll || "N/A"}</p>
+                      <div className="p-4 bg-sand/30 rounded-2xl border border-sand">
+                        <p className="text-[10px] uppercase text-black/40 font-bold mb-1">Roll Number</p>
+                        <p className="text-black font-bold">{scannedApplicant.classRoll || "N/A"}</p>
                       </div>
                     </div>
 
-                    <div className="w-full p-4 bg-slate-50 rounded-2xl flex items-center justify-center gap-3 text-slate-500">
+                    <div className="w-full p-4 bg-sand/20 rounded-2xl flex items-center justify-center gap-3 text-black/50">
                       <Clock className="w-4 h-4" />
                       <span className="text-sm font-medium">
                         সময়: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -286,7 +286,7 @@ export function Admin2Dashboard() {
 
                     <button 
                       onClick={() => setScannedApplicant(null)}
-                      className="w-full py-4 bg-[#4B5D16] text-white font-bold rounded-2xl hover:bg-[#3d4b12] transition-all shadow-lg shadow-[#4B5D16]/20 flex items-center justify-center gap-2"
+                      className="w-full py-4 bg-accent text-white font-bold rounded-2xl hover:bg-accent/90 transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2"
                     >
                       <Scan className="w-5 h-5" /> পরবর্তী স্ক্যান করুন
                     </button>
