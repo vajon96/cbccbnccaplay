@@ -9,6 +9,8 @@ import { EnrollmentForm } from "./pages/EnrollmentForm";
 import { AdmitCard } from "./pages/AdmitCard";
 import { AdminLogin } from "./pages/AdminLogin";
 import { AdminDashboard } from "./pages/AdminDashboard";
+import { Admin2Login } from "./pages/Admin2Login";
+import { Admin2Dashboard } from "./pages/Admin2Dashboard";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -26,6 +28,8 @@ export default function App() {
               <Route path="/admit-card/:id" element={<AdmitCard />} />
               <Route path="/admin" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin2" element={<Admin2Login />} />
+              <Route path="/admin2/dashboard" element={<Admin2Dashboard />} />
             </Routes>
           </main>
           <Footer />

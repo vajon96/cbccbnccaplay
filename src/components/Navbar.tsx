@@ -11,6 +11,7 @@ export function Navbar() {
     { name: "Home", path: "/" },
     { name: "Apply Now", path: "/enroll" },
     { name: "Admin", path: "/admin" },
+    { name: "Admin 2", path: "/admin2" },
   ];
 
   return (

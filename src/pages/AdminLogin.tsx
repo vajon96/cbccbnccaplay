@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Shield, Lock, ArrowRight, Eye, EyeOff, Terminal, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { auth, googleProvider, signInWithPopup } from "../firebase";
 
@@ -16,7 +16,6 @@ export function AdminLogin() {
     setLoading(true);
     setError("");
 
-    // The requested password from env and fallback
     const envPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "").trim();
     const fallbackPassword = "BNCC@Admin#2026!Secure";
     
@@ -26,60 +25,85 @@ export function AdminLogin() {
       localStorage.setItem("adminPasswordVerified", "true");
       navigate("/admin/dashboard");
     } else {
-      setError("ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।");
+      setError("Access Denied: Invalid Authentication Credentials.");
     }
     setLoading(false);
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 bg-paper">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-md w-full glass-card p-10 rounded-[2.5rem] space-y-8"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-md w-full glass-card p-12 rounded-sm border-t-4 border-primary space-y-10"
       >
-        <div className="text-center space-y-3">
-          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
-            <Shield className="w-8 h-8 text-primary" />
+        <div className="text-center space-y-4">
+          <div className="w-20 h-20 bg-ink rounded-sm flex items-center justify-center mx-auto shadow-xl shadow-ink/20">
+            <Shield className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">অ্যাডমিন লগইন</h1>
-          <p className="text-slate-600 text-sm">ড্যাশবোর্ড অ্যাক্সেস করতে পাসওয়ার্ড দিন</p>
+          <div className="space-y-1">
+            <h4 className="micro-label">Secure Access Protocol</h4>
+            <h1 className="text-3xl font-black text-ink uppercase tracking-tighter">Admin Portal</h1>
+          </div>
+          <p className="text-ink/40 text-xs font-medium max-w-[240px] mx-auto">Authorized personnel only. All access attempts are logged and monitored.</p>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
           {error && (
-            <div className="space-y-2">
-              <p className="text-accent text-xs text-center font-bold bg-accent/10 p-3 rounded-lg border border-accent/20">{error}</p>
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-accent/5 border-l-2 border-accent p-4"
+            >
+              <p className="text-accent text-[10px] font-black uppercase tracking-widest">{error}</p>
+            </motion.div>
           )}
 
-          <form onSubmit={handlePasswordLogin} className="space-y-4">
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-12 py-4 text-slate-900 focus:border-primary outline-none transition-colors"
-                placeholder="পাসওয়ার্ড লিখুন"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+          <form onSubmit={handlePasswordLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label className="micro-label">Access Key</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink/20" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-ink/5 border-b-2 border-ink/10 pl-12 pr-12 py-4 text-sm font-bold focus:border-primary outline-none transition-all placeholder:text-ink/20"
+                  placeholder="ENTER ACCESS KEY"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-ink/20 hover:text-primary transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-primary text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
+              className="w-full py-5 bg-ink text-white font-black uppercase tracking-widest text-xs rounded-sm flex items-center justify-center gap-3 btn-hover disabled:opacity-50"
             >
-              {loading ? "যাচাই হচ্ছে..." : "পাসওয়ার্ড দিয়ে এগিয়ে যান"} <ArrowRight className="w-5 h-5" />
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Authenticating...</span>
+                </>
+              ) : (
+                <>
+                  <span>Establish Connection</span>
+                  <ArrowRight size={18} />
+                </>
+              )}
             </button>
           </form>
+        </div>
+
+        <div className="pt-8 border-t border-ink/5 flex items-center justify-center gap-2 text-ink/20">
+          <Terminal size={14} />
+          <span className="text-[9px] font-black uppercase tracking-widest">System v4.0.2-Stable</span>
         </div>
       </motion.div>
     </div>

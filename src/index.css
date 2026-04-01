@@ -1,27 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&family=Montserrat:wght@600;700;800&family=Roboto:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700;800;900&family=Montserrat:wght@700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #4B5D16;
-  --color-secondary: #C3B091;
-  --color-accent: #A83232;
-  --color-sand: #F0E6D2;
-  --color-olive: #8A9A5B;
-  --color-bg-light: #FDFBF7;
+  --color-primary: #4B5320; /* Army Green */
+  --color-secondary: #C3B091; /* Khaki */
+  --color-accent: #A83232; /* Deep Red */
+  --color-sand: #F0E6D2; /* Sand */
+  --color-olive: #8A9A5B; /* Olive */
+  --color-ink: #1A1A1A;
+  --color-paper: #FDFBF7;
+  
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", sans-serif;
   --font-montserrat: "Montserrat", sans-serif;
-  --font-roboto: "Roboto", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 body {
-  @apply bg-bg-light text-slate-800 font-sans selection:bg-primary selection:text-white;
-  background-image: radial-gradient(circle at top right, rgba(138, 154, 91, 0.15), transparent 40%),
-                    radial-gradient(circle at bottom left, rgba(195, 176, 145, 0.15), transparent 40%);
+  @apply bg-paper text-ink font-sans selection:bg-primary selection:text-white antialiased;
 }
 
 h1, h2, h3, h4, .font-display {
-  @apply font-display text-slate-900;
+  @apply font-display text-ink tracking-tight;
 }
 
 .glass {
@@ -32,8 +32,17 @@ h1, h2, h3, h4, .font-display {
   @apply backdrop-blur-2xl bg-white/70 border border-white/60 shadow-xl;
 }
 
-.glow-hover:hover {
-  @apply shadow-[0_0_20px_rgba(168,50,50,0.2)];
+.military-border {
+  @apply border border-primary/20 relative;
+}
+
+.military-border::after {
+  content: '';
+  @apply absolute -inset-1 border border-primary/10 pointer-events-none;
+}
+
+.micro-label {
+  @apply font-mono text-[10px] uppercase tracking-[0.2em] font-bold text-primary/60;
 }
 
 .text-gradient {
@@ -47,6 +56,16 @@ h1, h2, h3, h4, .font-display {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Section Dividers */
+.section-divider {
+  @apply h-px w-full bg-gradient-to-r from-transparent via-primary/20 to-transparent my-12;
+}
+
+/* Button Hover Effects */
+.btn-hover {
+  @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98];
 }
 
 @media print {
