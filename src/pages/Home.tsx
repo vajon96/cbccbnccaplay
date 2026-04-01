@@ -8,9 +8,9 @@ export function Home() {
       {/* Hero Section */}
       <section className="relative h-[90vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-b from-peach/40 via-bg-light/80 to-bg-light z-10" />
+          <div className="absolute inset-0 bg-gradient-to-b from-olive/20 via-bg-light/80 to-bg-light z-10" />
           <img 
-            src="https://picsum.photos/seed/bncc/1920/1080?blur=2" 
+            src="https://picsum.photos/seed/army-training/1920/1080?blur=2" 
             className="w-full h-full object-cover"
             alt="BNCC Background"
             referrerPolicy="no-referrer"
@@ -49,7 +49,7 @@ export function Home() {
             </Link>
             <a
               href="#eligibility"
-              className="px-8 py-4 glass text-slate-700 font-bold rounded-xl hover:bg-slate-100 transition-all"
+              className="px-8 py-4 glass text-slate-700 font-bold rounded-xl hover:bg-sand transition-all"
             >
               বিস্তারিত জানুন
             </a>
@@ -123,7 +123,7 @@ export function Home() {
                 </table>
               </div>
             </div>
-            <div className="bg-primary/5 p-12 flex items-center justify-center">
+            <div className="bg-olive/5 p-12 flex items-center justify-center">
               <div className="space-y-6">
                 <h3 className="text-2xl font-bold text-slate-900">প্রয়োজনীয় কাগজপত্র</h3>
                 <ul className="space-y-4">
@@ -174,7 +174,7 @@ export function Home() {
 
       {/* Benefits */}
       <section className="max-w-7xl mx-auto px-4">
-        <div className="glass-card p-12 rounded-[2rem] bg-gradient-to-br from-primary/5 to-transparent">
+        <div className="glass-card p-12 rounded-[2rem] bg-gradient-to-br from-olive/10 to-transparent">
           <div className="max-w-3xl">
             <h2 className="text-3xl font-bold text-slate-900 mb-8">বিএনসিসি ক্যাডেট হওয়ার সুবিধাসমূহ</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -197,7 +197,7 @@ export function Home() {
       </section>
       {/* Contact / Urgent Inquiries */}
       <section className="max-w-7xl mx-auto px-4">
-        <div className="glass-card p-8 rounded-3xl border border-primary/10 bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="glass-card p-8 rounded-3xl border border-olive/10 bg-olive/5 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
               <Phone className="w-6 h-6 text-primary" />

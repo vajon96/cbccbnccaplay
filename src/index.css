@@ -2,12 +2,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #FF6B6B;
-  --color-accent: #FFF5BA;
-  --color-peach: #FFC9B9;
-  --color-mint: #B9FBC0;
-  --color-lavender: #DCC6E0;
-  --color-bg-light: #FDFCFB;
+  --color-primary: #4B5D16;
+  --color-secondary: #C3B091;
+  --color-accent: #A83232;
+  --color-sand: #F0E6D2;
+  --color-olive: #8A9A5B;
+  --color-bg-light: #FDFBF7;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", sans-serif;
   --font-montserrat: "Montserrat", sans-serif;
@@ -16,8 +16,8 @@
 
 body {
   @apply bg-bg-light text-slate-800 font-sans selection:bg-primary selection:text-white;
-  background-image: radial-gradient(circle at top right, rgba(255, 201, 185, 0.3), transparent 40%),
-                    radial-gradient(circle at bottom left, rgba(185, 251, 192, 0.3), transparent 40%);
+  background-image: radial-gradient(circle at top right, rgba(138, 154, 91, 0.15), transparent 40%),
+                    radial-gradient(circle at bottom left, rgba(195, 176, 145, 0.15), transparent 40%);
 }
 
 h1, h2, h3, h4, .font-display {
@@ -33,11 +33,11 @@ h1, h2, h3, h4, .font-display {
 }
 
 .glow-hover:hover {
-  @apply shadow-[0_0_20px_rgba(255,107,107,0.2)];
+  @apply shadow-[0_0_20px_rgba(168,50,50,0.2)];
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-slate-900;
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
 }
 
 .no-scrollbar::-webkit-scrollbar {

@@ -230,10 +230,10 @@ export function AdminDashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-blue-600" },
+          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-slate-600" },
           { label: "পেন্ডিং", value: stats.pending, icon: Clock, color: "text-amber-600" },
-          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-emerald-600" },
-          { label: "উপস্থিত", value: stats.present, icon: Scan, color: "text-primary" }
+          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-primary" },
+          { label: "উপস্থিত", value: stats.present, icon: Scan, color: "text-accent" }
         ].map((stat, i) => (
           <div key={i} className="glass-card p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-2">
@@ -333,8 +333,8 @@ export function AdminDashboard() {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      app.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
-                      app.status === 'Rejected' ? 'bg-rose-100 text-rose-700' :
+                      app.status === 'Approved' ? 'bg-primary/10 text-primary' :
+                      app.status === 'Rejected' ? 'bg-accent/10 text-accent' :
                       'bg-amber-100 text-amber-700'
                     }`}>
                       {app.status}
@@ -378,21 +378,21 @@ export function AdminDashboard() {
                       </button>
                       <button
                         onClick={() => updateStatus(app.id, 'Approved')}
-                        className="p-2 hover:bg-emerald-100 text-slate-400 hover:text-emerald-600 rounded-lg transition-colors"
+                        className="p-2 hover:bg-primary/10 text-slate-400 hover:text-primary rounded-lg transition-colors"
                         title="Approve"
                       >
                         <CheckCircle className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => updateStatus(app.id, 'Rejected')}
-                        className="p-2 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                        className="p-2 hover:bg-accent/10 text-slate-400 hover:text-accent rounded-lg transition-colors"
                         title="Reject"
                       >
                         <XCircle className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => deleteApplicant(app.id)}
-                        className="p-2 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                        className="p-2 hover:bg-accent/10 text-slate-400 hover:text-accent rounded-lg transition-colors"
                         title="Delete"
                       >
                         <Trash2 className="w-5 h-5" />

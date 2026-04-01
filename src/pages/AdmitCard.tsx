@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
-import { Download, Printer, CheckCircle, Shield } from "lucide-react";
-import jsPDF from "jspdf";
+import { QRCodeCanvas } from "qrcode.react";
+import { Download, Printer, CheckCircle, Shield, Loader2 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
 
@@ -11,6 +11,7 @@ export function AdmitCard() {
   const [searchParams] = useSearchParams();
   const [applicant, setApplicant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,19 +47,43 @@ export function AdmitCard() {
   }, [applicant, searchParams]);
 
   const handleDownloadPDF = async () => {
-    if (!cardRef.current) return;
-    const canvas = await html2canvas(cardRef.current, { 
-      scale: 2, 
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      logging: false
-    });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Admit_Card_${applicant.fullNameEnglish}.pdf`);
+    if (!cardRef.current || downloading) return;
+    
+    try {
+      setDownloading(true);
+      
+      // Wait a bit for all images to be fully loaded
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const canvas = await html2canvas(cardRef.current, { 
+        scale: 2, 
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        allowTaint: false,
+        logging: true, // Enable logging for debugging if needed
+        windowWidth: cardRef.current.scrollWidth,
+        windowHeight: cardRef.current.scrollHeight
+      });
+
+      const imgData = canvas.toDataURL("image/png", 1.0);
+      const pdf = new jsPDF({
+        orientation: "p",
+        unit: "mm",
+        format: "a4",
+        compress: true
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`BNCC_Admit_Card_${applicant.fullNameEnglish.replace(/\s+/g, '_')}.pdf`);
+    } catch (error) {
+      console.error("PDF Generation error:", error);
+      alert("পিডিএফ তৈরি করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handlePrint = () => {
@@ -78,18 +103,25 @@ export function AdmitCard() {
         <p className="text-slate-600">আপনার প্রবেশপত্রটি ডাউনলোড করে সংরক্ষণ করুন।</p>
       </div>
 
-      {/* Admit Card Preview */}
       <div className="flex justify-center overflow-x-auto pb-8 no-scrollbar">
         <div 
           ref={cardRef}
-          className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-2xl flex-shrink-0"
+          className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-2xl flex-shrink-0 print:shadow-none print:m-0"
           style={{ 
             fontFamily: "'Roboto', sans-serif",
             padding: "0.75in",
-            backgroundImage: 'radial-gradient(#f1f5f9 1px, transparent 1px)',
-            backgroundSize: '20px 20px'
           }}
         >
+          {/* Background Pattern - Hidden from html2canvas and print if needed */}
+          <div 
+            className="absolute inset-0 pointer-events-none print:hidden" 
+            style={{ 
+              backgroundImage: 'radial-gradient(#f1f5f9 1px, transparent 1px)',
+              backgroundSize: '20px 20px'
+            }}
+            data-html2canvas-ignore="true"
+          ></div>
+
           {/* Outer Border */}
           <div className="w-full h-full border-2 border-black rounded-[5px] p-6 relative flex flex-col">
             
@@ -100,6 +132,7 @@ export function AdmitCard() {
                 alt="Watermark" 
                 className="w-[300px] h-auto grayscale" 
                 referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
               />
             </div>
 
@@ -114,13 +147,14 @@ export function AdmitCard() {
                   alt="College Logo" 
                   className="max-h-full max-w-full" 
                   referrerPolicy="no-referrer" 
+                  crossOrigin="anonymous"
                 />
               </div>
               <div className="text-center flex-grow px-4">
                 <h2 className="text-xl font-bold font-montserrat uppercase leading-tight">COX’S BAZAR CITY COLLEGE</h2>
                 <h3 className="text-base font-semibold font-montserrat text-[#4B5320] uppercase leading-tight">BNCC PLATOON (ARMY WING)</h3>
                 <div className="mt-2 inline-block border-y-2 border-black py-1 px-4">
-                  <h1 className="text-2xl font-extrabold font-montserrat uppercase tracking-wider">ADMIT CARD 2025</h1>
+                  <h1 className="text-2xl font-extrabold font-montserrat uppercase tracking-wider">ADMIT CARD 2026</h1>
                 </div>
                 <p className="text-[10px] font-medium italic mt-1 text-gray-600">
                   “Computer Generated Admit Card (No Signature Required)”
@@ -132,6 +166,7 @@ export function AdmitCard() {
                   alt="BNCC Logo" 
                   className="max-h-full max-w-full" 
                   referrerPolicy="no-referrer" 
+                  crossOrigin="anonymous"
                 />
               </div>
             </div>
@@ -148,6 +183,7 @@ export function AdmitCard() {
                       className="w-full h-full object-cover" 
                       alt="Candidate" 
                       referrerPolicy="no-referrer" 
+                      crossOrigin="anonymous"
                     />
                   ) : (
                     <span className="text-xs text-gray-400">Photo</span>
@@ -158,7 +194,7 @@ export function AdmitCard() {
 
               <div className="flex flex-col items-center gap-2">
                 <div className="w-[1.5in] h-[2in] border border-black p-4 flex flex-col items-center justify-center bg-white">
-                  <QRCodeSVG 
+                  <QRCodeCanvas 
                     value={JSON.stringify({
                       id: applicant.id,
                       name: applicant.fullNameEnglish,
@@ -207,7 +243,7 @@ export function AdmitCard() {
               </div>
               <div className="flex flex-col items-center gap-1">
                 <div className="p-2 border border-black bg-white">
-                  <QRCodeSVG 
+                  <QRCodeCanvas 
                     value="https://www.facebook.com/cbcc.bncc" 
                     size={80} 
                   />
@@ -245,9 +281,18 @@ This admit card must be presented at the examination hall. Candidates must arriv
       <div className="flex justify-center gap-4 print:hidden">
         <button
           onClick={handleDownloadPDF}
-          className="flex items-center gap-2 px-8 py-4 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-all shadow-lg"
+          disabled={downloading}
+          className="flex items-center gap-2 px-8 py-4 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Download className="w-5 h-5" /> Download PDF
+          {downloading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+            </>
+          ) : (
+            <>
+              <Download className="w-5 h-5" /> Download PDF
+            </>
+          )}
         </button>
         <button
           onClick={handlePrint}

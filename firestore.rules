@@ -84,25 +84,33 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidApplicant(data) {
-      return hasRequiredFields([
-               'fullNameBangla', 'fullNameEnglish', 'fatherNameBangla', 'fatherNameEnglish', 
-               'motherNameBangla', 'motherNameEnglish', 'dob', 'nidBirthReg', 'gender', 
-               'religion', 'presentAddress', 'permanentAddress', 'studentPhone', 
-               'heightFeet', 'heightInches', 'weightKg', 'bloodGroup', 'sscGpa', 'sscGroup', 
-               'sscYear', 'sscBoard', 'studyStatus', 'subject', 'classRoll', 'session', 
-               'emisId', 'collegeName', 'photo', 'id', 'status', 'attendanceStatus', 'createdAt'
-             ]) &&
-             data.fullNameBangla is string && data.fullNameBangla.size() > 0 &&
-             data.fullNameEnglish is string && data.fullNameEnglish.size() > 0 &&
+      let requiredFields = [
+        'fullNameBangla', 'fullNameEnglish', 'fatherNameBangla', 'fatherNameEnglish', 
+        'motherNameBangla', 'motherNameEnglish', 'dob', 'nidBirthReg', 'gender', 
+        'religion', 'presentAddress', 'permanentAddress', 'studentPhone', 
+        'heightFeet', 'heightInches', 'weightKg', 'bloodGroup', 'sscGpa', 'sscGroup', 
+        'sscYear', 'sscBoard', 'studyStatus', 'subject', 'classRoll', 'session', 
+        'emisId', 'collegeName', 'photo', 'id', 'status', 'attendanceStatus', 'createdAt'
+      ];
+      let optionalFields = [
+        'studentEmail', 'hscGpa', 'hscGroup', 'hscYear', 'hscBoard', 'section', 'attendanceTime'
+      ];
+      let allFields = requiredFields.concat(optionalFields);
+
+      return hasRequiredFields(requiredFields) &&
+             request.resource.data.keys().hasOnly(allFields) &&
+             data.fullNameBangla is string && data.fullNameBangla.size() > 0 && data.fullNameBangla.size() < 200 &&
+             data.fullNameEnglish is string && data.fullNameEnglish.size() > 0 && data.fullNameEnglish.size() < 200 &&
              data.dob is string && data.dob.size() > 0 &&
              data.gender is string && data.gender in ['Male', 'Female', 'Others'] &&
              data.bloodGroup is string && data.bloodGroup.size() > 0 &&
              data.studyStatus is string && data.studyStatus.size() > 0 &&
              data.classRoll is string && data.classRoll.size() > 0 &&
-             data.photo is string && data.photo.size() > 0 &&
+             data.photo is string && data.photo.size() > 0 && data.photo.size() < 2000000 &&
              data.status in ['Pending', 'Approved', 'Rejected'] &&
              data.attendanceStatus in ['Present', 'Absent'] &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!('studentEmail' in data) || data.studentEmail == "" || isValidEmail(data.studentEmail));
     }
 
     // ===============================================================
@@ -117,7 +125,9 @@ service cloud.firestore {
       
       // Access allowed for dashboard operations
       // NOTE: Since Google Auth was removed per user request, these are now public.
-      allow read, update, delete: if true;
+      // We still validate the data on update to prevent corruption.
+      allow read, delete: if true;
+      allow update: if isValidApplicant(request.resource.data);
 
       // Public can read their own admit card if they have the ID
       allow get: if true; 

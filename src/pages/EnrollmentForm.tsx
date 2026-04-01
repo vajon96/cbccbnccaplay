@@ -637,7 +637,7 @@ export function EnrollmentForm() {
                   </div>
                 </div>
               </div>
-              <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-start gap-3">
+              <div className="p-4 bg-olive/5 rounded-xl border border-olive/20 flex items-start gap-3">
                 <Shield className="w-5 h-5 text-primary shrink-0" />
                 <p className="text-xs text-slate-500">আমি অঙ্গীকার করছি যে উপরে প্রদত্ত সকল তথ্য সত্য। কোনো তথ্য মিথ্যা প্রমাণিত হলে আমার আবেদন বাতিল বলে গণ্য হবে।</p>
               </div>

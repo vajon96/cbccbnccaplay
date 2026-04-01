@@ -49,7 +49,7 @@ export function AdminLogin() {
         <div className="space-y-6">
           {error && (
             <div className="space-y-2">
-              <p className="text-primary text-xs text-center font-bold bg-primary/10 p-3 rounded-lg border border-primary/20">{error}</p>
+              <p className="text-accent text-xs text-center font-bold bg-accent/10 p-3 rounded-lg border border-accent/20">{error}</p>
             </div>
           )}
 
