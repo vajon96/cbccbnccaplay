@@ -58,7 +58,7 @@ export function AdmitCard() {
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Admit_Card_${applicant.fullName}.pdf`);
+    pdf.save(`Admit_Card_${applicant.fullNameEnglish}.pdf`);
   };
 
   const handlePrint = () => {
@@ -85,7 +85,7 @@ export function AdmitCard() {
           className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-2xl flex-shrink-0"
           style={{ 
             fontFamily: "'Roboto', sans-serif",
-            padding: "1in"
+            padding: "0.75in"
           }}
         >
           {/* Outer Border */}
@@ -159,8 +159,8 @@ export function AdmitCard() {
                   <QRCodeSVG 
                     value={JSON.stringify({
                       id: applicant.id,
-                      name: applicant.fullName,
-                      collegeId: applicant.collegeId,
+                      name: applicant.fullNameEnglish,
+                      classRoll: applicant.classRoll,
                       status: applicant.status
                     })} 
                     size={100} 
@@ -177,12 +177,12 @@ export function AdmitCard() {
             <div className="mb-6 relative z-10">
               <div className="grid grid-cols-1 gap-y-3">
                 {[
-                  { label: "Name", value: applicant.fullName },
+                  { label: "Name", value: applicant.fullNameEnglish },
                   { label: "Date of Birth", value: applicant.dob },
-                  { label: "Roll Number", value: applicant.roll },
+                  { label: "Roll Number", value: applicant.classRoll },
                   { label: "Application ID", value: applicant.id },
-                  { label: "Department / Group", value: applicant.class },
-                  { label: "Mobile Number", value: applicant.mobile }
+                  { label: "Department / Group", value: applicant.studyStatus },
+                  { label: "Mobile Number", value: applicant.studentPhone }
                 ].map((item, i) => (
                   <div key={i} className="flex items-baseline">
                     <span className="w-48 font-bold text-sm uppercase font-montserrat">{item.label}</span>
@@ -194,16 +194,24 @@ export function AdmitCard() {
             </div>
 
             {/* Examination Notice */}
-            <div className="mb-6 relative z-10">
-              <hr className="border-black mb-4" />
-              <h4 className="text-sm font-bold font-montserrat uppercase mb-3 text-[#4B5320]">Examination Notice</h4>
-              <p className="text-sm font-medium text-gray-800 leading-relaxed">
-                The examination date will be announced through the Platoon Officer’s official Facebook page. 
-                Please stay updated by following the official link: 
-                <a href="https://www.facebook.com/cbcc.bncc" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline ml-1">
-                  https://www.facebook.com/cbcc.bncc
-                </a>
-              </p>
+            <div className="mb-6 relative z-10 flex items-start gap-6">
+              <div className="flex-grow">
+                <hr className="border-black mb-4" />
+                <h4 className="text-sm font-bold font-montserrat uppercase mb-3 text-[#4B5320]">Examination Notice</h4>
+                <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                  The examination date will be announced through the Platoon Officer’s official Facebook page. 
+                  Please stay updated by scanning the official QR code:
+                </p>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <div className="p-2 border border-black bg-white">
+                  <QRCodeSVG 
+                    value="https://www.facebook.com/cbcc.bncc" 
+                    size={80} 
+                  />
+                </div>
+                <span className="text-[8px] font-bold uppercase">Facebook Page</span>
+              </div>
             </div>
 
             {/* Important Instructions */}

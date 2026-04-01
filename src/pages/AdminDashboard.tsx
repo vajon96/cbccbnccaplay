@@ -152,7 +152,7 @@ export function AdminDashboard() {
     applicants.forEach((app) => {
       if (app.photo) {
         const base64Data = app.photo.split(",")[1];
-        zip.file(`${app.fullName}_${app.collegeId}.jpg`, base64Data, { base64: true });
+        zip.file(`${app.fullNameEnglish || app.fullNameBangla}_${app.id}.jpg`, base64Data, { base64: true });
       }
     });
     const content = await zip.generateAsync({ type: "blob" });
@@ -163,8 +163,10 @@ export function AdminDashboard() {
   };
 
   const filteredApplicants = applicants.filter(app => {
-    const matchesSearch = app.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          app.collegeId.toLowerCase().includes(searchTerm.toLowerCase());
+    const fullName = `${app.fullNameEnglish || ""} ${app.fullNameBangla || ""}`.toLowerCase();
+    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
+                          (app.classRoll || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (app.emisId || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "All" || app.status === statusFilter;
     const matchesAttendance = attendanceFilter === "All" || app.attendanceStatus === attendanceFilter;
     return matchesSearch && matchesStatus && matchesAttendance;
@@ -292,7 +294,7 @@ export function AdminDashboard() {
             <thead>
               <tr className="bg-white/5 border-b border-white/10">
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">আবেদনকারী</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">একাডেমিক তথ্য</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">শ্রেণি ও রোল</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">স্ট্যাটাস</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">উপস্থিতি</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase text-right">অ্যাকশন</th>
@@ -312,7 +314,7 @@ export function AdminDashboard() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-bold text-white">{app.fullName}</p>
+                          <p className="font-bold text-white">{app.fullNameEnglish || app.fullNameBangla}</p>
                           <button 
                             onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
                             className="text-accent hover:text-white transition-colors"
@@ -321,13 +323,13 @@ export function AdminDashboard() {
                             <Download className="w-3 h-3" />
                           </button>
                         </div>
-                        <p className="text-xs text-slate-500">{app.mobile || "No Mobile"}</p>
+                        <p className="text-xs text-slate-500">{app.studentPhone || "No Mobile"}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-sm text-slate-300">{app.class} | Roll: {app.roll}</p>
-                    <p className="text-xs text-slate-500">ID: {app.collegeId}</p>
+                    <p className="text-sm text-slate-300">{app.studyStatus} | Roll: {app.classRoll}</p>
+                    <p className="text-xs text-slate-500">ID: {app.id}</p>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -445,20 +447,20 @@ export function AdminDashboard() {
                       <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-white">{scannedApplicant.fullName}</h3>
+                      <h3 className="text-xl font-bold text-white">{scannedApplicant.fullNameEnglish || scannedApplicant.fullNameBangla}</h3>
                       <p className="text-accent font-bold text-sm uppercase tracking-wider">উপস্থিতি সফল!</p>
-                      <p className="text-xs text-slate-400 mt-1">ID: {scannedApplicant.collegeId}</p>
+                      <p className="text-xs text-slate-400 mt-1">ID: {scannedApplicant.id}</p>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-white/5 rounded-xl">
                       <p className="text-[10px] uppercase text-slate-500 font-bold">Class</p>
-                      <p className="text-white font-bold">{scannedApplicant.class}</p>
+                      <p className="text-white font-bold">{scannedApplicant.studyStatus}</p>
                     </div>
                     <div className="p-4 bg-white/5 rounded-xl">
                       <p className="text-[10px] uppercase text-slate-500 font-bold">Roll</p>
-                      <p className="text-white font-bold">{scannedApplicant.roll}</p>
+                      <p className="text-white font-bold">{scannedApplicant.classRoll}</p>
                     </div>
                   </div>
 
