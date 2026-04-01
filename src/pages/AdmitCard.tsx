@@ -52,20 +52,37 @@ export function AdmitCard() {
     try {
       setDownloading(true);
       
-      // Wait a bit for all images to be fully loaded
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Ensure all images are loaded
+      const images = cardRef.current.querySelectorAll('img');
+      await Promise.all(Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }));
+
+      // Small extra delay for rendering stability
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const canvas = await html2canvas(cardRef.current, { 
         scale: 2, 
         backgroundColor: "#ffffff",
         useCORS: true,
         allowTaint: false,
-        logging: true, // Enable logging for debugging if needed
-        windowWidth: cardRef.current.scrollWidth,
-        windowHeight: cardRef.current.scrollHeight
+        logging: false,
+        width: cardRef.current.offsetWidth,
+        height: cardRef.current.offsetHeight,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.querySelector('.print-area') as HTMLElement;
+          if (el) {
+            el.style.boxShadow = 'none';
+            el.style.border = 'none';
+          }
+        }
       });
 
-      const imgData = canvas.toDataURL("image/png", 1.0);
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
       const pdf = new jsPDF({
         orientation: "p",
         unit: "mm",
@@ -76,18 +93,21 @@ export function AdmitCard() {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`BNCC_Admit_Card_${applicant.fullNameEnglish.replace(/\s+/g, '_')}.pdf`);
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`BNCC_Admit_Card_${applicant.id}.pdf`);
     } catch (error) {
       console.error("PDF Generation error:", error);
-      alert("পিডিএফ তৈরি করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+      alert("পিডিএফ তৈরি করতে সমস্যা হয়েছে। অনুগ্রহ করে প্রিন্ট অপশনটি ব্যবহার করুন।");
     } finally {
       setDownloading(false);
     }
   };
 
   const handlePrint = () => {
-    window.print();
+    // Small delay to ensure UI is stable
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;

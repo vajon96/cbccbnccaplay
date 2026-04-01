@@ -50,27 +50,30 @@ h1, h2, h3, h4, .font-display {
 }
 
 @media print {
-  body * {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body {
     visibility: hidden;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .print-area, .print-area * {
     visibility: visible;
   }
   .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 210mm;
-    height: 297mm;
-    margin: 0;
-    padding: 0;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
     background: white !important;
-    color: black !important;
-  }
-  @page {
-    size: A4;
-    margin: 0;
+    z-index: 9999;
   }
 }
