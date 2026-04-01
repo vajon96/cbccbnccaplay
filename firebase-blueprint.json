@@ -44,7 +44,7 @@
         "attendanceTime": { "type": "string", "format": "date-time", "description": "Time of attendance marking" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
-      "required": ["fullNameBangla", "fullNameEnglish", "fatherNameBangla", "fatherNameEnglish", "motherNameBangla", "motherNameEnglish", "dob", "nidBirthReg", "gender", "religion", "presentAddress", "permanentAddress", "studentPhone", "heightFeet", "heightInches", "weightKg", "bloodGroup", "sscGpa", "sscGroup", "sscYear", "sscBoard", "studyStatus", "subject", "classRoll", "session", "collegeName", "photo"]
+      "required": ["fullNameBangla", "fullNameEnglish", "fatherNameBangla", "fatherNameEnglish", "motherNameBangla", "motherNameEnglish", "dob", "nidBirthReg", "gender", "religion", "presentAddress", "permanentAddress", "studentPhone", "heightFeet", "heightInches", "weightKg", "bloodGroup", "sscGpa", "sscGroup", "sscYear", "sscBoard", "studyStatus", "subject", "classRoll", "session", "emisId", "collegeName", "photo"]
     },
     "admin_config": {
       "title": "Admin Config",

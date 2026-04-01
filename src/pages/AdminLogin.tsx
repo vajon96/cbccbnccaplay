@@ -39,35 +39,35 @@ export function AdminLogin() {
         className="max-w-md w-full glass-card p-10 rounded-[2.5rem] space-y-8"
       >
         <div className="text-center space-y-3">
-          <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto">
-            <Shield className="w-8 h-8 text-accent" />
+          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
+            <Shield className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-white">অ্যাডমিন লগইন</h1>
-          <p className="text-slate-400 text-sm">ড্যাশবোর্ড অ্যাক্সেস করতে পাসওয়ার্ড দিন</p>
+          <h1 className="text-2xl font-bold text-slate-900">অ্যাডমিন লগইন</h1>
+          <p className="text-slate-600 text-sm">ড্যাশবোর্ড অ্যাক্সেস করতে পাসওয়ার্ড দিন</p>
         </div>
 
         <div className="space-y-6">
           {error && (
             <div className="space-y-2">
-              <p className="text-red-400 text-xs text-center font-medium bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</p>
+              <p className="text-primary text-xs text-center font-bold bg-primary/10 p-3 rounded-lg border border-primary/20">{error}</p>
             </div>
           )}
 
           <form onSubmit={handlePasswordLogin} className="space-y-4">
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-12 py-4 text-white focus:border-accent outline-none transition-colors"
+                className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-12 py-4 text-slate-900 focus:border-primary outline-none transition-colors"
                 placeholder="পাসওয়ার্ড লিখুন"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -75,7 +75,7 @@ export function AdminLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-accent text-primary font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-white transition-all disabled:opacity-50"
+              className="w-full py-4 bg-primary text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
             >
               {loading ? "যাচাই হচ্ছে..." : "পাসওয়ার্ড দিয়ে এগিয়ে যান"} <ArrowRight className="w-5 h-5" />
             </button>

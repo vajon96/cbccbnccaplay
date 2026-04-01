@@ -6,21 +6,43 @@ service cloud.firestore {
     // ===============================================================
     //
     // Collection: applicants
-    // Document ID: auto-generated
+    // Document ID: applicantId
     // Fields:
-    //   - fullName: string (required)
-    //   - fatherName: string (required)
-    //   - motherName: string (required)
+    //   - fullNameBangla: string (required)
+    //   - fullNameEnglish: string (required)
+    //   - fatherNameBangla: string (required)
+    //   - fatherNameEnglish: string (required)
+    //   - motherNameBangla: string (required)
+    //   - motherNameEnglish: string (required)
     //   - dob: string (required)
+    //   - nidBirthReg: string (required)
     //   - gender: string (required)
+    //   - religion: string (required)
+    //   - presentAddress: string (required)
+    //   - permanentAddress: string (required)
+    //   - studentPhone: string (required)
+    //   - studentEmail: string (optional)
+    //   - heightFeet: string|number (required)
+    //   - heightInches: string|number (required)
+    //   - weightKg: string|number (required)
     //   - bloodGroup: string (required)
-    //   - collegeId: string (required)
-    //   - class: string (required)
-    //   - roll: string (required)
+    //   - sscGpa: string|number (required)
+    //   - sscGroup: string (required)
+    //   - sscYear: string (required)
+    //   - sscBoard: string (required)
+    //   - hscGpa: string (optional)
+    //   - hscGroup: string (optional)
+    //   - hscYear: string (optional)
+    //   - hscBoard: string (optional)
+    //   - studyStatus: string (required)
+    //   - subject: string (required)
+    //   - classRoll: string (required)
+    //   - section: string (optional)
     //   - session: string (required)
-    //   - mobile: string (optional)
-    //   - email: string (optional)
+    //   - emisId: string (required)
+    //   - collegeName: string (required)
     //   - photo: string (required, base64)
+    //   - id: string (required)
     //   - status: string (enum: Pending, Approved, Rejected)
     //   - attendanceStatus: string (enum: Present, Absent)
     //   - attendanceTime: timestamp (optional)
@@ -53,17 +75,8 @@ service cloud.firestore {
         email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
-    function isValidUrl(url) {
-      return url is string &&
-        (url.matches("^https://.*") || url.matches("^http://.*"));
-    }
-
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
-    }
-
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
     }
 
     // ===============================================================
@@ -71,17 +84,21 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidApplicant(data) {
-      return hasRequiredFields(['fullName', 'fatherName', 'motherName', 'dob', 'gender', 'bloodGroup', 'collegeId', 'class', 'roll', 'session', 'photo', 'status', 'attendanceStatus', 'createdAt']) &&
-             data.fullName is string && data.fullName.size() > 0 && data.fullName.size() < 100 &&
-             data.fatherName is string && data.fatherName.size() > 0 && data.fatherName.size() < 100 &&
-             data.motherName is string && data.motherName.size() > 0 && data.motherName.size() < 100 &&
+      return hasRequiredFields([
+               'fullNameBangla', 'fullNameEnglish', 'fatherNameBangla', 'fatherNameEnglish', 
+               'motherNameBangla', 'motherNameEnglish', 'dob', 'nidBirthReg', 'gender', 
+               'religion', 'presentAddress', 'permanentAddress', 'studentPhone', 
+               'heightFeet', 'heightInches', 'weightKg', 'bloodGroup', 'sscGpa', 'sscGroup', 
+               'sscYear', 'sscBoard', 'studyStatus', 'subject', 'classRoll', 'session', 
+               'emisId', 'collegeName', 'photo', 'id', 'status', 'attendanceStatus', 'createdAt'
+             ]) &&
+             data.fullNameBangla is string && data.fullNameBangla.size() > 0 &&
+             data.fullNameEnglish is string && data.fullNameEnglish.size() > 0 &&
              data.dob is string && data.dob.size() > 0 &&
-             data.gender is string && data.gender in ['Male', 'Female', 'Other'] &&
+             data.gender is string && data.gender in ['Male', 'Female', 'Others'] &&
              data.bloodGroup is string && data.bloodGroup.size() > 0 &&
-             data.collegeId is string && data.collegeId.size() > 0 &&
-             data.class is string && data.class.size() > 0 &&
-             data.roll is string && data.roll.size() > 0 &&
-             data.session is string && data.session.size() > 0 &&
+             data.studyStatus is string && data.studyStatus.size() > 0 &&
+             data.classRoll is string && data.classRoll.size() > 0 &&
              data.photo is string && data.photo.size() > 0 &&
              data.status in ['Pending', 'Approved', 'Rejected'] &&
              data.attendanceStatus in ['Present', 'Absent'] &&

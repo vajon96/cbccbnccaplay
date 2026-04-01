@@ -2,10 +2,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #002147;
-  --color-accent: #C5A059;
-  --color-army: #4B5320;
-  --color-bg-dark: #0B0F19;
+  --color-primary: #FF6B6B;
+  --color-accent: #FFF5BA;
+  --color-peach: #FFC9B9;
+  --color-mint: #B9FBC0;
+  --color-lavender: #DCC6E0;
+  --color-bg-light: #FDFCFB;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", sans-serif;
   --font-montserrat: "Montserrat", sans-serif;
@@ -13,27 +15,29 @@
 }
 
 body {
-  @apply bg-bg-dark text-slate-200 font-sans selection:bg-accent selection:text-primary;
+  @apply bg-bg-light text-slate-800 font-sans selection:bg-primary selection:text-white;
+  background-image: radial-gradient(circle at top right, rgba(255, 201, 185, 0.3), transparent 40%),
+                    radial-gradient(circle at bottom left, rgba(185, 251, 192, 0.3), transparent 40%);
 }
 
 h1, h2, h3, h4, .font-display {
-  @apply font-display;
+  @apply font-display text-slate-900;
 }
 
 .glass {
-  @apply backdrop-blur-md bg-white/5 border border-white/10;
+  @apply backdrop-blur-md bg-white/40 border border-white/60;
 }
 
 .glass-card {
-  @apply backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl;
+  @apply backdrop-blur-2xl bg-white/70 border border-white/60 shadow-xl;
 }
 
 .glow-hover:hover {
-  @apply shadow-[0_0_20px_rgba(197,160,89,0.2)];
+  @apply shadow-[0_0_20px_rgba(255,107,107,0.2)];
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-accent to-white;
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-slate-900;
 }
 
 .no-scrollbar::-webkit-scrollbar {

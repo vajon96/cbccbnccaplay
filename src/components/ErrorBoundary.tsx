@@ -50,25 +50,25 @@ export class ErrorBoundary extends React.Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-red-100">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+        <div className="min-h-screen flex items-center justify-center bg-bg-light p-4">
+          <div className="max-w-md w-full glass-card rounded-3xl p-8 text-center border border-primary/10">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-8 h-8 text-primary" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Oops! Something went wrong</h2>
-            <p className="text-gray-600 mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Oops! Something went wrong</h2>
+            <p className="text-slate-600 mb-8">
               {isFirestoreError ? "There was a problem communicating with the database." : "We encountered an error while processing your request."}
             </p>
             
-            <div className="bg-red-50 rounded-lg p-4 mb-8 text-left">
-              <p className="text-sm font-mono text-red-800 break-words">
+            <div className="bg-primary/5 rounded-2xl p-4 mb-8 text-left border border-primary/10">
+              <p className="text-sm font-mono text-primary break-words">
                 {errorMessage}
               </p>
             </div>
 
             <button
               onClick={this.handleReset}
-              className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg shadow-primary/20"
             >
               <RefreshCcw className="w-5 h-5" />
               Try Again

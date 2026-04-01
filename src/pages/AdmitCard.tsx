@@ -71,11 +71,11 @@ export function AdmitCard() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-12 space-y-8">
       <div className="text-center space-y-4 print:hidden">
-        <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-          <CheckCircle className="w-10 h-10 text-green-500" />
+        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+          <CheckCircle className="w-10 h-10 text-primary" />
         </div>
-        <h1 className="text-3xl font-bold text-white">আবেদন সফল হয়েছে!</h1>
-        <p className="text-slate-400">আপনার প্রবেশপত্রটি ডাউনলোড করে সংরক্ষণ করুন।</p>
+        <h1 className="text-3xl font-bold text-slate-900">আবেদন সফল হয়েছে!</h1>
+        <p className="text-slate-600">আপনার প্রবেশপত্রটি ডাউনলোড করে সংরক্ষণ করুন।</p>
       </div>
 
       {/* Admit Card Preview */}
@@ -85,7 +85,9 @@ export function AdmitCard() {
           className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-2xl flex-shrink-0"
           style={{ 
             fontFamily: "'Roboto', sans-serif",
-            padding: "0.75in"
+            padding: "0.75in",
+            backgroundImage: 'radial-gradient(#f1f5f9 1px, transparent 1px)',
+            backgroundSize: '20px 20px'
           }}
         >
           {/* Outer Border */}
@@ -214,8 +216,9 @@ export function AdmitCard() {
               </div>
             </div>
 
+   
             {/* Important Instructions */}
-            <div className="mt-auto relative z-10">
+            <div className="mt-8 relative z-10">
               <hr className="border-black mb-4" />
               <h4 className="text-sm font-bold font-montserrat uppercase mb-3">Important Instructions for Candidates</h4>
               <ul className="text-[11px] leading-relaxed space-y-1.5 list-disc pl-5 text-justify">
@@ -227,8 +230,10 @@ This admit card must be presented at the examination hall. Candidates must arriv
 
             {/* Footer */}
             <div className="mt-6 pt-4 border-t border-gray-200 text-center relative z-10">
-        
-              <p className="text-[8px] text-gray-300 mt-1">
+              <p className="text-[10px] font-bold text-gray-800">
+                
+              </p>
+              <p className="text-[8px] text-gray-400 mt-1">
                 Generated on {new Date().toLocaleString()} | CBCC BNCC Enrollment System
               </p>
             </div>
@@ -240,13 +245,13 @@ This admit card must be presented at the examination hall. Candidates must arriv
       <div className="flex justify-center gap-4 print:hidden">
         <button
           onClick={handleDownloadPDF}
-          className="flex items-center gap-2 px-8 py-4 bg-[#4B5320] text-white font-bold rounded-xl hover:opacity-90 transition-all shadow-lg"
+          className="flex items-center gap-2 px-8 py-4 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-all shadow-lg"
         >
           <Download className="w-5 h-5" /> Download PDF
         </button>
         <button
           onClick={handlePrint}
-          className="flex items-center gap-2 px-8 py-4 glass text-white font-bold rounded-xl hover:bg-white/10 transition-all shadow-lg"
+          className="flex items-center gap-2 px-8 py-4 bg-white text-slate-900 border border-slate-200 font-bold rounded-xl hover:bg-slate-50 transition-all shadow-lg"
         >
           <Printer className="w-5 h-5" /> Print Card
         </button>

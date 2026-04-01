@@ -179,17 +179,17 @@ export function AdminDashboard() {
     present: applicants.filter(a => a.attendanceStatus === 'Present').length,
   };
 
-  if (loading) return <div className="flex items-center justify-center h-screen text-white">তথ্য লোড হচ্ছে...</div>;
+  if (loading) return <div className="flex items-center justify-center h-screen text-slate-900">তথ্য লোড হচ্ছে...</div>;
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen text-white p-4 text-center space-y-4">
-        <XCircle className="w-16 h-16 text-red-500" />
+      <div className="flex flex-col items-center justify-center h-screen text-slate-900 p-4 text-center space-y-4">
+        <XCircle className="w-16 h-16 text-primary" />
         <h2 className="text-xl font-bold">ত্রুটি ঘটেছে!</h2>
-        <p className="text-slate-400 max-w-md">{error}</p>
+        <p className="text-slate-600 max-w-md">{error}</p>
         <button 
           onClick={() => window.location.reload()}
-          className="px-6 py-2 bg-accent text-primary font-bold rounded-xl hover:bg-white transition-all"
+          className="px-6 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
         >
           আবার চেষ্টা করুন
         </button>
@@ -202,25 +202,25 @@ export function AdminDashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">অ্যাডমিন ড্যাশবোর্ড</h1>
-          <p className="text-slate-400">সকল আবেদনকারী এবং তাদের স্ট্যাটাস পরিচালনা করুন</p>
+          <h1 className="text-3xl font-bold text-slate-900">অ্যাডমিন ড্যাশবোর্ড</h1>
+          <p className="text-slate-600">সকল আবেদনকারী এবং তাদের স্ট্যাটাস পরিচালনা করুন</p>
         </div>
         <div className="flex gap-3">
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-5 py-2.5 glass rounded-xl text-sm font-bold hover:bg-white/10"
+            className="flex items-center gap-2 px-5 py-2.5 glass border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-50"
           >
-            <FileSpreadsheet className="w-4 h-4 text-green-400" /> Excel এক্সপোর্ট
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Excel এক্সপোর্ট
           </button>
           <button
             onClick={downloadPhotosZip}
-            className="flex items-center gap-2 px-5 py-2.5 glass rounded-xl text-sm font-bold hover:bg-white/10"
+            className="flex items-center gap-2 px-5 py-2.5 glass border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-50"
           >
-            <Archive className="w-4 h-4 text-accent" /> ফটো জিপ (ZIP)
+            <Archive className="w-4 h-4 text-primary" /> ফটো জিপ (ZIP)
           </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-sm font-bold hover:bg-red-500/20"
+            className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold hover:bg-primary/20"
           >
             <LogOut className="w-4 h-4" /> লগআউট
           </button>
@@ -230,18 +230,18 @@ export function AdminDashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-blue-400" },
-          { label: "পেন্ডিং", value: stats.pending, icon: Clock, color: "text-yellow-400" },
-          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-green-400" },
-          { label: "উপস্থিত", value: stats.present, icon: Scan, color: "text-accent" }
+          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-blue-600" },
+          { label: "পেন্ডিং", value: stats.pending, icon: Clock, color: "text-amber-600" },
+          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-emerald-600" },
+          { label: "উপস্থিত", value: stats.present, icon: Scan, color: "text-primary" }
         ].map((stat, i) => (
           <div key={i} className="glass-card p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-2">
               <stat.icon className={`w-5 h-5 ${stat.color}`} />
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Stats</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Stats</span>
             </div>
-            <p className="text-2xl font-bold text-white">{stat.value}</p>
-            <p className="text-xs text-slate-400">{stat.label}</p>
+            <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+            <p className="text-xs text-slate-600">{stat.label}</p>
           </div>
         ))}
       </div>
@@ -249,26 +249,26 @@ export function AdminDashboard() {
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-grow">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
             type="text"
             placeholder="নাম অথবা কলেজ আইডি দিয়ে খুঁজুন..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white focus:border-accent outline-none"
+            className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-4 py-3 text-slate-900 focus:border-primary outline-none transition-colors"
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setShowScanner(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-accent text-primary rounded-xl text-sm font-bold hover:bg-white transition-all"
+            className="flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
           >
             <QrCode className="w-4 h-4" /> QR স্ক্যানার
           </button>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-accent outline-none text-sm"
+            className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:border-primary outline-none text-sm cursor-pointer"
           >
             <option value="All">সকল স্ট্যাটাস</option>
             <option value="Pending">পেন্ডিং</option>
@@ -278,7 +278,7 @@ export function AdminDashboard() {
           <select
             value={attendanceFilter}
             onChange={(e) => setAttendanceFilter(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-accent outline-none text-sm"
+            className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:border-primary outline-none text-sm cursor-pointer"
           >
             <option value="All">উপস্থিতি (সকল)</option>
             <option value="Present">উপস্থিত (Present)</option>
@@ -292,32 +292,32 @@ export function AdminDashboard() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-white/5 border-b border-white/10">
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">আবেদনকারী</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">শ্রেণি ও রোল</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">স্ট্যাটাস</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">উপস্থিতি</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase text-right">অ্যাকশন</th>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">আবেদনকারী</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">শ্রেণি ও রোল</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">স্ট্যাটাস</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">উপস্থিতি</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">অ্যাকশন</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-slate-100">
               {filteredApplicants.map((app) => (
-                <tr key={app.id} className="hover:bg-white/[0.02] transition-colors">
+                <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
                         {app.photo ? (
                           <img src={app.photo} className="w-full h-full object-cover" alt="" />
                         ) : (
-                          <Users className="w-full h-full p-2 text-slate-600" />
+                          <Users className="w-full h-full p-2 text-slate-400" />
                         )}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-bold text-white">{app.fullNameEnglish || app.fullNameBangla}</p>
+                          <p className="font-bold text-slate-900">{app.fullNameEnglish || app.fullNameBangla}</p>
                           <button 
                             onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
-                            className="text-accent hover:text-white transition-colors"
+                            className="text-primary hover:text-primary/80 transition-colors"
                             title="Download Admit Card"
                           >
                             <Download className="w-3 h-3" />
@@ -328,14 +328,14 @@ export function AdminDashboard() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-sm text-slate-300">{app.studyStatus} | Roll: {app.classRoll}</p>
+                    <p className="text-sm text-slate-700">{app.studyStatus} | Roll: {app.classRoll}</p>
                     <p className="text-xs text-slate-500">ID: {app.id}</p>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      app.status === 'Approved' ? 'bg-green-500/10 text-green-400' :
-                      app.status === 'Rejected' ? 'bg-red-500/10 text-red-400' :
-                      'bg-yellow-500/10 text-yellow-400'
+                      app.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+                      app.status === 'Rejected' ? 'bg-rose-100 text-rose-700' :
+                      'bg-amber-100 text-amber-700'
                     }`}>
                       {app.status}
                     </span>
@@ -343,7 +343,7 @@ export function AdminDashboard() {
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className={`inline-flex items-center gap-1.5 font-bold text-[10px] uppercase ${
-                        app.attendanceStatus === 'Present' ? 'text-accent' : 'text-slate-500'
+                        app.attendanceStatus === 'Present' ? 'text-primary' : 'text-slate-400'
                       }`}>
                         {app.attendanceStatus === 'Present' ? (
                           <><CheckCircle className="w-3 h-3" /> Present</>
@@ -352,7 +352,7 @@ export function AdminDashboard() {
                         )}
                       </span>
                       {app.attendanceTime && (
-                        <span className="text-[9px] text-slate-600 mt-0.5">
+                        <span className="text-[9px] text-slate-500 mt-0.5">
                           {new Date(app.attendanceTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       )}
@@ -362,7 +362,7 @@ export function AdminDashboard() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
-                        className="p-2 hover:bg-accent/10 text-slate-500 hover:text-accent rounded-lg transition-colors"
+                        className="p-2 hover:bg-primary/10 text-slate-400 hover:text-primary rounded-lg transition-colors"
                         title="Download Admit Card"
                       >
                         <Download className="w-5 h-5" />
@@ -370,7 +370,7 @@ export function AdminDashboard() {
                       <button
                         onClick={() => updateStatus(app.id, undefined as any, app.attendanceStatus === 'Present' ? 'Absent' : 'Present')}
                         className={`p-2 rounded-lg transition-colors ${
-                          app.attendanceStatus === 'Present' ? 'text-accent hover:bg-accent/10' : 'text-slate-500 hover:bg-white/5'
+                          app.attendanceStatus === 'Present' ? 'text-primary hover:bg-primary/10' : 'text-slate-400 hover:bg-slate-100'
                         }`}
                         title={app.attendanceStatus === 'Present' ? "Mark Absent" : "Mark Present"}
                       >
@@ -378,21 +378,21 @@ export function AdminDashboard() {
                       </button>
                       <button
                         onClick={() => updateStatus(app.id, 'Approved')}
-                        className="p-2 hover:bg-green-500/10 text-slate-500 hover:text-green-400 rounded-lg transition-colors"
+                        className="p-2 hover:bg-emerald-100 text-slate-400 hover:text-emerald-600 rounded-lg transition-colors"
                         title="Approve"
                       >
                         <CheckCircle className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => updateStatus(app.id, 'Rejected')}
-                        className="p-2 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-lg transition-colors"
+                        className="p-2 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
                         title="Reject"
                       >
                         <XCircle className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => deleteApplicant(app.id)}
-                        className="p-2 hover:bg-red-500/10 text-slate-500 hover:text-red-500 rounded-lg transition-colors"
+                        className="p-2 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
                         title="Delete"
                       >
                         <Trash2 className="w-5 h-5" />
@@ -406,29 +406,29 @@ export function AdminDashboard() {
         </div>
         {filteredApplicants.length === 0 && (
           <div className="p-12 text-center">
-            <Users className="w-12 h-12 text-slate-700 mx-auto mb-4" />
-            <p className="text-slate-500">কোনো আবেদনকারী পাওয়া যায়নি।</p>
+            <Users className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+            <p className="text-slate-400">কোনো আবেদনকারী পাওয়া যায়নি।</p>
           </div>
         )}
       </div>
 
       {/* QR Scanner Modal */}
       {showScanner && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#000814] border border-white/10 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white border border-slate-200 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center">
-                  <Camera className="w-5 h-5 text-accent" />
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-primary" />
                 </div>
-                <h2 className="text-xl font-bold text-white">QR এটেনডেন্স স্ক্যানার</h2>
+                <h2 className="text-xl font-bold text-slate-900">QR এটেনডেন্স স্ক্যানার</h2>
               </div>
               <button 
                 onClick={() => {
                   setShowScanner(false);
                   setScannedApplicant(null);
                 }}
-                className="p-2 hover:bg-white/5 rounded-full text-slate-400"
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -437,36 +437,36 @@ export function AdminDashboard() {
             <div className="p-6 space-y-6">
               {!scannedApplicant ? (
                 <div className="space-y-4">
-                  <div id="reader" className="overflow-hidden rounded-2xl border-2 border-accent/20"></div>
-                  <p className="text-center text-sm text-slate-400">প্রবেশপত্রের QR কোডটি ক্যামেরার সামনে ধরুন</p>
+                  <div id="reader" className="overflow-hidden rounded-2xl border-2 border-primary/20"></div>
+                  <p className="text-center text-sm text-slate-500 font-medium">প্রবেশপত্রের QR কোডটি ক্যামেরার সামনে ধরুন</p>
                 </div>
               ) : (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                  <div className="flex items-center gap-4 p-4 bg-accent/10 border border-accent/20 rounded-2xl">
-                    <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-accent">
+                  <div className="flex items-center gap-4 p-4 bg-primary/5 border border-primary/10 rounded-2xl">
+                    <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-primary">
                       <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-white">{scannedApplicant.fullNameEnglish || scannedApplicant.fullNameBangla}</h3>
-                      <p className="text-accent font-bold text-sm uppercase tracking-wider">উপস্থিতি সফল!</p>
-                      <p className="text-xs text-slate-400 mt-1">ID: {scannedApplicant.id}</p>
+                      <h3 className="text-xl font-bold text-slate-900">{scannedApplicant.fullNameEnglish || scannedApplicant.fullNameBangla}</h3>
+                      <p className="text-primary font-bold text-sm uppercase tracking-wider">উপস্থিতি সফল!</p>
+                      <p className="text-xs text-slate-500 mt-1">ID: {scannedApplicant.id}</p>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-white/5 rounded-xl">
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                       <p className="text-[10px] uppercase text-slate-500 font-bold">Class</p>
-                      <p className="text-white font-bold">{scannedApplicant.studyStatus}</p>
+                      <p className="text-slate-900 font-bold">{scannedApplicant.studyStatus}</p>
                     </div>
-                    <div className="p-4 bg-white/5 rounded-xl">
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                       <p className="text-[10px] uppercase text-slate-500 font-bold">Roll</p>
-                      <p className="text-white font-bold">{scannedApplicant.classRoll}</p>
+                      <p className="text-slate-900 font-bold">{scannedApplicant.classRoll}</p>
                     </div>
                   </div>
 
                   <button 
                     onClick={() => setScannedApplicant(null)}
-                    className="w-full py-4 bg-accent text-primary font-bold rounded-xl hover:bg-white transition-all"
+                    className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
                   >
                     পরবর্তী স্ক্যান করুন
                   </button>
