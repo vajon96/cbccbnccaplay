@@ -1,8 +1,9 @@
 import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield } from "lucide-react";
+import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit } from "lucide-react";
 import { db, collection, setDoc, doc, Timestamp, handleFirestoreError, OperationType } from "../firebase";
+import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
 
 export function EnrollmentForm() {
   const [step, setStep] = useState(1);
@@ -47,6 +48,10 @@ export function EnrollmentForm() {
     collegeName: "Cox's Bazar City College",
     photo: ""
   });
+
+  const [aiPhotoFeedback, setAiPhotoFeedback] = useState("");
+  const [aiFormFeedback, setAiFormFeedback] = useState("");
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -104,6 +109,11 @@ export function EnrollmentForm() {
         const compressedPhoto = await compressImage(photoData);
         setFormData({ ...formData, photo: compressedPhoto });
         
+        // AI Photo Check
+        setAiPhotoFeedback("AI analyzing photo...");
+        const feedback = await analyzePhoto(compressedPhoto);
+        setAiPhotoFeedback(feedback);
+
         // Stop camera
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -122,9 +132,21 @@ export function EnrollmentForm() {
       reader.onloadend = async () => {
         const compressedPhoto = await compressImage(reader.result as string);
         setFormData({ ...formData, photo: compressedPhoto });
+        
+        // AI Photo Check
+        setAiPhotoFeedback("AI analyzing photo...");
+        const feedback = await analyzePhoto(compressedPhoto);
+        setAiPhotoFeedback(feedback);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const runAiReview = async () => {
+    setIsAiAnalyzing(true);
+    const feedback = await analyzeEnrollment(formData);
+    setAiFormFeedback(feedback);
+    setIsAiAnalyzing(false);
   };
 
   const handleSubmit = async () => {
@@ -584,6 +606,17 @@ export function EnrollmentForm() {
                   <canvas ref={canvasRef} className="hidden" />
                 </div>
 
+                {aiPhotoFeedback && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-primary/5 border border-primary/20 p-3 rounded-xl flex items-center gap-2 max-w-xs"
+                  >
+                    <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                    <p className="text-[10px] font-medium text-primary italic">{aiPhotoFeedback}</p>
+                  </motion.div>
+                )}
+
                 <div className="flex flex-wrap justify-center gap-4">
                   <button
                     onClick={startCamera}
@@ -614,6 +647,38 @@ export function EnrollmentForm() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
+              <div className="bg-primary/5 border border-primary/10 p-6 rounded-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <BrainCircuit size={80} className="text-primary" />
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Sparkles className="text-primary" size={20} />
+                    <h3 className="font-bold text-primary uppercase tracking-widest text-xs">AI Smart Review</h3>
+                  </div>
+                  
+                  {!aiFormFeedback ? (
+                    <button 
+                      onClick={runAiReview}
+                      disabled={isAiAnalyzing}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/90 transition-all disabled:opacity-50"
+                    >
+                      {isAiAnalyzing ? "Analyzing..." : "Run AI Analysis"}
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-black/80 leading-relaxed italic">"{aiFormFeedback}"</p>
+                      <button 
+                        onClick={() => setAiFormFeedback("")}
+                        className="text-[10px] text-primary font-bold uppercase hover:underline"
+                      >
+                        Re-analyze
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <h3 className="text-primary font-bold uppercase tracking-widest text-xs">ব্যক্তিগত তথ্য</h3>

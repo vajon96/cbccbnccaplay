@@ -14,6 +14,7 @@ import { Admin2Dashboard } from "./pages/Admin2Dashboard";
 import { Navbar } from "./components/Navbar";
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
+import { ChatBot } from "./components/ChatBot";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
             </Routes>
           </main>
           <Footer />
+          <ChatBot />
         </div>
       </Router>
     </ErrorBoundary>

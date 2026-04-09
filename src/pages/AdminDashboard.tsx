@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Users, CheckCircle, XCircle, Clock, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
-  QrCode, Scan, Calendar, Camera, X
+  QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType } from "../firebase";
+import { getAdminInsights, getApplicantSummary } from "../services/geminiService";
 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -19,6 +21,10 @@ export function AdminDashboard() {
   const [attendanceFilter, setAttendanceFilter] = useState("All");
   const [showScanner, setShowScanner] = useState(false);
   const [scannedApplicant, setScannedApplicant] = useState<any>(null);
+  const [aiInsights, setAiInsights] = useState("");
+  const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
+  const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
+  const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -172,6 +178,21 @@ export function AdminDashboard() {
     return matchesSearch && matchesStatus && matchesAttendance;
   });
 
+  const runAiInsights = async () => {
+    if (applicants.length === 0) return;
+    setIsAnalyzingInsights(true);
+    const insights = await getAdminInsights(applicants);
+    setAiInsights(insights);
+    setIsAnalyzingInsights(false);
+  };
+
+  const runApplicantSummary = async (app: any) => {
+    setLoadingSummaryId(app.id);
+    const summary = await getApplicantSummary(app);
+    setApplicantSummaries(prev => ({ ...prev, [app.id]: summary }));
+    setLoadingSummaryId(null);
+  };
+
   const stats = {
     total: applicants.length,
     pending: applicants.filter(a => a.status === 'Pending').length,
@@ -245,6 +266,44 @@ export function AdminDashboard() {
             <p className="text-xs text-black/70">{stat.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* AI Insights Section */}
+      <div className="bg-white p-6 rounded-[2rem] border border-primary/10 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-6 opacity-5">
+          <BrainCircuit size={120} className="text-primary" />
+        </div>
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="text-primary" size={20} />
+              <h3 className="font-bold text-primary uppercase tracking-widest text-xs">AI Recruitment Insights</h3>
+            </div>
+            {!aiInsights && (
+              <button 
+                onClick={runAiInsights}
+                disabled={isAnalyzingInsights || applicants.length === 0}
+                className="px-4 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-bold uppercase hover:bg-primary/20 transition-all disabled:opacity-50"
+              >
+                {isAnalyzingInsights ? "Analyzing Data..." : "Generate Insights"}
+              </button>
+            )}
+          </div>
+          
+          {aiInsights ? (
+            <div className="space-y-3">
+              <p className="text-sm text-black/70 leading-relaxed italic">"{aiInsights}"</p>
+              <button 
+                onClick={() => setAiInsights("")}
+                className="text-[10px] text-primary font-bold uppercase hover:underline"
+              >
+                Refresh Insights
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-black/30 italic">Click the button to generate AI-powered recruitment insights based on current applicants.</p>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -323,8 +382,25 @@ export function AdminDashboard() {
                           >
                             <Download className="w-3 h-3" />
                           </button>
+                          <button 
+                            onClick={() => runApplicantSummary(app)}
+                            disabled={loadingSummaryId === app.id}
+                            className="text-accent hover:text-accent/80 transition-colors"
+                            title="AI Summary"
+                          >
+                            <Sparkles className={`w-3 h-3 ${loadingSummaryId === app.id ? 'animate-pulse' : ''}`} />
+                          </button>
                         </div>
                         <p className="text-xs text-black/50">{app.studentPhone || "No Mobile"}</p>
+                        {applicantSummaries[app.id] && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            className="mt-2 p-2 bg-accent/5 border-l-2 border-accent rounded-r-lg max-w-xs"
+                          >
+                            <p className="text-[10px] text-accent italic leading-tight">{applicantSummaries[app.id]}</p>
+                          </motion.div>
+                        )}
                       </div>
                     </div>
                   </td>

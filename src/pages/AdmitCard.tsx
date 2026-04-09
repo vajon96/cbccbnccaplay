@@ -52,38 +52,54 @@ export function AdmitCard() {
     try {
       setDownloading(true);
       
+      // Ensure all images are fully loaded
       const images = Array.from(cardRef.current.querySelectorAll('img'));
       await Promise.all(images.map(img => {
         if (img.complete) return Promise.resolve();
         return new Promise(resolve => {
-          const timeout = setTimeout(() => resolve(null), 5000);
-          img.onload = () => { clearTimeout(timeout); resolve(null); };
-          img.onerror = () => { clearTimeout(timeout); resolve(null); };
+          img.onload = () => resolve(null);
+          img.onerror = () => resolve(null);
+          // Timeout after 10 seconds
+          setTimeout(() => resolve(null), 10000);
         });
       }));
 
-      const originalScrollY = window.scrollY;
-      window.scrollTo(0, 0);
+      // Small delay to ensure rendering is complete
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const element = cardRef.current;
       const canvas = await html2canvas(element, { 
-        scale: 2,
+        scale: 1.5, // Reduced scale for better compatibility
         backgroundColor: "#ffffff",
         useCORS: true,
         allowTaint: false,
-        logging: false,
+        logging: true,
         width: element.offsetWidth,
         height: element.offsetHeight,
         imageTimeout: 15000,
-        removeContainer: true,
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.getElementById("admitCard");
+          if (clonedElement) {
+            clonedElement.style.transform = "none";
+            clonedElement.style.boxShadow = "none";
+            // Ensure all images in clone have crossOrigin
+            clonedElement.querySelectorAll('img').forEach(img => {
+              img.setAttribute('crossOrigin', 'anonymous');
+            });
+          }
+        }
       });
 
-      window.scrollTo(0, originalScrollY);
+      if (!canvas) throw new Error("Canvas generation failed");
 
-      if (!canvas) throw new Error("Failed to create canvas");
+      let imgData;
+      try {
+        imgData = canvas.toDataURL("image/jpeg", 0.8); // Use JPEG and lower quality to reduce size
+      } catch (e) {
+        console.error("Canvas toDataURL failed:", e);
+        throw new Error("SECURITY_RESTRICTION");
+      }
 
-      const imgData = canvas.toDataURL("image/png", 1.0);
       const pdf = new jsPDF({
         orientation: "p",
         unit: "mm",
@@ -94,11 +110,16 @@ export function AdmitCard() {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
       pdf.save(`BNCC_Admit_Card_${applicant.id}.pdf`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("PDF Generation error:", error);
-      alert("Error generating PDF. Please try the 'Open in New Tab' option.");
+      
+      if (error.message === "SECURITY_RESTRICTION") {
+        alert("Security Restriction: Your browser blocked the PDF generation because of external images (CORS). \n\nSolution: Please click the 'Print' button and choose 'Save as PDF' in the destination dropdown.");
+      } else {
+        alert("Error generating PDF. This usually happens in the preview window. \n\nSolution: Click 'Open in New Tab' at the top right of the screen, then try downloading again. Or use the 'Print' button.");
+      }
     } finally {
       setDownloading(false);
     }
