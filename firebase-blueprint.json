@@ -55,6 +55,20 @@
         "value": { "type": "string", "description": "Configuration value" }
       },
       "required": ["key", "value"]
+    },
+    "activity_log": {
+      "title": "Activity Log",
+      "description": "Log of system and user activities.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["ACCOUNT_CREATED", "PROFILE_UPDATED", "PASSWORD_CHANGED", "PASSWORD_RESET_BY_ADMIN"] },
+        "targetId": { "type": "string", "description": "ID of the target entity" },
+        "actorId": { "type": "string", "description": "ID of the user who performed the action" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": { "type": "string" },
+        "changes": { "type": "object", "description": "Optional details of changes made" }
+      },
+      "required": ["type", "targetId", "actorId", "timestamp", "details"]
     }
   },
   "firestore": {
@@ -65,6 +79,10 @@
     "/admin_config/{configId}": {
       "schema": "admin_config",
       "description": "Admin configuration settings"
+    },
+    "/activity_logs/{logId}": {
+      "schema": "activity_log",
+      "description": "System activity logs"
     }
   }
 }

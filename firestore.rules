@@ -43,6 +43,8 @@ service cloud.firestore {
     //   - collegeName: string (required)
     //   - photo: string (required, base64)
     //   - id: string (required)
+    //   - password: string (required, hashed)
+    //   - role: string (required, enum: user, admin)
     //   - status: string (enum: Pending, Approved, Rejected)
     //   - attendanceStatus: string (enum: Present, Absent)
     //   - attendanceTime: timestamp (optional)
@@ -53,6 +55,16 @@ service cloud.firestore {
     // Fields:
     //   - key: string (required)
     //   - value: string (required)
+    //
+    // Collection: activity_logs
+    // Document ID: logId
+    // Fields:
+    //   - type: string (required)
+    //   - targetId: string (required)
+    //   - actorId: string (required)
+    //   - timestamp: timestamp (required)
+    //   - details: string (required)
+    //   - changes: map (optional)
     //
     // ===============================================================
 
@@ -90,7 +102,8 @@ service cloud.firestore {
         'religion', 'presentAddress', 'permanentAddress', 'studentPhone', 
         'heightFeet', 'heightInches', 'weightKg', 'bloodGroup', 'sscGpa', 'sscGroup', 
         'sscYear', 'sscBoard', 'studyStatus', 'subject', 'classRoll', 'session', 
-        'emisId', 'collegeName', 'photo', 'id', 'status', 'attendanceStatus', 'createdAt'
+        'emisId', 'collegeName', 'photo', 'id', 'status', 'attendanceStatus', 'createdAt',
+        'password', 'role'
       ];
       let optionalFields = [
         'studentEmail', 'hscGpa', 'hscGroup', 'hscYear', 'hscBoard', 'section', 'attendanceTime'
@@ -110,7 +123,21 @@ service cloud.firestore {
              data.status in ['Pending', 'Approved', 'Rejected'] &&
              data.attendanceStatus in ['Present', 'Absent'] &&
              data.createdAt is timestamp &&
+             data.password is string && data.password.size() > 0 &&
+             data.role in ['user', 'admin'] &&
              (!('studentEmail' in data) || data.studentEmail == "" || isValidEmail(data.studentEmail));
+    }
+
+    function isValidLog(data) {
+      let requiredFields = ['type', 'targetId', 'actorId', 'timestamp', 'details'];
+      let optionalFields = ['changes'];
+      return hasRequiredFields(requiredFields) &&
+             request.resource.data.keys().hasOnly(requiredFields.concat(optionalFields)) &&
+             data.type is string &&
+             data.targetId is string &&
+             data.actorId is string &&
+             data.timestamp is timestamp &&
+             data.details is string;
     }
 
     // ===============================================================
@@ -141,6 +168,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() && request.auth.uid == userId;
       allow write: if isAdmin();
+    }
+
+    match /activity_logs/{logId} {
+      allow create: if isValidLog(request.resource.data);
+      allow read: if true; // Allow dashboard to read logs
     }
 
     // Default deny
