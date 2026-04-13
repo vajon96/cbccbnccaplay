@@ -2,8 +2,9 @@ import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit } from "lucide-react";
-import { db, collection, setDoc, doc, Timestamp, handleFirestoreError, OperationType } from "../firebase";
+import { db, collection, setDoc, doc, Timestamp, handleFirestoreError, OperationType, addDoc } from "../firebase";
 import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
+import { generatePassword, hashPassword } from "../lib/auth";
 
 export function EnrollmentForm() {
   const [step, setStep] = useState(1);
@@ -199,18 +200,32 @@ export function EnrollmentForm() {
 
     setLoading(true);
     const id = `BNCC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const rawPassword = generatePassword();
+    const hashedPassword = await hashPassword(rawPassword);
     const path = `applicants/${id}`;
     try {
       const applicantData = {
         ...formData,
         id,
+        password: hashedPassword,
+        role: "user",
         status: "Pending",
         attendanceStatus: "Absent",
         createdAt: Timestamp.now(),
       };
 
       await setDoc(doc(db, "applicants", id), applicantData);
-      navigate(`/admit-card/${id}`);
+      
+      // Log the creation
+      await addDoc(collection(db, "activity_logs"), {
+        type: "ACCOUNT_CREATED",
+        targetId: id,
+        actorId: "SYSTEM",
+        timestamp: Timestamp.now(),
+        details: "New applicant account created via enrollment form"
+      });
+
+      navigate(`/admit-card/${id}?pw=${encodeURIComponent(rawPassword)}`);
     } catch (error) {
       console.error("Submission error:", error);
       alert("আবেদন জমা দিতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন অথবা আপনার ইন্টারনেট সংযোগ চেক করুন।");

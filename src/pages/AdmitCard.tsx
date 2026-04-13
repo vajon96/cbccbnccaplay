@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
-import { Download, Printer, CheckCircle, Shield, Loader2, ExternalLink, ArrowLeft, FileCheck, Info } from "lucide-react";
+import { Download, Printer, CheckCircle, Shield, Loader2, ExternalLink, ArrowLeft, FileCheck, Info, Key, User as UserIcon } from "lucide-react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 export function AdmitCard() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const rawPassword = searchParams.get("pw");
   const [applicant, setApplicant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -185,8 +186,38 @@ export function AdmitCard() {
 
       <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-12">
         {/* Sidebar Info */}
-        <div className="lg:col-span-4 space-y-8">
-          <motion.div 
+          <div className="lg:col-span-4 space-y-8">
+            {rawPassword && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-yellow-50 border-2 border-yellow-200 p-6 rounded-sm space-y-4 shadow-xl"
+              >
+                <div className="flex items-center gap-2 text-yellow-700">
+                  <Shield size={20} />
+                  <h3 className="font-black uppercase text-sm">Security Credentials</h3>
+                </div>
+                <p className="text-[10px] text-yellow-600 font-medium">Please save these credentials. You will need them to log in to your dashboard.</p>
+                <div className="space-y-3">
+                  <div className="p-3 bg-white border border-yellow-100 rounded flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <UserIcon size={14} className="text-yellow-600" />
+                      <span className="text-[10px] font-bold uppercase text-yellow-600/60">User ID</span>
+                    </div>
+                    <span className="font-mono font-black text-sm">{applicant.id}</span>
+                  </div>
+                  <div className="p-3 bg-white border border-yellow-100 rounded flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Key size={14} className="text-yellow-600" />
+                      <span className="text-[10px] font-bold uppercase text-yellow-600/60">Password</span>
+                    </div>
+                    <span className="font-mono font-black text-sm text-primary">{rawPassword}</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             className="glass-card p-8 rounded-sm space-y-6 border-l-4 border-primary"
@@ -285,13 +316,13 @@ export function AdmitCard() {
                       crossOrigin="anonymous"
                     />
                   </div>
-                  <div className="text-center flex-grow px-4">
-                    <h2 className="text-lg font-bold font-montserrat uppercase leading-tight">COX’S BAZAR CITY COLLEGE</h2>
-                    <h3 className="text-sm font-semibold font-montserrat text-[#4B5320] uppercase leading-tight">BNCC PLATOON (ARMY WING)</h3>
+                  <div className="text-center flex-grow px-4 bg-white py-2 rounded-sm mx-2">
+                    <h2 className="text-lg font-bold font-montserrat uppercase leading-tight !text-black">COX’S BAZAR CITY COLLEGE</h2>
+                    <h3 className="text-sm font-semibold font-montserrat !text-black uppercase leading-tight">BNCC PLATOON (ARMY WING)</h3>
                     <div className="mt-1 inline-block border-y border-black py-0.5 px-4">
-                      <h1 className="text-xl font-extrabold font-montserrat uppercase tracking-wider">ADMIT CARD 2026</h1>
+                      <h1 className="text-xl font-extrabold font-montserrat uppercase tracking-wider !text-black">ADMIT CARD 2026</h1>
                     </div>
-                    <p className="text-[9px] font-medium italic mt-0.5 text-gray-600">
+                    <p className="text-[9px] font-medium italic mt-0.5 text-black/60">
                       “Computer Generated Admit Card (No Signature Required)”
                     </p>
                   </div>
@@ -368,7 +399,7 @@ export function AdmitCard() {
                       <div key={i} className="flex items-baseline">
                         <span className="w-32 font-bold text-[11px] uppercase font-montserrat shrink-0">{item.label}</span>
                         <span className="mx-1 font-bold text-[11px]">:</span>
-                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-gray-400 pb-0.5 truncate">{item.value}</span>
+                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-black/20 pb-0.5 truncate">{item.value}</span>
                       </div>
                     ))}
                   </div>
@@ -381,7 +412,7 @@ export function AdmitCard() {
                       <div key={i} className="flex items-baseline">
                         <span className="w-32 font-bold text-[11px] uppercase font-montserrat shrink-0">{item.label}</span>
                         <span className="mx-1 font-bold text-[11px]">:</span>
-                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-gray-400 pb-0.5">{item.value}</span>
+                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-black/20 pb-0.5">{item.value}</span>
                       </div>
                     ))}
                   </div>
@@ -396,7 +427,7 @@ export function AdmitCard() {
                       <div key={i} className="flex items-baseline">
                         <span className="w-32 font-bold text-[11px] uppercase font-montserrat shrink-0">{item.label}</span>
                         <span className="mx-1 font-bold text-[11px]">:</span>
-                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-gray-400 pb-0.5">{item.value}</span>
+                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-black/20 pb-0.5">{item.value}</span>
                       </div>
                     ))}
                   </div>
@@ -406,8 +437,8 @@ export function AdmitCard() {
                 <div className="mb-4 relative z-10 flex items-start gap-4">
                   <div className="flex-grow">
                     <hr className="border-black mb-2" />
-                    <h4 className="text-[12px] font-bold font-montserrat uppercase mb-1 text-[#4B5320]">Examination Notice</h4>
-                    <p className="text-[11px] font-medium text-gray-800 leading-tight">
+                    <h4 className="text-[12px] font-bold font-montserrat uppercase mb-1 !text-black">Examination Notice</h4>
+                    <p className="text-[11px] font-medium text-black leading-tight">
                       The examination date will be announced through the Platoon Officer’s official Facebook page. 
                       Please stay updated by scanning the official QR code:
                     </p>
@@ -426,8 +457,8 @@ export function AdmitCard() {
                 {/* Important Instructions */}
                 <div className="mt-auto relative z-10">
                   <hr className="border-black mb-2" />
-                  <h4 className="text-[12px] font-bold font-montserrat uppercase mb-1">Important Instructions for Candidates</h4>
-                  <div className="text-[10px] leading-tight space-y-1 text-justify text-gray-700">
+                  <h4 className="text-[12px] font-bold font-montserrat uppercase mb-1 !text-black">Important Instructions for Candidates</h4>
+                  <div className="text-[10px] leading-tight space-y-1 text-justify text-black">
                     <p>
                       This admit card must be presented at the examination hall. Candidates must arrive in a neat, clean, and well-groomed condition. Proper preparation for both written and physical tests is mandatory. Male candidates must maintain a proper haircut and wear disciplined attire. For physical tests, candidates must bring a tracksuit and sports shoes. Candidates must report within the specified time; late entry may not be permitted. Any form of misconduct, disorder, or indiscipline will result in disqualification.
                     </p>
@@ -435,7 +466,7 @@ export function AdmitCard() {
                 </div>
 
                 {/* Footer */}
-                <div className="mt-4 pt-2 border-t border-gray-200 text-center relative z-10">
+                <div className="mt-4 pt-2 border-t border-black/10 text-center relative z-10">
                   <p className="text-[8px] text-gray-400 mt-1">
                     Generated on {new Date().toLocaleString()} | CBCC BNCC Enrollment System
                   </p>

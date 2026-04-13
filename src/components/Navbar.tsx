@@ -10,8 +10,7 @@ export function Navbar() {
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Apply Now", path: "/enroll" },
-    { name: "Admin", path: "/admin" },
-    { name: "Admin 2", path: "/admin2" },
+    { name: "Login", path: "/login" },
   ];
 
   return (

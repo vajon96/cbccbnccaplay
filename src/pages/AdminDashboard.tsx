@@ -4,13 +4,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Users, CheckCircle, XCircle, Clock, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
-  QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info
+  QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info,
+  History, Key, Edit, Save, AlertCircle, Loader2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { Html5QrcodeScanner } from "html5-qrcode";
-import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType } from "../firebase";
+import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc } from "../firebase";
 import { getAdminInsights, getApplicantSummary } from "../services/geminiService";
+import { getSession, clearSession, hashPassword } from "../lib/auth";
 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -25,17 +27,21 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs">("applicants");
+  const [logs, setLogs] = useState<any[]>([]);
+  const [showPasswordReset, setShowPasswordReset] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const passwordVerified = localStorage.getItem("adminPasswordVerified");
-    if (!passwordVerified) {
-      navigate("/admin");
+    const session = getSession();
+    if (!session || session.role !== "admin") {
+      navigate("/login");
       return;
     }
 
     const q = query(collection(db, "applicants"), orderBy("createdAt", "desc"));
-    const path = "applicants";
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const applicantsData = snapshot.docs.map(doc => ({
         ...doc.data(),
@@ -46,16 +52,29 @@ export function AdminDashboard() {
       setError(null);
     }, (err) => {
       console.error("Firestore onSnapshot error:", err);
-      setError("ডেটা লোড করতে সমস্যা হচ্ছে। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ অথবা ফায়ারবেস কনফিগারেশন চেক করুন।");
+      setError("ডেটা লোড করতে সমস্যা হচ্ছে।");
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Fetch logs
+    const logsQ = query(collection(db, "activity_logs"), orderBy("timestamp", "desc"));
+    const logsUnsubscribe = onSnapshot(logsQ, (snapshot) => {
+      const logsData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      }));
+      setLogs(logsData);
+    });
+
+    return () => {
+      unsubscribe();
+      logsUnsubscribe();
+    };
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("adminPasswordVerified");
-    navigate("/admin");
+    clearSession();
+    navigate("/login");
   };
 
   useEffect(() => {
@@ -109,6 +128,35 @@ export function AdminDashboard() {
 
   const onScanFailure = (error: any) => {
     // console.warn(`Code scan error = ${error}`);
+  };
+
+  const handleResetPassword = async () => {
+    if (!showPasswordReset || !newPassword) return;
+    setResetting(true);
+    try {
+      const hashedPassword = await hashPassword(newPassword);
+      await updateDoc(doc(db, "applicants", showPasswordReset), {
+        password: hashedPassword
+      });
+
+      // Log activity
+      const session = getSession();
+      await addDoc(collection(db, "activity_logs"), {
+        type: "PASSWORD_RESET_BY_ADMIN",
+        targetId: showPasswordReset,
+        actorId: session.id,
+        timestamp: Timestamp.now(),
+        details: `Admin reset password for user ${showPasswordReset}`
+      });
+
+      setShowPasswordReset(null);
+      setNewPassword("");
+      alert("Password reset successfully!");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `applicants/${showPasswordReset}`);
+    } finally {
+      setResetting(false);
+    }
   };
 
   const updateStatus = async (id: string, status?: string, attendanceStatus?: string) => {
@@ -268,8 +316,38 @@ export function AdminDashboard() {
         ))}
       </div>
 
-      {/* AI Insights Section */}
-      <div className="bg-white p-6 rounded-[2rem] border border-primary/10 shadow-xl relative overflow-hidden">
+      {/* Tabs */}
+      <div className="flex gap-4 border-b border-sand pb-1">
+        <button
+          onClick={() => setActiveTab("applicants")}
+          className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all relative ${
+            activeTab === "applicants" ? "text-primary" : "text-black/40 hover:text-black/60"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Users size={18} />
+            Applicants
+          </div>
+          {activeTab === "applicants" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
+        </button>
+        <button
+          onClick={() => setActiveTab("logs")}
+          className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all relative ${
+            activeTab === "logs" ? "text-primary" : "text-black/40 hover:text-black/60"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <History size={18} />
+            Activity Logs
+          </div>
+          {activeTab === "logs" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
+        </button>
+      </div>
+
+      {activeTab === "applicants" ? (
+        <>
+          {/* AI Insights Section */}
+          <div className="bg-white p-6 rounded-[2rem] border border-primary/10 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-6 opacity-5">
           <BrainCircuit size={120} className="text-primary" />
         </div>
@@ -468,6 +546,13 @@ export function AdminDashboard() {
                         <XCircle className="w-5 h-5" />
                       </button>
                       <button
+                        onClick={() => setShowPasswordReset(app.id)}
+                        className="p-2 hover:bg-primary/10 text-black/30 hover:text-primary rounded-lg transition-colors"
+                        title="Reset Password"
+                      >
+                        <Key className="w-5 h-5" />
+                      </button>
+                      <button
                         onClick={() => deleteApplicant(app.id)}
                         className="p-2 hover:bg-accent/10 text-black/30 hover:text-accent rounded-lg transition-colors"
                         title="Delete"
@@ -488,6 +573,46 @@ export function AdminDashboard() {
           </div>
         )}
       </div>
+
+        </>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[2rem] border border-sand shadow-xl">
+            <h3 className="text-xl font-bold text-black mb-6 flex items-center gap-2">
+              <History className="text-primary" />
+              System Activity Logs
+            </h3>
+            <div className="space-y-4">
+              {logs.length === 0 ? (
+                <p className="text-center py-12 text-black/30 italic">No activity logs found.</p>
+              ) : (
+                logs.map((log) => (
+                  <div key={log.id} className="p-4 bg-sand/10 border border-sand/20 rounded-2xl flex items-start gap-4">
+                    <div className={`p-2 rounded-lg ${
+                      log.type === 'PASSWORD_CHANGED' || log.type === 'PASSWORD_RESET_BY_ADMIN' ? 'bg-red-100 text-red-600' :
+                      log.type === 'ACCOUNT_CREATED' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                    }`}>
+                      {log.type === 'PASSWORD_CHANGED' || log.type === 'PASSWORD_RESET_BY_ADMIN' ? <Key size={16} /> :
+                       log.type === 'ACCOUNT_CREATED' ? <CheckCircle size={16} /> : <Edit size={16} />}
+                    </div>
+                    <div className="flex-grow">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-black/40">{log.type}</span>
+                        <span className="text-[10px] text-black/30">{log.timestamp?.toDate().toLocaleString()}</span>
+                      </div>
+                      <p className="text-sm font-medium text-black/80">{log.details}</p>
+                      <div className="mt-2 flex items-center gap-4">
+                        <span className="text-[10px] font-bold text-black/40">Target: <span className="text-black/70">{log.targetId}</span></span>
+                        <span className="text-[10px] font-bold text-black/40">Actor: <span className="text-black/70">{log.actorId}</span></span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QR Scanner Modal */}
       {showScanner && (
@@ -553,7 +678,65 @@ export function AdminDashboard() {
           </div>
         </div>
       )}
-      </div>
+
+      {/* Password Reset Modal */}
+      <AnimatePresence>
+        {showPasswordReset && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPasswordReset(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white p-8 rounded-[2.5rem] space-y-6 shadow-2xl"
+            >
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Key className="text-primary" size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-black uppercase tracking-tight">Reset User Password</h3>
+                <p className="text-xs text-black/50">Resetting password for ID: <span className="font-mono font-bold">{showPasswordReset}</span></p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-black/40 tracking-widest">New Password</label>
+                  <input 
+                    type="text" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-sm text-black outline-none focus:border-primary"
+                    placeholder="Enter new password"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowPasswordReset(null)}
+                  className="flex-1 py-3 bg-sand/20 text-black/60 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-sand/30 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleResetPassword}
+                  disabled={resetting || !newPassword}
+                  className="flex-1 py-3 bg-primary text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+                >
+                  {resetting ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Reset Now"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
+  </div>
   );
 }
