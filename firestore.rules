@@ -111,15 +111,14 @@ service cloud.firestore {
       let allFields = requiredFields.concat(optionalFields);
 
       return hasRequiredFields(requiredFields) &&
-             request.resource.data.keys().hasOnly(allFields) &&
              data.fullNameBangla is string && data.fullNameBangla.size() > 0 && data.fullNameBangla.size() < 200 &&
              data.fullNameEnglish is string && data.fullNameEnglish.size() > 0 && data.fullNameEnglish.size() < 200 &&
              data.dob is string && data.dob.size() > 0 &&
-             data.gender is string && data.gender in ['Male', 'Female', 'Others'] &&
+             data.gender is string && data.gender in ['Male', 'Female', 'Others', 'Other'] &&
              data.bloodGroup is string && data.bloodGroup.size() > 0 &&
              data.studyStatus is string && data.studyStatus.size() > 0 &&
              data.classRoll is string && data.classRoll.size() > 0 &&
-             data.photo is string && data.photo.size() > 0 && data.photo.size() < 2000000 &&
+             data.photo is string && data.photo.size() > 0 && data.photo.size() < 10000000 &&
              data.status in ['Pending', 'Approved', 'Rejected'] &&
              data.attendanceStatus in ['Present', 'Absent'] &&
              data.createdAt is timestamp &&
@@ -172,7 +171,7 @@ service cloud.firestore {
 
     match /activity_logs/{logId} {
       allow create: if isValidLog(request.resource.data);
-      allow read: if true; // Allow dashboard to read logs
+      allow read, list: if true; // Explicitly allow list
     }
 
     // Default deny

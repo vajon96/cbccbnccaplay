@@ -216,14 +216,19 @@ export function EnrollmentForm() {
 
       await setDoc(doc(db, "applicants", id), applicantData);
       
-      // Log the creation
-      await addDoc(collection(db, "activity_logs"), {
-        type: "ACCOUNT_CREATED",
-        targetId: id,
-        actorId: "SYSTEM",
-        timestamp: Timestamp.now(),
-        details: "New applicant account created via enrollment form"
-      });
+      // Log the creation (wrapped in try-catch to prevent blocking submission)
+      try {
+        await addDoc(collection(db, "activity_logs"), {
+          type: "ACCOUNT_CREATED",
+          targetId: id,
+          actorId: "SYSTEM",
+          timestamp: Timestamp.now(),
+          details: "New applicant account created via enrollment form"
+        });
+      } catch (logError) {
+        console.error("Logging error:", logError);
+        // Don't alert here, as the main submission succeeded
+      }
 
       navigate(`/admit-card/${id}?pw=${encodeURIComponent(rawPassword)}`);
     } catch (error) {
