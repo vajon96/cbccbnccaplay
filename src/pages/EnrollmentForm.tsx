@@ -69,7 +69,7 @@ export function EnrollmentForm() {
     }
   };
 
-  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+  const compressImage = (base64Str: string, maxWidth = 600, maxHeight = 600): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.src = base64Str;
@@ -94,7 +94,7 @@ export function EnrollmentForm() {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
       };
     });
   };
@@ -201,9 +201,10 @@ export function EnrollmentForm() {
     setLoading(true);
     const id = `BNCC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const rawPassword = generatePassword();
-    const hashedPassword = await hashPassword(rawPassword);
     const path = `applicants/${id}`;
+    
     try {
+      const hashedPassword = await hashPassword(rawPassword);
       const applicantData = {
         ...formData,
         id,
@@ -231,9 +232,10 @@ export function EnrollmentForm() {
       }
 
       navigate(`/admit-card/${id}?pw=${encodeURIComponent(rawPassword)}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Submission error:", error);
-      alert("আবেদন জমা দিতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন অথবা আপনার ইন্টারনেট সংযোগ চেক করুন।");
+      const errorMessage = error?.message || "Unknown error";
+      alert(`আবেদন জমা দিতে সমস্যা হয়েছে।\nত্রুটি: ${errorMessage}\n\nঅনুগ্রহ করে পুনরায় চেষ্টা করুন অথবা আপনার ইন্টারনেট সংযোগ চেক করুন।`);
       handleFirestoreError(error, OperationType.WRITE, path);
     } finally {
       setLoading(false);

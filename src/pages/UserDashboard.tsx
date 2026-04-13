@@ -4,7 +4,7 @@ import {
   User, Shield, LogOut, Edit3, Save, X, Key, 
   CheckCircle, AlertCircle, Loader2, Camera,
   FileText, Calendar, Mail, Phone, MapPin, Droplets,
-  Ruler, Weight
+  Ruler, Weight, Download
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, doc, getDoc, updateDoc, Timestamp, handleFirestoreError, OperationType, collection, addDoc } from "../firebase";
@@ -190,10 +190,18 @@ export function UserDashboard() {
                 <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-1">{user.fullNameEnglish}</h2>
                 <p className="text-slate-400 text-sm font-medium mb-6">{user.id}</p>
                 
-                <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-500/10 text-green-500 rounded-full text-[10px] font-black uppercase tracking-widest mx-auto w-fit">
+                <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-500/10 text-green-500 rounded-full text-[10px] font-black uppercase tracking-widest mx-auto w-fit mb-6">
                   <CheckCircle size={12} />
                   Verified Candidate
                 </div>
+
+                <button 
+                  onClick={() => navigate(`/admit-card/${user.id}?download=true`)}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-accent text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all shadow-xl shadow-accent/20 group"
+                >
+                  <Download size={18} className="group-hover:bounce" />
+                  Download Admit Card
+                </button>
               </div>
             </motion.div>
 

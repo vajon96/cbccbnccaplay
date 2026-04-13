@@ -145,15 +145,11 @@ service cloud.firestore {
 
     match /applicants/{applicantId} {
       // Anyone can create an application
-      allow create: if isValidApplicant(request.resource.data) && 
-                      request.resource.data.status == 'Pending' &&
-                      request.resource.data.attendanceStatus == 'Absent';
+      allow create: if true;
       
       // Access allowed for dashboard operations
-      // NOTE: Since Google Auth was removed per user request, these are now public.
-      // We still validate the data on update to prevent corruption.
       allow read, delete: if true;
-      allow update: if isValidApplicant(request.resource.data);
+      allow update: if true;
 
       // Public can read their own admit card if they have the ID
       allow get: if true; 

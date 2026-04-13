@@ -5,7 +5,7 @@ import {
   Users, CheckCircle, XCircle, Clock, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
   QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info,
-  History, Key, Edit, Save, AlertCircle, Loader2
+  History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
@@ -32,6 +32,7 @@ export function AdminDashboard() {
   const [showPasswordReset, setShowPasswordReset] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [showPasswordId, setShowPasswordId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -157,6 +158,17 @@ export function AdminDashboard() {
     } finally {
       setResetting(false);
     }
+  };
+
+  const handleAdminLoginAsUser = (applicant: any) => {
+    // Set a temporary session that mimics the user but keeps admin context if needed
+    // For simplicity, we'll just set the user session and redirect
+    localStorage.setItem("bncc_session", JSON.stringify({
+      id: applicant.id,
+      role: "user",
+      expiry: Date.now() + 1000 * 60 * 60 // 1 hour
+    }));
+    navigate("/dashboard");
   };
 
   const updateStatus = async (id: string, status?: string, attendanceStatus?: string) => {
@@ -515,6 +527,27 @@ export function AdminDashboard() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {showPasswordId === app.id && (
+                        <div className="mr-4 px-3 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 animate-in fade-in slide-in-from-right-2">
+                          Hash: {app.password?.substring(0, 15)}...
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleAdminLoginAsUser(app)}
+                        className="p-2 hover:bg-primary/10 text-black/30 hover:text-primary rounded-lg transition-colors"
+                        title="Login as User / View Profile"
+                      >
+                        <ExternalLink className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setShowPasswordId(showPasswordId === app.id ? null : app.id)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          showPasswordId === app.id ? 'text-primary bg-primary/10' : 'text-black/30 hover:bg-primary/10'
+                        }`}
+                        title="View Password Hash/Status"
+                      >
+                        {showPasswordId === app.id ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
                       <button
                         onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
                         className="p-2 hover:bg-primary/10 text-black/30 hover:text-primary rounded-lg transition-colors"
