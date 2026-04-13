@@ -9,6 +9,7 @@ export function Navbar() {
 
   const navLinks = [
     { name: "Home", path: "/" },
+    { name: "Messenger", path: "/messenger" },
     { name: "Apply Now", path: "/enroll" },
     { name: "Login", path: "/login" },
   ];

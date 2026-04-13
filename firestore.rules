@@ -170,6 +170,13 @@ service cloud.firestore {
       allow read, list: if true; // Explicitly allow list
     }
 
+    match /messages/{messageId} {
+      // For now, allowing read/create to match the custom auth pattern used in the app
+      // In a production app, this should be secured with Firebase Auth
+      allow read, create: if true;
+      allow delete: if true; // Admin check would go here if using Firebase Auth
+    }
+
     // Default deny
     match /{path=**} {
       allow read, write: if false;

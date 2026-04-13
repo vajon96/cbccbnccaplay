@@ -5,7 +5,8 @@ import {
   Users, CheckCircle, XCircle, Clock, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
   QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info,
-  History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink
+  History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
+  MessageSquare
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
@@ -299,6 +300,12 @@ export function AdminDashboard() {
               className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg"
             >
               <Archive className="w-4 h-4" /> ফটো জিপ (ZIP)
+            </button>
+            <button
+              onClick={() => navigate("/messenger")}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white border border-white/20 rounded-xl text-sm font-bold hover:bg-white/20"
+            >
+              <MessageSquare className="w-4 h-4" /> Messenger
             </button>
             <button
               onClick={handleLogout}

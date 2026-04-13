@@ -11,6 +11,7 @@ import { AdminLogin } from "./pages/AdminLogin";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { Login } from "./pages/Login";
 import { UserDashboard } from "./pages/UserDashboard";
+import { Messenger } from "./pages/Messenger";
 import { Admin2Login } from "./pages/Admin2Login";
 import { Admin2Dashboard } from "./pages/Admin2Dashboard";
 import { Navbar } from "./components/Navbar";
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="/admit-card/:id" element={<AdmitCard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/dashboard" element={<UserDashboard />} />
+              <Route path="/messenger" element={<Messenger />} />
               <Route path="/admin" element={<Login />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin2" element={<Admin2Login />} />

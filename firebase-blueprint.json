@@ -69,6 +69,19 @@
         "changes": { "type": "object", "description": "Optional details of changes made" }
       },
       "required": ["type", "targetId", "actorId", "timestamp", "details"]
+    },
+    "message": {
+      "title": "Message",
+      "description": "A chat message in the group chat.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "description": "ID of the sender" },
+        "senderName": { "type": "string", "description": "Name of the sender" },
+        "content": { "type": "string", "description": "Message content" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the message was sent" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "Role of the sender" }
+      },
+      "required": ["senderId", "senderName", "content", "timestamp", "role"]
     }
   },
   "firestore": {
@@ -83,6 +96,10 @@
     "/activity_logs/{logId}": {
       "schema": "activity_log",
       "description": "System activity logs"
+    },
+    "/messages/{messageId}": {
+      "schema": "message",
+      "description": "Group chat messages"
     }
   }
 }

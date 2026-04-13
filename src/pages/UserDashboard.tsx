@@ -4,7 +4,7 @@ import {
   User, Shield, LogOut, Edit3, Save, X, Key, 
   CheckCircle, AlertCircle, Loader2, Camera,
   FileText, Calendar, Mail, Phone, MapPin, Droplets,
-  Ruler, Weight, Download
+  Ruler, Weight, Download, MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, doc, getDoc, updateDoc, Timestamp, handleFirestoreError, OperationType, collection, addDoc } from "../firebase";
@@ -201,6 +201,14 @@ export function UserDashboard() {
                 >
                   <Download size={18} className="group-hover:bounce" />
                   Download Admit Card
+                </button>
+
+                <button 
+                  onClick={() => navigate("/messenger")}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-white/5 text-white border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all group mt-4"
+                >
+                  <MessageSquare size={18} className="group-hover:scale-110 transition-transform" />
+                  Open Messenger
                 </button>
               </div>
             </motion.div>
