@@ -16,13 +16,13 @@
 }
 
 body {
-  @apply bg-bg-light text-slate-200 font-sans selection:bg-primary selection:text-white;
-  background-image: radial-gradient(circle at top right, rgba(239, 68, 68, 0.07), transparent 40%),
-                    radial-gradient(circle at bottom left, rgba(153, 27, 27, 0.07), transparent 40%);
+  @apply bg-slate-50 text-slate-800 font-sans selection:bg-primary selection:text-white;
+  background-image: radial-gradient(circle at top right, rgba(220, 38, 38, 0.05), transparent 40%),
+                    radial-gradient(circle at bottom left, rgba(153, 27, 27, 0.03), transparent 40%);
 }
 
 h1, h2, h3, h4, .font-display {
-  @apply font-display text-white;
+  @apply font-display text-slate-900;
 }
 
 .glass {
