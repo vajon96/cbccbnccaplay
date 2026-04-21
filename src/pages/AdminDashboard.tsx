@@ -261,14 +261,14 @@ export function AdminDashboard() {
     present: applicants.filter(a => a.attendanceStatus === 'Present').length,
   };
 
-  if (loading) return <div className="flex items-center justify-center h-screen text-black">তথ্য লোড হচ্ছে...</div>;
+  if (loading) return <div className="flex items-center justify-center h-screen text-slate-200 bg-bg-light font-bold">তথ্য লোড হচ্ছে...</div>;
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen text-black p-4 text-center space-y-4">
+      <div className="flex flex-col items-center justify-center h-screen bg-bg-light text-slate-200 p-4 text-center space-y-4">
         <XCircle className="w-16 h-16 text-primary" />
         <h2 className="text-xl font-bold">ত্রুটি ঘটেছে!</h2>
-        <p className="text-black/70 max-w-md">{error}</p>
+        <p className="text-slate-400 max-w-md">{error}</p>
         <button 
           onClick={() => window.location.reload()}
           className="px-6 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
@@ -280,7 +280,7 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-sand">
+    <div className="min-h-screen bg-bg-light">
       <div className="max-w-7xl mx-auto px-4 py-12 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-primary p-8 rounded-[2rem] text-white shadow-xl">
@@ -319,28 +319,28 @@ export function AdminDashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-black/70" },
-          { label: "পেন্ডিং", value: stats.pending, icon: Clock, color: "text-amber-600" },
+          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-slate-400" },
+          { label: "পেন্ডিং", value: stats.pending, icon: Clock, color: "text-amber-500" },
           { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-primary" },
-          { label: "উপস্থিত", value: stats.present, icon: Scan, color: "text-accent" }
+          { label: "উপস্থিত", value: stats.present, icon: Scan, color: "text-emerald-500" }
         ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl border border-sand shadow-lg">
+          <div key={i} className="glass-card p-6 rounded-2xl border border-white/5 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
               <stat.icon className={`w-5 h-5 ${stat.color}`} />
-              <span className="text-xs font-bold text-black/30 uppercase tracking-widest">Stats</span>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Stats</span>
             </div>
-            <p className="text-2xl font-bold text-black">{stat.value}</p>
-            <p className="text-xs text-black/70">{stat.label}</p>
+            <p className="text-2xl font-black text-white">{stat.value}</p>
+            <p className="text-xs font-bold text-slate-400">{stat.label}</p>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-4 border-b border-sand pb-1">
+      <div className="flex gap-4 border-b border-white/5 pb-1">
         <button
           onClick={() => setActiveTab("applicants")}
-          className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all relative ${
-            activeTab === "applicants" ? "text-primary" : "text-black/40 hover:text-black/60"
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+            activeTab === "applicants" ? "text-primary" : "text-slate-500 hover:text-slate-300"
           }`}
         >
           <div className="flex items-center gap-2">
@@ -351,8 +351,8 @@ export function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("logs")}
-          className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all relative ${
-            activeTab === "logs" ? "text-primary" : "text-black/40 hover:text-black/60"
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+            activeTab === "logs" ? "text-primary" : "text-slate-500 hover:text-slate-300"
           }`}
         >
           <div className="flex items-center gap-2">
@@ -365,8 +365,9 @@ export function AdminDashboard() {
 
       {activeTab === "applicants" ? (
         <>
-          {/* AI Insights Section */}
-          <div className="bg-white p-6 rounded-[2rem] border border-primary/10 shadow-xl relative overflow-hidden">
+          <div className="space-y-6">
+            {/* AI Insights Section */}
+          <div className="glass-card p-6 rounded-[2rem] border border-white/5 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-6 opacity-5">
           <BrainCircuit size={120} className="text-primary" />
         </div>
@@ -374,22 +375,22 @@ export function AdminDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Sparkles className="text-primary" size={20} />
-              <h3 className="font-bold text-primary uppercase tracking-widest text-xs">AI Recruitment Insights</h3>
+              <h3 className="font-black text-primary uppercase tracking-widest text-[10px]">AI Recruitment Insights</h3>
             </div>
             {!aiInsights && (
               <button 
                 onClick={runAiInsights}
                 disabled={isAnalyzingInsights || applicants.length === 0}
-                className="px-4 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-bold uppercase hover:bg-primary/20 transition-all disabled:opacity-50"
+                className="px-4 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase hover:bg-primary/20 transition-all disabled:opacity-50"
               >
-                {isAnalyzingInsights ? "Analyzing Data..." : "Generate Insights"}
+                {isAnalyzingInsights ? "Analyzing..." : "Generate Insights"}
               </button>
             )}
           </div>
           
           {aiInsights ? (
             <div className="space-y-3">
-              <p className="text-sm text-black/70 leading-relaxed italic">"{aiInsights}"</p>
+              <p className="text-sm text-slate-300 leading-relaxed italic">"{aiInsights}"</p>
               <button 
                 onClick={() => setAiInsights("")}
                 className="text-[10px] text-primary font-bold uppercase hover:underline"
@@ -398,7 +399,7 @@ export function AdminDashboard() {
               </button>
             </div>
           ) : (
-            <p className="text-xs text-black/30 italic">Click the button to generate AI-powered recruitment insights based on current applicants.</p>
+            <p className="text-xs text-slate-500 italic">Click the button to generate AI-powered recruitment insights based on current applicants.</p>
           )}
         </div>
       </div>
@@ -406,26 +407,26 @@ export function AdminDashboard() {
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-grow">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-black/40" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
           <input
             type="text"
-            placeholder="নাম অথবা কলেজ আইডি দিয়ে খুঁজুন..."
+            placeholder="নাম অথবা আইডি দিয়ে খুঁজুন..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white border border-sand rounded-xl pl-12 pr-4 py-3 text-black focus:border-accent outline-none transition-colors"
+            className="w-full bg-surface border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-white focus:border-primary outline-none transition-all shadow-xl"
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setShowScanner(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+            className="flex items-center gap-2 px-6 py-4 bg-accent text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all shadow-xl shadow-accent/20"
           >
             <QrCode className="w-4 h-4" /> QR স্ক্যানার
           </button>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-white border border-sand rounded-xl px-4 py-3 text-black focus:border-accent outline-none text-sm cursor-pointer"
+            className="bg-surface border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
           >
             <option value="All">সকল স্ট্যাটাস</option>
             <option value="Pending">পেন্ডিং</option>
@@ -435,89 +436,82 @@ export function AdminDashboard() {
           <select
             value={attendanceFilter}
             onChange={(e) => setAttendanceFilter(e.target.value)}
-            className="bg-white border border-sand rounded-xl px-4 py-3 text-black focus:border-accent outline-none text-sm cursor-pointer"
+            className="bg-surface border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
           >
             <option value="All">উপস্থিতি (সকল)</option>
-            <option value="Present">উপস্থিত (Present)</option>
-            <option value="Absent">অনুপস্থিত (Absent)</option>
+            <option value="Present">উপস্থিত</option>
+            <option value="Absent">অনুপস্থিত</option>
           </select>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-sand shadow-xl">
+      <div className="glass-card rounded-[2rem] overflow-hidden border border-white/5 shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-primary text-white border-b border-sand">
-                <th className="px-6 py-4 text-xs font-bold uppercase">আবেদনকারী</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase">শ্রেণি ও রোল</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase">স্ট্যাটাস</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase">উপস্থিতি</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase text-right">অ্যাকশন</th>
+              <tr className="bg-slate-900 text-white">
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">নথিভুক্ত ক্যাডেট</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">শ্রেণি ও রোল</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">স্ট্যাটাস</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-center">উপস্থিতি</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-right">অ্যাকশন</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-sand/20">
+            <tbody className="divide-y divide-white/5">
               {filteredApplicants.map((app) => (
-                <tr key={app.id} className="hover:bg-sand/5 transition-colors">
-                  <td className="px-6 py-4">
+                <tr key={app.id} className="hover:bg-white/[0.02] transition-colors group">
+                  <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-sand/10 overflow-hidden border border-sand">
+                      <div className="w-12 h-12 rounded-[1.2rem] bg-slate-800 overflow-hidden border border-white/10 shadow-lg group-hover:scale-105 transition-transform">
                         {app.photo ? (
                           <img src={app.photo} className="w-full h-full object-cover" alt="" />
                         ) : (
-                          <Users className="w-full h-full p-2 text-black/20" />
+                          <Users className="w-full h-full p-3 text-slate-600" />
                         )}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-bold text-black">{app.fullNameEnglish || app.fullNameBangla}</p>
-                          <button 
-                            onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
-                            className="text-primary hover:text-primary/80 transition-colors"
-                            title="Download Admit Card"
-                          >
-                            <Download className="w-3 h-3" />
-                          </button>
+                          <p className="font-bold text-white text-sm">{app.fullNameEnglish || app.fullNameBangla}</p>
                           <button 
                             onClick={() => runApplicantSummary(app)}
                             disabled={loadingSummaryId === app.id}
-                            className="text-accent hover:text-accent/80 transition-colors"
+                            className="text-primary hover:text-primary/80 transition-colors"
                             title="AI Summary"
                           >
                             <Sparkles className={`w-3 h-3 ${loadingSummaryId === app.id ? 'animate-pulse' : ''}`} />
                           </button>
                         </div>
-                        <p className="text-xs text-black/50">{app.studentPhone || "No Mobile"}</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{app.studentPhone || "No Mobile"}</p>
                         {applicantSummaries[app.id] && (
                           <motion.div 
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
-                            className="mt-2 p-2 bg-accent/5 border-l-2 border-accent rounded-r-lg max-w-xs"
+                            className="mt-2 p-2 bg-primary/5 border-l-2 border-primary rounded-r-lg max-w-xs"
                           >
-                            <p className="text-[10px] text-accent italic leading-tight">{applicantSummaries[app.id]}</p>
+                            <p className="text-[9px] text-primary italic leading-tight">{applicantSummaries[app.id]}</p>
                           </motion.div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm text-black/70">{app.studyStatus} | Roll: {app.classRoll}</p>
-                    <p className="text-xs text-black/40">ID: {app.id}</p>
+                  <td className="px-8 py-6">
+                    <p className="text-sm font-bold text-slate-200">{app.studyStatus}</p>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Roll: {app.classRoll}</p>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      app.status === 'Approved' ? 'bg-primary/20 text-primary' :
-                      app.status === 'Rejected' ? 'bg-accent/20 text-accent' :
-                      'bg-amber-200 text-amber-800'
+                  <td className="px-8 py-6">
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                      app.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                      app.status === 'Rejected' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                      'bg-amber-500/10 text-amber-500 border-amber-500/20'
                     }`}>
                       {app.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className={`inline-flex items-center gap-1.5 font-bold text-[10px] uppercase ${
-                        app.attendanceStatus === 'Present' ? 'text-primary' : 'text-black/30'
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col items-center">
+                      <span className={`inline-flex items-center gap-1.5 font-black text-[9px] uppercase tracking-widest ${
+                        app.attendanceStatus === 'Present' ? 'text-emerald-500' : 'text-slate-500'
                       }`}>
                         {app.attendanceStatus === 'Present' ? (
                           <><CheckCircle className="w-3 h-3" /> Present</>
@@ -526,75 +520,61 @@ export function AdminDashboard() {
                         )}
                       </span>
                       {app.attendanceTime && (
-                        <span className="text-[9px] text-black/40 mt-0.5">
+                        <span className="text-[8px] font-bold text-slate-600 mt-1">
                           {new Date(app.attendanceTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2 group-hover:scale-100 transition-transform">
                       {showPasswordId === app.id && (
-                        <div className="mr-4 px-3 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 animate-in fade-in slide-in-from-right-2">
-                          Hash: {app.password?.substring(0, 15)}...
+                        <div className="mr-2 px-3 py-1.5 bg-slate-900 border border-white/5 rounded-xl text-[10px] font-mono text-slate-400 animate-in fade-in slide-in-from-right-2">
+                          {app.password?.substring(0, 15)}...
                         </div>
                       )}
                       <button
                         onClick={() => handleAdminLoginAsUser(app)}
-                        className="p-2 hover:bg-primary/10 text-black/30 hover:text-primary rounded-lg transition-colors"
-                        title="Login as User / View Profile"
+                        className="p-2.5 hover:bg-white/5 text-slate-500 hover:text-white rounded-xl transition-all"
+                        title="Login as User"
                       >
                         <ExternalLink className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => setShowPasswordId(showPasswordId === app.id ? null : app.id)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          showPasswordId === app.id ? 'text-primary bg-primary/10' : 'text-black/30 hover:bg-primary/10'
+                        className={`p-2.5 rounded-xl transition-all ${
+                          showPasswordId === app.id ? 'text-primary bg-primary/10' : 'text-slate-500 hover:bg-white/5'
                         }`}
-                        title="View Password Hash/Status"
+                        title="Verify Hash"
                       >
                         {showPasswordId === app.id ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                       <button
-                        onClick={() => window.open(`/admit-card/${app.id}?download=true`, '_blank')}
-                        className="p-2 hover:bg-primary/10 text-black/30 hover:text-primary rounded-lg transition-colors"
-                        title="Download Admit Card"
-                      >
-                        <Download className="w-5 h-5" />
-                      </button>
-                      <button
                         onClick={() => updateStatus(app.id, undefined as any, app.attendanceStatus === 'Present' ? 'Absent' : 'Present')}
-                        className={`p-2 rounded-lg transition-colors ${
-                          app.attendanceStatus === 'Present' ? 'text-primary hover:bg-primary/10' : 'text-black/30 hover:bg-sand/10'
+                        className={`p-2.5 rounded-xl transition-all ${
+                          app.attendanceStatus === 'Present' ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-500 hover:bg-white/5'
                         }`}
-                        title={app.attendanceStatus === 'Present' ? "Mark Absent" : "Mark Present"}
+                        title="Attendance"
                       >
                         <Scan className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => updateStatus(app.id, 'Approved')}
-                        className="p-2 hover:bg-primary/10 text-black/30 hover:text-primary rounded-lg transition-colors"
+                        className="p-2.5 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-500 rounded-xl transition-all"
                         title="Approve"
                       >
                         <CheckCircle className="w-5 h-5" />
                       </button>
                       <button
-                        onClick={() => updateStatus(app.id, 'Rejected')}
-                        className="p-2 hover:bg-accent/10 text-black/30 hover:text-accent rounded-lg transition-colors"
-                        title="Reject"
-                      >
-                        <XCircle className="w-5 h-5" />
-                      </button>
-                      <button
                         onClick={() => setShowPasswordReset(app.id)}
-                        className="p-2 hover:bg-primary/10 text-black/30 hover:text-primary rounded-lg transition-colors"
-                        title="Reset Password"
+                        className="p-2.5 hover:bg-amber-500/10 text-slate-500 hover:text-amber-500 rounded-xl transition-all"
+                        title="Reset PW"
                       >
                         <Key className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => deleteApplicant(app.id)}
-                        className="p-2 hover:bg-accent/10 text-black/30 hover:text-accent rounded-lg transition-colors"
+                        className="p-2.5 hover:bg-red-500/10 text-slate-500 hover:text-red-500 rounded-xl transition-all"
                         title="Delete"
                       >
                         <Trash2 className="w-5 h-5" />
@@ -606,6 +586,7 @@ export function AdminDashboard() {
             </tbody>
           </table>
         </div>
+      </div>
         {filteredApplicants.length === 0 && (
           <div className="p-12 text-center">
             <Users className="w-12 h-12 text-black/10 mx-auto mb-4" />
@@ -613,10 +594,9 @@ export function AdminDashboard() {
           </div>
         )}
       </div>
-
-        </>
-      ) : (
-        <div className="space-y-6">
+    </>
+  ) : (
+    <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2rem] border border-sand shadow-xl">
             <h3 className="text-xl font-bold text-black mb-6 flex items-center gap-2">
               <History className="text-primary" />
@@ -656,14 +636,14 @@ export function AdminDashboard() {
 
       {/* QR Scanner Modal */}
       {showScanner && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white border border-sand w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl">
-            <div className="p-6 bg-primary text-white border-b border-sand flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg-light/80 backdrop-blur-md">
+          <div className="glass-card border border-white/10 w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl">
+            <div className="p-6 bg-primary text-white border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                  <Camera className="w-5 h-5 text-white" />
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-white" />
                 </div>
-                <h2 className="text-xl font-bold text-white">QR এটেনডেন্স স্ক্যানার</h2>
+                <h2 className="text-xl font-black text-white uppercase tracking-tight">Attendance QR</h2>
               </div>
               <button 
                 onClick={() => {
@@ -676,41 +656,41 @@ export function AdminDashboard() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-8 space-y-6 bg-slate-900/50">
               {!scannedApplicant ? (
                 <div className="space-y-4">
-                  <div id="reader" className="overflow-hidden rounded-2xl border-2 border-primary/20"></div>
-                  <p className="text-center text-sm text-black/50 font-medium">প্রবেশপত্রের QR কোডটি ক্যামেরার সামনে ধরুন</p>
+                  <div id="reader" className="overflow-hidden rounded-[2rem] border-4 border-primary/20 shadow-2xl"></div>
+                  <p className="text-center text-[10px] text-slate-500 font-black uppercase tracking-widest">Point camera at Admit Card QR</p>
                 </div>
               ) : (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                  <div className="flex items-center gap-4 p-4 bg-primary/5 border border-primary/10 rounded-2xl">
-                    <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-primary">
+                  <div className="flex items-center gap-5 p-6 bg-primary/5 border border-primary/10 rounded-3xl">
+                    <div className="w-24 h-24 rounded-2xl overflow-hidden border-4 border-slate-900 shadow-2xl">
                       <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-black">{scannedApplicant.fullNameEnglish || scannedApplicant.fullNameBangla}</h3>
-                      <p className="text-primary font-bold text-sm uppercase tracking-wider">উপস্থিতি সফল!</p>
-                      <p className="text-xs text-black/40 mt-1">ID: {scannedApplicant.id}</p>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight">{scannedApplicant.fullNameEnglish}</h3>
+                      <p className="text-primary font-black text-xs uppercase tracking-widest mt-1">Verification Success!</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">ID: {scannedApplicant.id}</p>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-sand/10 rounded-xl border border-sand">
-                      <p className="text-[10px] uppercase text-black/40 font-bold">Class</p>
-                      <p className="text-black font-bold">{scannedApplicant.studyStatus}</p>
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                      <p className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-1">Class</p>
+                      <p className="text-white font-black text-sm">{scannedApplicant.studyStatus}</p>
                     </div>
-                    <div className="p-4 bg-sand/10 rounded-xl border border-sand">
-                      <p className="text-[10px] uppercase text-black/40 font-bold">Roll</p>
-                      <p className="text-black font-bold">{scannedApplicant.classRoll}</p>
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                      <p className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-1">Roll</p>
+                      <p className="text-white font-black text-sm">{scannedApplicant.classRoll}</p>
                     </div>
                   </div>
 
                   <button 
                     onClick={() => setScannedApplicant(null)}
-                    className="w-full py-4 bg-accent text-white font-bold rounded-xl hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+                    className="w-full py-4 bg-emerald-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-500/20"
                   >
-                    পরবর্তী স্ক্যান করুন
+                    Scan Next Cadet
                   </button>
                 </div>
               )}
@@ -728,48 +708,48 @@ export function AdminDashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowPasswordReset(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-bg-light/90 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-white p-8 rounded-[2.5rem] space-y-6 shadow-2xl"
+              className="relative w-full max-w-md glass-card p-8 rounded-[2.5rem] space-y-6 shadow-2xl"
             >
               <div className="text-center space-y-2">
-                <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Key className="text-primary" size={24} />
+                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Key className="text-primary" size={28} />
                 </div>
-                <h3 className="text-xl font-bold text-black uppercase tracking-tight">Reset User Password</h3>
-                <p className="text-xs text-black/50">Resetting password for ID: <span className="font-mono font-bold">{showPasswordReset}</span></p>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Security Reset</h3>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {showPasswordReset}</p>
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-black/40 tracking-widest">New Password</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">New Password Key</label>
                   <input 
                     type="text" 
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-sm text-black outline-none focus:border-primary"
-                    placeholder="Enter new password"
+                    className="w-full bg-surface border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-primary shadow-xl"
+                    placeholder="Set temporary password"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 <button 
                   onClick={() => setShowPasswordReset(null)}
-                  className="flex-1 py-3 bg-sand/20 text-black/60 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-sand/30 transition-all"
+                  className="flex-1 py-4 bg-white/5 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleResetPassword}
                   disabled={resetting || !newPassword}
-                  className="flex-1 py-3 bg-primary text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
                 >
-                  {resetting ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Reset Now"}
+                  {resetting ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Update Now"}
                 </button>
               </div>
             </motion.div>
@@ -778,5 +758,5 @@ export function AdminDashboard() {
       </AnimatePresence>
     </div>
   </div>
-  );
+);
 }

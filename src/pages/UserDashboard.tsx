@@ -134,15 +134,15 @@ export function UserDashboard() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="min-h-screen bg-bg-light flex items-center justify-center">
       <Loader2 className="w-12 h-12 text-primary animate-spin" />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 pb-20">
+    <div className="min-h-screen bg-bg-light text-slate-200 pb-20">
       {/* Header */}
-      <header className="bg-slate-900/50 border-b border-slate-800 sticky top-0 z-30 backdrop-blur-md">
+      <header className="bg-surface/50 border-b border-white/5 sticky top-0 z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center">
@@ -214,13 +214,13 @@ export function UserDashboard() {
             </motion.div>
 
             <div className="glass-card p-6 rounded-3xl space-y-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-primary">Quick Stats</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">Quick Stats</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                <div className="p-4 bg-surface/50 rounded-2xl border border-white/5">
                   <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Status</p>
                   <p className="text-sm font-black text-white">{user.status}</p>
                 </div>
-                <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                <div className="p-4 bg-surface/50 rounded-2xl border border-white/5">
                   <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Attendance</p>
                   <p className="text-sm font-black text-white">{user.attendanceStatus}</p>
                 </div>
@@ -232,12 +232,12 @@ export function UserDashboard() {
           <div className="lg:col-span-8 space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-800">
+                <div className="w-12 h-12 bg-surface rounded-2xl flex items-center justify-center border border-white/5">
                   <User className="text-primary" size={24} />
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-white uppercase tracking-tight">Profile Information</h2>
-                  <p className="text-xs text-slate-500">Manage your personal and academic details</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Manage your personal and academic details</p>
                 </div>
               </div>
 
@@ -287,14 +287,14 @@ export function UserDashboard() {
                     { label: "Religion", name: "religion", icon: Shield, type: "select", options: ["Islam", "Hinduism", "Buddhism", "Christianity", "Other"] },
                   ].map((field: any) => (
                     <div key={field.name} className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">{field.label}</label>
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{field.label}</label>
                       {editing ? (
                         field.type === "select" ? (
                           <select 
                             name={field.name} 
                             value={formData[field.name]} 
                             onChange={handleChange}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-primary"
+                            className="w-full bg-surface border border-white/10 rounded-[1.2rem] px-5 py-3 text-sm text-white outline-none focus:border-primary appearance-none transition-all"
                           >
                             {field.options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                           </select>
@@ -304,11 +304,11 @@ export function UserDashboard() {
                             name={field.name} 
                             value={formData[field.name]} 
                             onChange={handleChange}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-primary"
+                            className="w-full bg-surface border border-white/10 rounded-[1.2rem] px-5 py-3 text-sm text-white outline-none focus:border-primary transition-all shadow-inner"
                           />
                         )
                       ) : (
-                        <p className="text-sm font-medium text-white">{user[field.name]}</p>
+                        <p className="text-sm font-bold text-slate-200">{user[field.name] || "—"}</p>
                       )}
                     </div>
                   ))}
@@ -331,14 +331,14 @@ export function UserDashboard() {
                     { label: "Weight (Kg)", name: "weightKg", icon: Weight },
                   ].map((field: any) => (
                     <div key={field.name} className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">{field.label}</label>
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{field.label}</label>
                       {editing ? (
                         field.type === "select" ? (
                           <select 
                             name={field.name} 
                             value={formData[field.name]} 
                             onChange={handleChange}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-primary"
+                            className="w-full bg-surface border border-white/10 rounded-[1.2rem] px-5 py-3 text-sm text-white outline-none focus:border-primary appearance-none transition-all"
                           >
                             {field.options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                           </select>
@@ -348,11 +348,11 @@ export function UserDashboard() {
                             name={field.name} 
                             value={formData[field.name]} 
                             onChange={handleChange}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-primary"
+                            className="w-full bg-surface border border-white/10 rounded-[1.2rem] px-5 py-3 text-sm text-white outline-none focus:border-primary transition-all shadow-inner"
                           />
                         )
                       ) : (
-                        <p className="text-sm font-medium text-white">{user[field.name]}</p>
+                        <p className="text-sm font-bold text-slate-200">{user[field.name] || "—"}</p>
                       )}
                     </div>
                   ))}
@@ -372,64 +372,64 @@ export function UserDashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowPasswordModal(false)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-bg-light/90 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md glass-card p-8 rounded-3xl space-y-6"
+              className="relative w-full max-w-md glass-card p-8 rounded-[2.5rem] space-y-6 shadow-2xl"
             >
               <div className="text-center space-y-2">
-                <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Key className="text-primary" size={24} />
+                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Key className="text-primary" size={28} />
                 </div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Change Password</h3>
-                <p className="text-xs text-slate-500">Enter a new secure password for your account</p>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Security Reset</h3>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Update your access key</p>
               </div>
 
               <div className="space-y-4">
                 {passwordError && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-500 text-[10px] font-bold uppercase">
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-500 text-[10px] font-black uppercase tracking-widest">
                     <AlertCircle size={14} />
                     {passwordError}
                   </div>
                 )}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">New Password</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">New Password Key</label>
                   <input 
                     type="password" 
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary"
+                    className="w-full bg-surface border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-primary shadow-xl"
                     placeholder="••••••••"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">Confirm Password</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Confirm Key</label>
                   <input 
                     type="password" 
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary"
+                    className="w-full bg-surface border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-primary shadow-xl"
                     placeholder="••••••••"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 <button 
                   onClick={() => setShowPasswordModal(false)}
-                  className="flex-1 py-3 bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
+                  className="flex-1 py-4 bg-white/5 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleChangePassword}
                   disabled={saving}
-                  className="flex-1 py-3 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
                 >
-                  {saving ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Update Password"}
+                  {saving ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Save Changes"}
                 </button>
               </div>
             </motion.div>

@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
 import { Download, Printer, CheckCircle, Shield, Loader2, ExternalLink, ArrowLeft, FileCheck, Info, Key, User as UserIcon } from "lucide-react";
 import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
+import * as htmlToImage from 'html-to-image';
 import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
 import { motion } from "framer-motion";
 
@@ -69,37 +69,19 @@ export function AdmitCard() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const element = cardRef.current;
-      const canvas = await html2canvas(element, { 
-        scale: 1.5, // Reduced scale for better compatibility
+      
+      const imgData = await htmlToImage.toJpeg(element, {
+        quality: 0.8,
         backgroundColor: "#ffffff",
-        useCORS: true,
-        allowTaint: false,
-        logging: true,
-        width: element.offsetWidth,
-        height: element.offsetHeight,
-        imageTimeout: 15000,
-        onclone: (clonedDoc) => {
-          const clonedElement = clonedDoc.getElementById("admitCard");
-          if (clonedElement) {
-            clonedElement.style.transform = "none";
-            clonedElement.style.boxShadow = "none";
-            // Ensure all images in clone have crossOrigin
-            clonedElement.querySelectorAll('img').forEach(img => {
-              img.setAttribute('crossOrigin', 'anonymous');
-            });
-          }
+        pixelRatio: 1.5,
+        cacheBust: true,
+        style: {
+          transform: 'none',
+          boxShadow: 'none'
         }
       });
 
-      if (!canvas) throw new Error("Canvas generation failed");
-
-      let imgData;
-      try {
-        imgData = canvas.toDataURL("image/jpeg", 0.8); // Use JPEG and lower quality to reduce size
-      } catch (e) {
-        console.error("Canvas toDataURL failed:", e);
-        throw new Error("SECURITY_RESTRICTION");
-      }
+      if (!imgData) throw new Error("Image generation failed");
 
       const pdf = new jsPDF({
         orientation: "p",
@@ -151,9 +133,9 @@ export function AdmitCard() {
   );
 
   return (
-    <div className="min-h-screen bg-paper pb-24">
+    <div className="min-h-screen bg-bg-light pb-24 selection:bg-primary selection:text-white">
       {/* Header Banner */}
-      <div className="bg-ink py-12 mb-12 border-b border-primary/20">
+      <div className="bg-surface/50 backdrop-blur-xl py-12 mb-12 border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3">
@@ -189,70 +171,65 @@ export function AdmitCard() {
           <div className="lg:col-span-4 space-y-8">
             {rawPassword && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-yellow-50 border-2 border-yellow-200 p-6 rounded-sm space-y-4 shadow-xl"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-primary/10 border border-primary/20 p-8 rounded-sm space-y-6 relative overflow-hidden"
               >
-                <div className="flex items-center gap-2 text-yellow-700">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl -mr-16 -mt-16" />
+                <div className="flex items-center gap-3 text-primary">
                   <Shield size={20} />
-                  <h3 className="font-black uppercase text-sm">Security Credentials</h3>
+                  <h3 className="font-extrabold uppercase text-xs tracking-widest">Security Access</h3>
                 </div>
-                <p className="text-[10px] text-yellow-600 font-medium">Please save these credentials. You will need them to log in to your dashboard.</p>
-                <div className="space-y-3">
-                  <div className="p-3 bg-white border border-yellow-100 rounded flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <UserIcon size={14} className="text-yellow-600" />
-                      <span className="text-[10px] font-bold uppercase text-yellow-600/60">User ID</span>
-                    </div>
-                    <span className="font-mono font-black text-sm">{applicant.id}</span>
+                <div className="space-y-4">
+                  <div className="p-4 bg-bg-light/50 backdrop-blur border border-white/5 rounded flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase text-slate-500">Applicant ID</span>
+                    <span className="font-mono font-black text-lg text-white">{applicant.id}</span>
                   </div>
-                  <div className="p-3 bg-white border border-yellow-100 rounded flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Key size={14} className="text-yellow-600" />
-                      <span className="text-[10px] font-bold uppercase text-yellow-600/60">Password</span>
-                    </div>
-                    <span className="font-mono font-black text-sm text-primary">{rawPassword}</span>
+                  <div className="p-4 bg-bg-light/50 backdrop-blur border border-white/5 rounded flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase text-slate-500">Access Key</span>
+                    <span className="font-mono font-black text-lg text-primary">{rawPassword}</span>
                   </div>
                 </div>
+                <p className="text-[10px] text-slate-400 font-medium italic">Save these credentials securely for future access.</p>
               </motion.div>
             )}
 
             <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="glass-card p-8 rounded-sm space-y-6 border-l-4 border-primary"
+            className="glass-card p-8 rounded-sm space-y-8 border-l-4 border-primary"
           >
-            <h3 className="text-xl font-black uppercase tracking-tight">Candidate Status</h3>
+            <h3 className="text-xl font-black uppercase tracking-tighter text-white">Verification Status</h3>
             <div className="space-y-4">
-              <div className="flex justify-between items-center py-2 border-b border-ink/5">
-                <span className="text-xs font-bold uppercase text-ink/40">Status</span>
-                <span className="px-3 py-1 bg-green-500/10 text-green-600 text-[10px] font-black uppercase rounded-full">Verified</span>
+              <div className="flex justify-between items-center py-3 border-b border-white/5">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Document Status</span>
+                <span className="px-4 py-1 bg-green-500/10 text-green-400 text-[10px] font-black uppercase rounded-full border border-green-500/20">Verified</span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-ink/5">
-                <span className="text-xs font-bold uppercase text-ink/40">ID Number</span>
-                <span className="font-mono text-sm font-bold">{applicant.id}</span>
+              <div className="flex justify-between items-center py-3 border-b border-white/5">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Applicant ID</span>
+                <span className="font-mono text-sm font-bold text-white">{applicant.id}</span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-ink/5">
-                <span className="text-xs font-bold uppercase text-ink/40">Session</span>
-                <span className="font-mono text-sm font-bold">2026-27</span>
+              <div className="flex justify-between items-center py-3 border-b border-white/5">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Cohort Session</span>
+                <span className="font-mono text-sm font-bold text-white">2026-27</span>
               </div>
             </div>
           </motion.div>
 
-          <div className="p-6 bg-primary/5 border border-primary/10 space-y-4">
-            <div className="flex items-center gap-2 text-primary">
+          <div className="p-8 bg-surface border border-white/5 space-y-6">
+            <div className="flex items-center gap-3 text-primary">
               <Info size={18} />
-              <span className="font-black uppercase text-xs tracking-widest">Instructions</span>
+              <span className="font-black uppercase text-xs tracking-widest">Candidate Conduct</span>
             </div>
-            <ul className="space-y-3">
+            <ul className="space-y-4">
               {[
                 "Bring this card to the examination hall.",
                 "Original NID/Birth Certificate required.",
                 "Report 30 minutes before schedule.",
                 "Electronic devices are strictly prohibited."
               ].map((text, i) => (
-                <li key={i} className="flex gap-3 text-xs text-ink/60 font-medium">
-                  <span className="text-primary">•</span>
+                <li key={i} className="flex gap-3 text-[11px] text-slate-400 font-medium leading-relaxed">
+                  <span className="text-primary font-bold">0{i+1}</span>
                   {text}
                 </li>
               ))}
@@ -279,11 +256,12 @@ export function AdmitCard() {
             </div>
           </div>
 
-          <div className="flex justify-center overflow-x-auto pb-8 no-scrollbar bg-ink/5 p-8 rounded-sm border border-ink/5">
+          <div className="flex justify-center overflow-x-auto pb-12 no-scrollbar bg-slate-950 p-12 rounded-sm border border-white/5 relative group">
+            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity" />
             <div 
               ref={cardRef}
               id="admitCard"
-              className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-2xl flex-shrink-0 print:shadow-none print:m-0"
+              className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] flex-shrink-0 print:shadow-none print:m-0 z-10"
               style={{ 
                 fontFamily: "'Roboto', sans-serif",
                 padding: "0.75in",
@@ -396,10 +374,10 @@ export function AdmitCard() {
                       { label: "Height", value: `${applicant.heightFeet}'${applicant.heightInches}"` },
                       { label: "Weight", value: `${applicant.weightKg} kg` },
                     ].map((item, i) => (
-                      <div key={i} className="flex items-baseline">
-                        <span className="w-32 font-bold text-[11px] uppercase font-montserrat shrink-0">{item.label}</span>
-                        <span className="mx-1 font-bold text-[11px]">:</span>
-                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-black/20 pb-0.5 truncate">{item.value}</span>
+                      <div key={i} className="flex items-baseline mb-0.5">
+                        <span className="w-32 font-bold text-[10px] uppercase font-montserrat shrink-0 text-black/60 truncate">{item.label}</span>
+                        <span className="mx-1 font-bold text-[10px] text-black">:</span>
+                        <span className="flex-grow font-black text-[10.5px] border-b border-dotted border-black/10 pb-0.5 truncate text-black">{item.value}</span>
                       </div>
                     ))}
                   </div>
@@ -409,15 +387,15 @@ export function AdmitCard() {
                       { label: "Present Address", value: applicant.presentAddress },
                       { label: "Permanent Address", value: applicant.permanentAddress },
                     ].map((item, i) => (
-                      <div key={i} className="flex items-baseline">
-                        <span className="w-32 font-bold text-[11px] uppercase font-montserrat shrink-0">{item.label}</span>
-                        <span className="mx-1 font-bold text-[11px]">:</span>
-                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-black/20 pb-0.5">{item.value}</span>
+                      <div key={i} className="flex items-baseline mb-0.5">
+                        <span className="w-32 font-bold text-[10px] uppercase font-montserrat shrink-0 text-black/60">{item.label}</span>
+                        <span className="mx-1 font-bold text-[10px] text-black">:</span>
+                        <span className="flex-grow font-black text-[10.5px] border-b border-dotted border-black/10 pb-0.5 text-black">{item.value}</span>
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-x-8 gap-y-2">
+                  <div className="mt-3 grid grid-cols-2 gap-x-8 gap-y-1">
                     {[
                       { label: "SSC GPA", value: applicant.sscGpa },
                       { label: "SSC Group", value: applicant.sscGroup },
@@ -425,9 +403,9 @@ export function AdmitCard() {
                       { label: "SSC Board", value: applicant.sscBoard },
                     ].map((item, i) => (
                       <div key={i} className="flex items-baseline">
-                        <span className="w-32 font-bold text-[11px] uppercase font-montserrat shrink-0">{item.label}</span>
-                        <span className="mx-1 font-bold text-[11px]">:</span>
-                        <span className="flex-grow font-medium text-[11px] border-b border-dotted border-black/20 pb-0.5">{item.value}</span>
+                        <span className="w-32 font-bold text-[10px] uppercase font-montserrat shrink-0 text-black/60">{item.label}</span>
+                        <span className="mx-1 font-bold text-[10px] text-black">:</span>
+                        <span className="flex-grow font-black text-[10.5px] border-b border-dotted border-black/10 pb-0.5 text-black">{item.value}</span>
                       </div>
                     ))}
                   </div>

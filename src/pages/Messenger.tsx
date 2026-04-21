@@ -141,16 +141,16 @@ export function Messenger() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
+      <div className="flex items-center justify-center h-screen bg-bg-light">
         <Loader2 className="w-8 h-8 text-accent animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-bg-light text-white overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-slate-900/50 backdrop-blur-xl border-b border-white/5 z-20">
+      <header className="flex items-center justify-between px-6 py-4 bg-surface/50 backdrop-blur-xl border-b border-white/5 z-20">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => navigate(-1)}
@@ -258,7 +258,7 @@ export function Messenger() {
       </main>
 
       {/* Input Area */}
-      <footer className="p-6 bg-slate-900/50 backdrop-blur-xl border-t border-white/5 z-20">
+      <footer className="p-6 bg-surface/50 backdrop-blur-xl border-t border-white/5 z-20">
         <div className="max-w-4xl mx-auto relative">
           <form onSubmit={handleSendMessage} className="flex items-center gap-3">
             <div className="relative flex-grow">
@@ -267,7 +267,7 @@ export function Messenger() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Type a message..."
-                className="w-full bg-slate-800/50 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-accent/50 transition-all pr-12"
+                className="w-full bg-slate-800/20 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-accent/50 transition-all pr-12"
               />
               <button
                 type="button"

@@ -293,7 +293,7 @@ export function EnrollmentForm() {
                   name="fullNameBangla"
                   value={formData.fullNameBangla}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                   placeholder="বাংলায় নাম লিখুন"
                 />
               </div>
@@ -304,7 +304,7 @@ export function EnrollmentForm() {
                   name="fullNameEnglish"
                   value={formData.fullNameEnglish}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                   placeholder="Name in English"
                 />
               </div>
@@ -315,7 +315,7 @@ export function EnrollmentForm() {
                   name="fatherNameBangla"
                   value={formData.fatherNameBangla}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -325,7 +325,7 @@ export function EnrollmentForm() {
                   name="fatherNameEnglish"
                   value={formData.fatherNameEnglish}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -335,7 +335,7 @@ export function EnrollmentForm() {
                   name="motherNameBangla"
                   value={formData.motherNameBangla}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -345,7 +345,7 @@ export function EnrollmentForm() {
                   name="motherNameEnglish"
                   value={formData.motherNameEnglish}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -355,7 +355,7 @@ export function EnrollmentForm() {
                   name="dob"
                   value={formData.dob}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -365,7 +365,7 @@ export function EnrollmentForm() {
                   name="nidBirthReg"
                   value={formData.nidBirthReg}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -374,7 +374,7 @@ export function EnrollmentForm() {
                   name="gender"
                   value={formData.gender}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 >
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
@@ -387,7 +387,7 @@ export function EnrollmentForm() {
                   name="religion"
                   value={formData.religion}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 >
                   <option value="Islam">Islam</option>
                   <option value="Hinduism">Hinduism</option>
@@ -414,7 +414,7 @@ export function EnrollmentForm() {
                   value={formData.presentAddress}
                   onChange={handleChange}
                   rows={2}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors resize-none"
                 />
               </div>
               <div className="md:col-span-2 space-y-2">
@@ -424,7 +424,7 @@ export function EnrollmentForm() {
                   value={formData.permanentAddress}
                   onChange={handleChange}
                   rows={2}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors resize-none"
                 />
               </div>
               <div className="space-y-2">
@@ -434,7 +434,7 @@ export function EnrollmentForm() {
                   name="studentPhone"
                   value={formData.studentPhone}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -444,7 +444,7 @@ export function EnrollmentForm() {
                   name="studentEmail"
                   value={formData.studentEmail}
                   onChange={handleChange}
-                  className="w-full bg-sand/10 border border-sand rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-black focus:border-primary outline-none transition-colors"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
