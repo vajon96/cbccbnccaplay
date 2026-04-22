@@ -53,6 +53,9 @@ export function AdmitCard() {
     try {
       setDownloading(true);
       
+      // Ensure all fonts are loaded
+      await document.fonts.ready;
+      
       // Ensure all images are fully loaded
       const images = Array.from(cardRef.current.querySelectorAll('img'));
       await Promise.all(images.map(img => {
@@ -60,24 +63,23 @@ export function AdmitCard() {
         return new Promise(resolve => {
           img.onload = () => resolve(null);
           img.onerror = () => resolve(null);
-          // Timeout after 10 seconds
           setTimeout(() => resolve(null), 10000);
         });
       }));
 
-      // Small delay to ensure rendering is complete
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       const element = cardRef.current;
       
       const imgData = await htmlToImage.toJpeg(element, {
-        quality: 1.0,
+        quality: 0.95,
         backgroundColor: "#ffffff",
-        pixelRatio: 3.5, // High resolution for 300 DPI quality
+        pixelRatio: 2.5, // Balanced for quality and stability
         cacheBust: true,
         style: {
           transform: 'none',
-          boxShadow: 'none'
+          boxShadow: 'none',
+          borderRadius: '0'
         }
       });
 
@@ -87,7 +89,7 @@ export function AdmitCard() {
         orientation: "p",
         unit: "mm",
         format: "a4",
-        compress: false // No compression for maximum quality
+        compress: true
       });
       
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -265,7 +267,7 @@ export function AdmitCard() {
               id="admitCard"
               className="print-area w-[210mm] h-[297mm] bg-white text-black relative shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] flex-shrink-0 print:shadow-none print:m-0 z-10"
               style={{ 
-                fontFamily: "'Roboto', sans-serif",
+                fontFamily: "Roboto, sans-serif",
                 padding: "0.75in",
               }}
             >
