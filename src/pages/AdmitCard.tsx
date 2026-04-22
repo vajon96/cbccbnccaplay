@@ -108,7 +108,9 @@ export function AdmitCard() {
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     try {
       window.print();
     } catch (error) {
@@ -157,10 +159,10 @@ export function AdmitCard() {
             </button>
             <button
               onClick={handlePrint}
-              className="px-8 py-4 border border-white/20 text-white font-black uppercase tracking-widest text-xs rounded-sm hover:bg-white/10 transition-all flex items-center gap-3"
+              className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-xs rounded-sm transition-all flex items-center gap-3 shadow-xl shadow-emerald-900/20 group"
             >
-              <Printer size={18} />
-              Print
+              <Printer size={18} className="group-hover:scale-110 transition-transform" />
+              Print Admit Card
             </button>
           </div>
         </div>
