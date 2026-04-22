@@ -2,7 +2,7 @@ import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Lock, ArrowRight, Eye, EyeOff, User as UserIcon, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
+import { db, doc, getDoc, handleFirestoreError, OperationType, collection, query, where, getDocs } from "../firebase";
 import { comparePassword, setSession } from "../lib/auth";
 
 export function Login() {
@@ -19,18 +19,38 @@ export function Login() {
     setError("");
 
     try {
-      // Check for Admin Login first (simple static check for now as per previous logic)
+      // Static Admin Check (Super Admin fallback)
       const envPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "").trim();
       const fallbackPassword = "BNCC@Admin#2026!Secure";
       
-      if (userId.toLowerCase() === "admin") {
+      const checkAdmin = userId.toLowerCase() === "admin";
+      if (checkAdmin) {
         if (password === fallbackPassword || (envPassword && password === envPassword)) {
-          setSession({ id: "admin", role: "admin", name: "Administrator" });
+          setSession({ id: "super_admin", role: "super_admin", name: "Super Admin" });
           navigate("/admin/dashboard");
           return;
         } else {
           setError("ভুল অ্যাডমিন পাসওয়ার্ড।");
           setLoading(false);
+          return;
+        }
+      }
+
+      // Dynamic Admin Check (Secondary Admins)
+      const adminsRef = collection(db, "admins");
+      const adminQuery = query(adminsRef, where("username", "==", userId.toLowerCase()));
+      const adminSnapshot = await getDocs(adminQuery);
+
+      if (!adminSnapshot.empty) {
+        const adminData = adminSnapshot.docs[0].data();
+        const isMatch = await comparePassword(password, adminData.password);
+        if (isMatch) {
+          setSession({
+            id: adminSnapshot.docs[0].id,
+            role: adminData.role || "admin",
+            name: adminData.name
+          });
+          navigate("/admin/dashboard");
           return;
         }
       }

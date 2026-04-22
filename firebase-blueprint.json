@@ -46,6 +46,19 @@
       },
       "required": ["fullNameBangla", "fullNameEnglish", "fatherNameBangla", "fatherNameEnglish", "motherNameBangla", "motherNameEnglish", "dob", "nidBirthReg", "gender", "religion", "presentAddress", "permanentAddress", "studentPhone", "heightFeet", "heightInches", "weightKg", "bloodGroup", "sscGpa", "sscGroup", "sscYear", "sscBoard", "studyStatus", "subject", "classRoll", "session", "emisId", "collegeName", "photo"]
     },
+    "admin": {
+      "title": "Admin",
+      "description": "Represents an administrative user.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Admin's display name" },
+        "username": { "type": "string", "description": "Login username" },
+        "password": { "type": "string", "description": "Hashed password" },
+        "role": { "type": "string", "enum": ["super_admin", "admin"], "description": "Access level" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "username", "password", "role"]
+    },
     "admin_config": {
       "title": "Admin Config",
       "description": "Configuration settings for the admin panel.",
@@ -100,6 +113,10 @@
     "/messages/{messageId}": {
       "schema": "message",
       "description": "Group chat messages"
+    },
+    "/admins/{adminId}": {
+      "schema": "admin",
+      "description": "Administrative users"
     }
   }
 }

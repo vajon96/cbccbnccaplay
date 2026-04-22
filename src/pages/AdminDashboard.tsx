@@ -6,12 +6,12 @@ import {
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
   QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info,
   History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
-  MessageSquare
+  MessageSquare, UserPlus
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { Html5QrcodeScanner } from "html5-qrcode";
-import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc } from "../firebase";
+import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc, where, getDocs } from "../firebase";
 import { getAdminInsights, getApplicantSummary } from "../services/geminiService";
 import { getSession, clearSession, hashPassword } from "../lib/auth";
 
@@ -28,8 +28,18 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs">("applicants");
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins">("applicants");
   const [logs, setLogs] = useState<any[]>([]);
+  const [admins, setAdmins] = useState<any[]>([]);
+  const [adminSession, setAdminSession] = useState<any>(null);
+  
+  // Create Admin State
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [adminName, setAdminName] = useState("");
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
+
   const [showPasswordReset, setShowPasswordReset] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
@@ -38,10 +48,11 @@ export function AdminDashboard() {
 
   useEffect(() => {
     const session = getSession();
-    if (!session || session.role !== "admin") {
+    if (!session || (session.role !== "admin" && session.role !== "super_admin")) {
       navigate("/login");
       return;
     }
+    setAdminSession(session);
 
     const q = query(collection(db, "applicants"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -68,11 +79,78 @@ export function AdminDashboard() {
       setLogs(logsData);
     });
 
+    // Fetch admins (only for super admin)
+    let adminsUnsubscribe = () => {};
+    if (session.role === "super_admin") {
+      const adminsQ = query(collection(db, "admins"), orderBy("createdAt", "desc"));
+      adminsUnsubscribe = onSnapshot(adminsQ, (snapshot) => {
+        const adminsData = snapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        }));
+        setAdmins(adminsData);
+      });
+    }
+
     return () => {
       unsubscribe();
       logsUnsubscribe();
+      adminsUnsubscribe();
     };
   }, [navigate]);
+
+  const handleCreateAdmin = async () => {
+    if (!adminName || !adminUsername || !adminPassword) return;
+    setCreatingAdmin(true);
+    try {
+      // Check if username exists in admins
+      const q = query(collection(db, "admins"), where("username", "==", adminUsername.toLowerCase()));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        alert("This username is already taken.");
+        return;
+      }
+
+      const hashedPassword = await hashPassword(adminPassword);
+      await addDoc(collection(db, "admins"), {
+        name: adminName,
+        username: adminUsername.toLowerCase(),
+        password: hashedPassword,
+        role: "admin",
+        createdAt: Timestamp.now()
+      });
+
+      // Log activity
+      await addDoc(collection(db, "activity_logs"), {
+        type: "ADMIN_CREATED",
+        targetId: adminUsername,
+        actorId: adminSession.id,
+        timestamp: Timestamp.now(),
+        details: `Super Admin created new admin: ${adminUsername}`
+      });
+
+      setShowAddAdmin(false);
+      setAdminName("");
+      setAdminUsername("");
+      setAdminPassword("");
+      alert("Admin created successfully!");
+    } catch (err) {
+      console.error("Create admin error:", err);
+      alert("Failed to create admin.");
+    } finally {
+      setCreatingAdmin(false);
+    }
+  };
+
+  const deleteAdmin = async (id: string) => {
+    if (!confirm("Are you sure you want to remove this admin?")) return;
+    try {
+      await deleteDoc(doc(db, "admins", id));
+      alert("Admin removed.");
+    } catch (err) {
+      console.error("Delete admin error:", err);
+    }
+  };
 
   const handleLogout = () => {
     clearSession();
@@ -361,6 +439,20 @@ export function AdminDashboard() {
           </div>
           {activeTab === "logs" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
         </button>
+        {adminSession?.role === "super_admin" && (
+          <button
+            onClick={() => setActiveTab("admins")}
+            className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+              activeTab === "admins" ? "text-primary" : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Shield size={18} />
+              Manage Admins
+            </div>
+            {activeTab === "admins" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
+          </button>
+        )}
       </div>
 
       {activeTab === "applicants" ? (
@@ -595,6 +687,84 @@ export function AdminDashboard() {
         )}
       </div>
     </>
+  ) : activeTab === "admins" ? (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <Shield className="text-primary" />
+            এডমিন ম্যানেজার
+          </h3>
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Administrative User Access Control</p>
+        </div>
+        <button
+          onClick={() => setShowAddAdmin(true)}
+          className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20"
+        >
+          <UserPlus className="w-4 h-4" /> নতুন এডমিন যোগ করুন
+        </button>
+      </div>
+
+      <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-2xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-900 text-white">
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">এডমিনের নাম</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">ইউজারনেম</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">রোল (Role)</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">তৈরির তারিখ</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-right">অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {/* Static Super Admin Row */}
+              <tr className="bg-slate-50/30">
+                <td className="px-8 py-6 font-bold text-slate-800">Super Admin</td>
+                <td className="px-8 py-6 font-mono text-xs text-slate-500">admin</td>
+                <td className="px-8 py-6">
+                  <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
+                    SUPER_ADMIN
+                  </span>
+                </td>
+                <td className="px-8 py-6 text-xs text-slate-500 font-bold uppercase">Permanent</td>
+                <td className="px-8 py-6 text-right">
+                  <Shield className="w-5 h-5 text-emerald-500 inline-block" />
+                </td>
+              </tr>
+              {admins.map((admin) => (
+                <tr key={admin.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3 font-bold text-slate-800">
+                      {admin.name}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="text-slate-500 font-mono text-xs">{admin.username}</span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-primary/20 bg-primary/5 text-primary">
+                      ADMIN
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-xs text-slate-500">
+                    {admin.createdAt?.toDate ? admin.createdAt.toDate().toLocaleDateString() : new Date(admin.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <button
+                      onClick={() => deleteAdmin(admin.id)}
+                      className="p-2.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   ) : (
     <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2rem] border border-sand shadow-xl">
@@ -750,6 +920,84 @@ export function AdminDashboard() {
                   className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
                 >
                   {resetting ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Update Now"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Admin Modal */}
+      <AnimatePresence>
+        {showAddAdmin && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddAdmin(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white p-10 rounded-[2.5rem] space-y-8 shadow-2xl border border-white"
+            >
+              <div className="text-center space-y-3">
+                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
+                  <UserPlus className="text-primary" size={32} />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800">নতুন এডমিন যুক্ত করুন</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">Add Administrative Sub-user</p>
+              </div>
+
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">পুরো নাম</label>
+                  <input 
+                    type="text" 
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm text-slate-800 outline-none focus:border-primary transition-all"
+                    placeholder="নাম লিখুন"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">ইউজারনেম (Username)</label>
+                  <input 
+                    type="text" 
+                    value={adminUsername}
+                    onChange={(e) => setAdminUsername(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm text-slate-800 outline-none focus:border-primary transition-all"
+                    placeholder="username (লগইন এ ব্যবহৃত হবে)"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">পাসওয়ার্ড</label>
+                  <input 
+                    type="password" 
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm text-slate-800 outline-none focus:border-primary transition-all"
+                    placeholder="নিরাপদ পাসওয়ার্ড দিন"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setShowAddAdmin(false)}
+                  className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-100"
+                >
+                  বাতিল
+                </button>
+                <button 
+                  onClick={handleCreateAdmin}
+                  disabled={creatingAdmin || !adminName || !adminUsername || !adminPassword}
+                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
+                >
+                  {creatingAdmin ? <Loader2 className="animate-spin mx-auto" size={18} /> : "তৈরি করুন"}
                 </button>
               </div>
             </motion.div>
