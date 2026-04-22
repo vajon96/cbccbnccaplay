@@ -71,9 +71,9 @@ export function AdmitCard() {
       const element = cardRef.current;
       
       const imgData = await htmlToImage.toJpeg(element, {
-        quality: 0.8,
+        quality: 1.0,
         backgroundColor: "#ffffff",
-        pixelRatio: 1.5,
+        pixelRatio: 3.5, // High resolution for 300 DPI quality
         cacheBust: true,
         style: {
           transform: 'none',
@@ -87,7 +87,7 @@ export function AdmitCard() {
         orientation: "p",
         unit: "mm",
         format: "a4",
-        compress: true
+        compress: false // No compression for maximum quality
       });
       
       const pdfWidth = pdf.internal.pageSize.getWidth();
