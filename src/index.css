@@ -2,13 +2,13 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #dc2626;
-  --color-secondary: #7f1d1d;
-  --color-accent: #ef4444;
+  --color-primary: #e11d48;
+  --color-secondary: #9f1239;
+  --color-accent: #fb7185;
   --color-sand: #f8fafc;
-  --color-bg-light: #020617;
-  --color-surface: #0f172a;
-  --color-paper: #f1f5f9;
+  --color-bg-light: #ffffff;
+  --color-surface: #f1f5f9;
+  --color-paper: #ffffff;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", sans-serif;
   --font-montserrat: "Montserrat", sans-serif;
@@ -16,9 +16,9 @@
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 font-sans selection:bg-primary selection:text-white;
-  background-image: radial-gradient(circle at top right, rgba(220, 38, 38, 0.05), transparent 40%),
-                    radial-gradient(circle at bottom left, rgba(153, 27, 27, 0.03), transparent 40%);
+  @apply bg-white text-slate-700 font-sans selection:bg-rose-500 selection:text-white;
+  background-image: radial-gradient(circle at top right, rgba(225, 29, 72, 0.03), transparent 40%),
+                    radial-gradient(circle at bottom left, rgba(159, 18, 57, 0.02), transparent 40%);
 }
 
 h1, h2, h3, h4, .font-display {
