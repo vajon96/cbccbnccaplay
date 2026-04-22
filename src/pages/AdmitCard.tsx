@@ -178,12 +178,12 @@ export function AdmitCard() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl -mr-16 -mt-16" />
                 <div className="flex items-center gap-3 text-primary">
                   <Shield size={20} />
-                  <h3 className="font-extrabold uppercase text-xs tracking-widest">Security Access</h3>
+                  <h3 className="font-extrabold uppercase text-xs tracking-widest text-slate-900">Security Access</h3>
                 </div>
                 <div className="space-y-4">
                   <div className="p-4 bg-bg-light/50 backdrop-blur border border-white/5 rounded flex flex-col gap-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-500">Applicant ID</span>
-                    <span className="font-mono font-black text-lg text-white">{applicant.id}</span>
+                    <span className="text-[10px] font-bold uppercase text-slate-600">Applicant ID</span>
+                    <span className="font-mono font-black text-lg text-slate-900">{applicant.id}</span>
                   </div>
                   <div className="p-4 bg-bg-light/50 backdrop-blur border border-white/5 rounded flex flex-col gap-1">
                     <span className="text-[10px] font-bold uppercase text-slate-500">Access Key</span>
