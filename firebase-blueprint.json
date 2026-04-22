@@ -55,6 +55,19 @@
         "username": { "type": "string", "description": "Login username" },
         "password": { "type": "string", "description": "Hashed password" },
         "role": { "type": "string", "enum": ["super_admin", "admin"], "description": "Access level" },
+        "permissions": {
+          "type": "object",
+          "properties": {
+            "canAdd": { "type": "boolean" },
+            "canEdit": { "type": "boolean" },
+            "canDelete": { "type": "boolean" },
+            "canViewLogs": { "type": "boolean" },
+            "canResetPW": { "type": "boolean" },
+            "canApprove": { "type": "boolean" },
+            "canExport": { "type": "boolean" },
+            "canChat": { "type": "boolean" }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "username", "password", "role"]

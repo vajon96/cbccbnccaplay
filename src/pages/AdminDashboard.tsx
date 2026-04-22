@@ -6,7 +6,7 @@ import {
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
   QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info,
   History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
-  MessageSquare, UserPlus
+  MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
@@ -38,7 +38,22 @@ export function AdminDashboard() {
   const [adminName, setAdminName] = useState("");
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [adminPermissions, setAdminPermissions] = useState({
+    canAdd: true,
+    canEdit: true,
+    canDelete: false,
+    canViewLogs: true,
+    canResetPW: false,
+    canApprove: true,
+    canExport: false,
+    canChat: true
+  });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
+
+  // Edit Admin Permissions State
+  const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
+  const [editPermissions, setEditPermissions] = useState<any>(null);
+  const [updatingPermissions, setUpdatingPermissions] = useState(false);
 
   const [showPasswordReset, setShowPasswordReset] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -117,6 +132,7 @@ export function AdminDashboard() {
         username: adminUsername.toLowerCase(),
         password: hashedPassword,
         role: "admin",
+        permissions: adminPermissions,
         createdAt: Timestamp.now()
       });
 
@@ -150,6 +166,33 @@ export function AdminDashboard() {
       alert("Admin removed.");
     } catch (err) {
       console.error("Delete admin error:", err);
+    }
+  };
+
+  const handleUpdatePermissions = async () => {
+    if (!editingAdminId || !editPermissions) return;
+    setUpdatingPermissions(true);
+    try {
+      await updateDoc(doc(db, "admins", editingAdminId), {
+        permissions: editPermissions
+      });
+      
+      // Log activity
+      await addDoc(collection(db, "activity_logs"), {
+        type: "ADMIN_PERMISSIONS_UPDATED",
+        targetId: editingAdminId,
+        actorId: adminSession.id,
+        timestamp: Timestamp.now(),
+        details: `Super Admin updated permissions for admin ID: ${editingAdminId}`
+      });
+
+      setEditingAdminId(null);
+      alert("Permissions updated successfully!");
+    } catch (err) {
+      console.error("Update permissions error:", err);
+      alert("Failed to update permissions.");
+    } finally {
+      setUpdatingPermissions(false);
     }
   };
 
@@ -187,6 +230,12 @@ export function AdminDashboard() {
 
     if (!id) return;
 
+    // Check permission for attendance update via scan
+    if (!adminSession?.permissions?.canEdit) {
+      alert("আপনার উপস্থিতি আপডেট করার অনুমতি নেই।");
+      return;
+    }
+
     const path = `applicants/${id}`;
     try {
       const docRef = doc(db, "applicants", id);
@@ -213,6 +262,13 @@ export function AdminDashboard() {
 
   const handleResetPassword = async () => {
     if (!showPasswordReset || !newPassword) return;
+    
+    // Check permission
+    if (!adminSession?.permissions?.canResetPW) {
+      alert("আপনার এই কাজটি করার অনুমতি নেই। (Permission Denied)");
+      return;
+    }
+
     setResetting(true);
     try {
       const hashedPassword = await hashPassword(newPassword);
@@ -252,6 +308,16 @@ export function AdminDashboard() {
   };
 
   const updateStatus = async (id: string, status?: string, attendanceStatus?: string) => {
+    // Check permission
+    if (status && !adminSession?.permissions?.canApprove) {
+      alert("আপনার আবেদন অনুমোদন করার অনুমতি নেই।");
+      return;
+    }
+    if (attendanceStatus && !adminSession?.permissions?.canEdit) {
+      alert("আপনার উপস্থিতি পরিবর্তন করার অনুমতি নেই।");
+      return;
+    }
+
     const path = `applicants/${id}`;
     try {
       const docRef = doc(db, "applicants", id);
@@ -272,6 +338,12 @@ export function AdminDashboard() {
   };
 
   const deleteApplicant = async (id: string) => {
+    // Check permission
+    if (!adminSession?.permissions?.canDelete) {
+      alert("আপনার রেকর্ড মুছে ফেলার অনুমতি নেই।");
+      return;
+    }
+
     if (!confirm("আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?")) return;
     const path = `applicants/${id}`;
     try {
@@ -370,21 +442,24 @@ export function AdminDashboard() {
           <div className="flex gap-3">
             <button
               onClick={exportToExcel}
-              className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg"
+              disabled={!adminSession?.permissions?.canExport}
+              className={`flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg ${!adminSession?.permissions?.canExport ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
             >
-              <FileSpreadsheet className="w-4 h-4" /> Excel এক্সপোর্ট
+              <FileSpreadsheet className="w-4 h-4" /> {adminSession?.permissions?.canExport ? "Excel এক্সপোর্ট" : <Lock size={14} />}
             </button>
             <button
               onClick={downloadPhotosZip}
-              className="flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg"
+              disabled={!adminSession?.permissions?.canExport}
+              className={`flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg ${!adminSession?.permissions?.canExport ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
             >
-              <Archive className="w-4 h-4" /> ফটো জিপ (ZIP)
+              <Archive className="w-4 h-4" /> {adminSession?.permissions?.canExport ? "ফটো জিপ (ZIP)" : <Lock size={14} />}
             </button>
             <button
               onClick={() => navigate("/messenger")}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white border border-white/20 rounded-xl text-sm font-bold hover:bg-white/20"
+              disabled={!adminSession?.permissions?.canChat}
+              className={`flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white border border-white/20 rounded-xl text-sm font-bold hover:bg-white/20 ${!adminSession?.permissions?.canChat ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
             >
-              <MessageSquare className="w-4 h-4" /> Messenger
+              <MessageSquare className="w-4 h-4" /> {adminSession?.permissions?.canChat ? "Messenger" : <Lock size={14} />}
             </button>
             <button
               onClick={handleLogout}
@@ -430,13 +505,15 @@ export function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("logs")}
+          disabled={!adminSession?.permissions?.canViewLogs}
           className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
             activeTab === "logs" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-          }`}
+          } ${!adminSession?.permissions?.canViewLogs ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
         >
           <div className="flex items-center gap-2">
             <History size={18} />
             Activity Logs
+            {!adminSession?.permissions?.canViewLogs && <Lock size={12} className="text-red-500" />}
           </div>
           {activeTab === "logs" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
         </button>
@@ -628,10 +705,11 @@ export function AdminDashboard() {
                       )}
                       <button
                         onClick={() => handleAdminLoginAsUser(app)}
-                        className="p-2.5 hover:bg-white/5 text-slate-500 hover:text-white rounded-xl transition-all"
+                        disabled={!adminSession?.permissions?.canEdit}
+                        className={`p-2.5 hover:bg-white/5 text-slate-500 hover:text-white rounded-xl transition-all ${!adminSession?.permissions?.canEdit ? 'opacity-30 cursor-not-allowed' : ''}`}
                         title="Login as User"
                       >
-                        <ExternalLink className="w-5 h-5" />
+                        {adminSession?.permissions?.canEdit ? <ExternalLink className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
                       </button>
                       <button
                         onClick={() => setShowPasswordId(showPasswordId === app.id ? null : app.id)}
@@ -646,31 +724,35 @@ export function AdminDashboard() {
                         onClick={() => updateStatus(app.id, undefined as any, app.attendanceStatus === 'Present' ? 'Absent' : 'Present')}
                         className={`p-2.5 rounded-xl transition-all ${
                           app.attendanceStatus === 'Present' ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-500 hover:bg-white/5'
-                        }`}
+                        } ${!adminSession?.permissions?.canEdit ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        disabled={!adminSession?.permissions?.canEdit}
                         title="Attendance"
                       >
-                        <Scan className="w-5 h-5" />
+                        {adminSession?.permissions?.canEdit ? <Scan className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
                       </button>
                       <button
                         onClick={() => updateStatus(app.id, 'Approved')}
-                        className="p-2.5 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-500 rounded-xl transition-all"
+                        className={`p-2.5 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-500 rounded-xl transition-all ${!adminSession?.permissions?.canApprove ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        disabled={!adminSession?.permissions?.canApprove}
                         title="Approve"
                       >
-                        <CheckCircle className="w-5 h-5" />
+                        {adminSession?.permissions?.canApprove ? <CheckCircle className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
                       </button>
                       <button
                         onClick={() => setShowPasswordReset(app.id)}
-                        className="p-2.5 hover:bg-amber-500/10 text-slate-500 hover:text-amber-500 rounded-xl transition-all"
+                        className={`p-2.5 hover:bg-amber-500/10 text-slate-500 hover:text-amber-500 rounded-xl transition-all ${!adminSession?.permissions?.canResetPW ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        disabled={!adminSession?.permissions?.canResetPW}
                         title="Reset PW"
                       >
-                        <Key className="w-5 h-5" />
+                        {adminSession?.permissions?.canResetPW ? <Key className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
                       </button>
                       <button
                         onClick={() => deleteApplicant(app.id)}
-                        className="p-2.5 hover:bg-red-500/10 text-slate-500 hover:text-red-500 rounded-xl transition-all"
+                        className={`p-2.5 hover:bg-red-500/10 text-slate-500 hover:text-red-500 rounded-xl transition-all ${!adminSession?.permissions?.canDelete ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        disabled={!adminSession?.permissions?.canDelete}
                         title="Delete"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        {adminSession?.permissions?.canDelete ? <Trash2 className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
                       </button>
                     </div>
                   </td>
@@ -752,12 +834,32 @@ export function AdminDashboard() {
                     {admin.createdAt?.toDate ? admin.createdAt.toDate().toLocaleDateString() : new Date(admin.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-8 py-6 text-right">
-                    <button
-                      onClick={() => deleteAdmin(admin.id)}
-                      className="p-2.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingAdminId(admin.id);
+                          setEditPermissions(admin.permissions || {
+                            canAdd: false,
+                            canEdit: true,
+                            canDelete: false,
+                            canViewLogs: true,
+                            canResetPW: false,
+                            canApprove: true
+                          });
+                        }}
+                        className="p-2.5 hover:bg-slate-50 text-slate-400 hover:text-primary rounded-xl transition-all"
+                        title="Edit Permissions"
+                      >
+                        <Settings size={18} />
+                      </button>
+                      <button
+                        onClick={() => deleteAdmin(admin.id)}
+                        className="p-2.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
+                        title="Delete Admin"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -984,6 +1086,32 @@ export function AdminDashboard() {
                     placeholder="নিরাপদ পাসওয়ার্ড দিন"
                   />
                 </div>
+
+                <div className="pt-2 space-y-3">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">কাজের অনুমতি (Permissions)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { key: 'canAdd', label: 'ডাটা যোগ' },
+                      { key: 'canEdit', label: 'ডাটা এডিট' },
+                      { key: 'canDelete', label: 'ডাটা ডিলিট' },
+                      { key: 'canViewLogs', label: 'লগ দেখা' },
+                      { key: 'canResetPW', label: 'পাসওয়ার্ড রিসেট' },
+                      { key: 'canApprove', label: 'অনুমোদন (Approve)' },
+                      { key: 'canExport', label: 'এক্সপোর্ট (Excel/ZIP)' },
+                      { key: 'canChat', label: 'মেসেঞ্জার অ্যাক্সেস' }
+                    ].map((pref) => (
+                      <label key={pref.key} className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all">
+                        <input 
+                          type="checkbox" 
+                          checked={(adminPermissions as any)[pref.key]}
+                          onChange={(e) => setAdminPermissions(prev => ({ ...prev, [pref.key]: e.target.checked }))}
+                          className="w-4 h-4 rounded text-primary focus:ring-primary"
+                        />
+                        <span className="text-[11px] font-bold text-slate-700">{pref.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-4">
@@ -999,6 +1127,82 @@ export function AdminDashboard() {
                   className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
                 >
                   {creatingAdmin ? <Loader2 className="animate-spin mx-auto" size={18} /> : "তৈরি করুন"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Permissions Modal */}
+      <AnimatePresence>
+        {editingAdminId && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEditingAdminId(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white p-10 rounded-[2.5rem] space-y-8 shadow-2xl border border-white"
+            >
+              <div className="text-center space-y-3">
+                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
+                  <Settings className="text-primary" size={32} />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800">পারমিশন পরিবর্তন করুন</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">Modify Access Level</p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">কাজের অনুমতি পরিবর্তন (Dynamic Control)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'canAdd', label: 'ডাটা যোগ', icon: <UserPlus size={14} /> },
+                    { key: 'canEdit', label: 'ডাটা এডিট', icon: <Edit size={14} /> },
+                    { key: 'canDelete', label: 'ডাটা ডিলিট', icon: <Trash2 size={14} /> },
+                    { key: 'canViewLogs', label: 'লগ দেখা', icon: <History size={14} /> },
+                    { key: 'canResetPW', label: 'পাসওয়ার্ড রিসেট', icon: <Key size={14} /> },
+                    { key: 'canApprove', label: 'অনুমোদন', icon: <CheckCircle size={14} /> },
+                    { key: 'canExport', label: 'এক্সপোর্ট', icon: <Download size={14} /> },
+                    { key: 'canChat', label: 'মেসেঞ্জার', icon: <MessageSquare size={14} /> }
+                  ].map((pref) => (
+                    <label key={pref.key} className={`flex items-center gap-2 p-3 rounded-xl border transition-all cursor-pointer ${
+                      editPermissions?.[pref.key] ? 'bg-primary/5 border-primary/20 text-primary' : 'bg-slate-50 border-slate-100 text-slate-500'
+                    }`}>
+                      <input 
+                        type="checkbox" 
+                        checked={editPermissions?.[pref.key]}
+                        onChange={(e) => setEditPermissions((prev: any) => ({ ...prev, [pref.key]: e.target.checked }))}
+                        className="w-4 h-4 rounded text-primary focus:ring-primary"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        {pref.icon}
+                        <span className="text-[11px] font-bold">{pref.label}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setEditingAdminId(null)}
+                  className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-100"
+                >
+                  বাতিল
+                </button>
+                <button 
+                  onClick={handleUpdatePermissions}
+                  disabled={updatingPermissions}
+                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
+                >
+                  {updatingPermissions ? <Loader2 className="animate-spin mx-auto" size={18} /> : "আপডেট করুন"}
                 </button>
               </div>
             </motion.div>

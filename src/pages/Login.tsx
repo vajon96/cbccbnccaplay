@@ -26,7 +26,21 @@ export function Login() {
       const checkAdmin = userId.toLowerCase() === "admin";
       if (checkAdmin) {
         if (password === fallbackPassword || (envPassword && password === envPassword)) {
-          setSession({ id: "super_admin", role: "super_admin", name: "Super Admin" });
+          setSession({ 
+            id: "super_admin", 
+            role: "super_admin", 
+            name: "Super Admin",
+            permissions: {
+              canAdd: true,
+              canEdit: true,
+              canDelete: true,
+              canViewLogs: true,
+              canResetPW: true,
+              canApprove: true,
+              canExport: true,
+              canChat: true
+            }
+          });
           navigate("/admin/dashboard");
           return;
         } else {
@@ -48,7 +62,17 @@ export function Login() {
           setSession({
             id: adminSnapshot.docs[0].id,
             role: adminData.role || "admin",
-            name: adminData.name
+            name: adminData.name,
+            permissions: adminData.permissions || {
+              canAdd: false,
+              canEdit: true,
+              canDelete: false,
+              canViewLogs: true,
+              canResetPW: false,
+              canApprove: true,
+              canExport: false,
+              canChat: true
+            }
           });
           navigate("/admin/dashboard");
           return;
