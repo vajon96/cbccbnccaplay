@@ -135,15 +135,15 @@ export function AdmitCard() {
   return (
     <div className="min-h-screen bg-bg-light pb-24 selection:bg-primary selection:text-white">
       {/* Header Banner */}
-      <div className="bg-surface/50 backdrop-blur-xl py-12 mb-12 border-b border-white/5">
+      <div className="bg-slate-100 py-12 mb-12 border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3">
               <FileCheck className="text-primary" size={24} />
-              <span className="micro-label !text-white/60">Official Document Retrieval</span>
+              <span className="micro-label !text-slate-500">Official Document Retrieval</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter">Enrollment Successful</h1>
-            <p className="text-white/40 font-light">Your application has been processed. Please download your admit card below.</p>
+            <h1 className="text-4xl md:text-5xl font-black text-slate-900 uppercase tracking-tighter">Enrollment Successful</h1>
+            <p className="text-slate-500 font-medium">Your application has been processed. Please download your admit card below.</p>
           </div>
           
           <div className="flex gap-4">
@@ -157,7 +157,7 @@ export function AdmitCard() {
             </button>
             <button
               onClick={handlePrint}
-              className="px-8 py-4 border border-white/20 text-white font-black uppercase tracking-widest text-xs rounded-sm hover:bg-white/10 transition-all flex items-center gap-3"
+              className="px-8 py-4 border-2 border-slate-900 text-slate-900 font-black uppercase tracking-widest text-xs rounded-sm hover:bg-slate-900 hover:text-white transition-all flex items-center gap-3 shadow-xl shadow-slate-900/5 active:scale-95"
             >
               <Printer size={18} />
               Print
