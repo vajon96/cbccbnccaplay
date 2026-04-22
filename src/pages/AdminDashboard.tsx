@@ -134,9 +134,10 @@ export function AdminDashboard() {
       setAdminUsername("");
       setAdminPassword("");
       alert("Admin created successfully!");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Create admin error:", err);
-      alert("Failed to create admin.");
+      const errorMessage = err?.message || "Unknown error";
+      alert(`Failed to create admin: ${errorMessage}`);
     } finally {
       setCreatingAdmin(false);
     }

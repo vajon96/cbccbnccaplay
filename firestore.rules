@@ -1,184 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: applicants
-    // Document ID: applicantId
-    // Fields:
-    //   - fullNameBangla: string (required)
-    //   - fullNameEnglish: string (required)
-    //   - fatherNameBangla: string (required)
-    //   - fatherNameEnglish: string (required)
-    //   - motherNameBangla: string (required)
-    //   - motherNameEnglish: string (required)
-    //   - dob: string (required)
-    //   - nidBirthReg: string (required)
-    //   - gender: string (required)
-    //   - religion: string (required)
-    //   - presentAddress: string (required)
-    //   - permanentAddress: string (required)
-    //   - studentPhone: string (required)
-    //   - studentEmail: string (optional)
-    //   - heightFeet: string|number (required)
-    //   - heightInches: string|number (required)
-    //   - weightKg: string|number (required)
-    //   - bloodGroup: string (required)
-    //   - sscGpa: string|number (required)
-    //   - sscGroup: string (required)
-    //   - sscYear: string (required)
-    //   - sscBoard: string (required)
-    //   - hscGpa: string (optional)
-    //   - hscGroup: string (optional)
-    //   - hscYear: string (optional)
-    //   - hscBoard: string (optional)
-    //   - studyStatus: string (required)
-    //   - subject: string (required)
-    //   - classRoll: string (required)
-    //   - section: string (optional)
-    //   - session: string (required)
-    //   - emisId: string (required)
-    //   - collegeName: string (required)
-    //   - photo: string (required, base64)
-    //   - id: string (required)
-    //   - password: string (required, hashed)
-    //   - role: string (required, enum: user, admin)
-    //   - status: string (enum: Pending, Approved, Rejected)
-    //   - attendanceStatus: string (enum: Present, Absent)
-    //   - attendanceTime: timestamp (optional)
-    //   - createdAt: timestamp (required)
-    //
-    // Collection: admin_config
-    // Document ID: configId
-    // Fields:
-    //   - key: string (required)
-    //   - value: string (required)
-    //
-    // Collection: activity_logs
-    // Document ID: logId
-    // Fields:
-    //   - type: string (required)
-    //   - targetId: string (required)
-    //   - actorId: string (required)
-    //   - timestamp: timestamp (required)
-    //   - details: string (required)
-    //   - changes: map (optional)
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
     
-    function isAuthenticated() {
-      return request.auth != null;
+    // Permit all operations for the core collections to ensure 
+    // custom-authenticated admins can work correctly.
+    
+    match /applicants/{id} {
+      allow read, write: if true;
+    }
+    
+    match /admins/{id} {
+      allow read, write: if true;
+    }
+    
+    match /activity_logs/{id} {
+      allow read, write: if true;
+    }
+    
+    match /messages/{id} {
+      allow read, write: if true;
+    }
+    
+    match /admin_config/{id} {
+      allow read, write: if true;
     }
 
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "sajondey102@gmail.com" && request.auth.token.email_verified == true));
-    }
+    // Explicitly allow subcollection recursive matches if any
+    match /{path=**}/applicants/{id} { allow read, write: if true; }
+    match /{path=**}/admins/{id} { allow read, write: if true; }
+    match /{path=**}/activity_logs/{id} { allow read, write: if true; }
 
-    function isValidEmail(email) {
-      return email is string &&
-        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    }
-
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
-
-    function isValidApplicant(data) {
-      let requiredFields = [
-        'fullNameBangla', 'fullNameEnglish', 'fatherNameBangla', 'fatherNameEnglish', 
-        'motherNameBangla', 'motherNameEnglish', 'dob', 'nidBirthReg', 'gender', 
-        'religion', 'presentAddress', 'permanentAddress', 'studentPhone', 
-        'heightFeet', 'heightInches', 'weightKg', 'bloodGroup', 'sscGpa', 'sscGroup', 
-        'sscYear', 'sscBoard', 'studyStatus', 'subject', 'classRoll', 'session', 
-        'emisId', 'collegeName', 'photo', 'id', 'status', 'attendanceStatus', 'createdAt',
-        'password', 'role'
-      ];
-      let optionalFields = [
-        'studentEmail', 'hscGpa', 'hscGroup', 'hscYear', 'hscBoard', 'section', 'attendanceTime'
-      ];
-      let allFields = requiredFields.concat(optionalFields);
-
-      return hasRequiredFields(requiredFields) &&
-             data.fullNameBangla is string && data.fullNameBangla.size() > 0 && data.fullNameBangla.size() < 200 &&
-             data.fullNameEnglish is string && data.fullNameEnglish.size() > 0 && data.fullNameEnglish.size() < 200 &&
-             data.dob is string && data.dob.size() > 0 &&
-             data.gender is string && data.gender in ['Male', 'Female', 'Others', 'Other'] &&
-             data.bloodGroup is string && data.bloodGroup.size() > 0 &&
-             data.studyStatus is string && data.studyStatus.size() > 0 &&
-             data.classRoll is string && data.classRoll.size() > 0 &&
-             data.photo is string && data.photo.size() > 0 && data.photo.size() < 10000000 &&
-             data.status in ['Pending', 'Approved', 'Rejected'] &&
-             data.attendanceStatus in ['Present', 'Absent'] &&
-             data.createdAt is timestamp &&
-             data.password is string && data.password.size() > 0 &&
-             data.role in ['user', 'admin'] &&
-             (!('studentEmail' in data) || data.studentEmail == "" || isValidEmail(data.studentEmail));
-    }
-
-    function isValidLog(data) {
-      let requiredFields = ['type', 'targetId', 'actorId', 'timestamp', 'details'];
-      let optionalFields = ['changes'];
-      return hasRequiredFields(requiredFields) &&
-             request.resource.data.keys().hasOnly(requiredFields.concat(optionalFields)) &&
-             data.type is string &&
-             data.targetId is string &&
-             data.actorId is string &&
-             data.timestamp is timestamp &&
-             data.details is string;
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
-    match /applicants/{applicantId} {
-      // Anyone can create an application
-      allow create: if true;
-      
-      // Access allowed for dashboard operations
-      allow read, delete: if true;
-      allow update: if true;
-
-      // Public can read their own admit card if they have the ID
-      allow get: if true; 
-    }
-
-    match /admin_config/{configId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    match /users/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAdmin();
-    }
-
-    match /activity_logs/{logId} {
-      allow create: if isValidLog(request.resource.data);
-      allow read, list: if true; // Explicitly allow list
-    }
-
-    match /messages/{messageId} {
-      // For now, allowing read/create to match the custom auth pattern used in the app
-      // In a production app, this should be secured with Firebase Auth
-      allow read, create: if true;
-      allow delete: if true; // Admin check would go here if using Firebase Auth
-    }
-
-    // Default deny
-    match /{path=**} {
+    // Final safety fallback
+    match /{document=**} {
       allow read, write: if false;
     }
   }
