@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
-import { Download, Printer, CheckCircle, Shield, Loader2, ExternalLink, ArrowLeft, FileCheck, Info, Key, User as UserIcon } from "lucide-react";
+import { Download, CheckCircle, Shield, Loader2, ExternalLink, ArrowLeft, FileCheck, Info, Key, User as UserIcon } from "lucide-react";
 import { jsPDF } from "jspdf";
 import * as htmlToImage from 'html-to-image';
 import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
@@ -15,6 +15,36 @@ export function AdmitCard() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Block browser print shortcut (Ctrl+P / Cmd+P)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        alert("Printing is disabled. Please use the 'Download Admit Card' button.");
+      }
+    };
+
+    // Override window.print
+    const originalPrint = window.print;
+    window.print = () => {
+      alert("Printing is disabled. Please use the 'Download Admit Card' button.");
+    };
+
+    // Prevent context menu (optional, but requested 'Prevent right-click print options if possible')
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.print = originalPrint;
+    };
+  }, []);
 
   useEffect(() => {
     const fetchApplicant = async () => {
@@ -110,17 +140,6 @@ export function AdmitCard() {
     }
   };
 
-  const handlePrint = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      window.print();
-    } catch (error) {
-      console.error("Print error:", error);
-      alert("Printing failed. Please try opening in a new tab.");
-    }
-  };
-
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-screen space-y-4">
       <Loader2 className="w-12 h-12 text-primary animate-spin" />
@@ -150,24 +169,39 @@ export function AdmitCard() {
             <p className="text-white/40 font-light">Your application has been processed. Please download your admit card below.</p>
           </div>
           
-          <div className="flex gap-4">
+          <div className="flex flex-col items-end gap-3">
             <button
               onClick={handleDownloadPDF}
               disabled={downloading}
-              className="px-8 py-4 bg-primary text-white font-black uppercase tracking-widest text-xs rounded-sm btn-hover flex items-center gap-3 disabled:opacity-50"
+              className="px-10 py-5 bg-primary text-white font-black uppercase tracking-widest text-sm rounded-sm btn-hover flex items-center gap-3 disabled:opacity-50 shadow-2xl shadow-primary/20"
             >
-              {downloading ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
-              Download PDF
+              {downloading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+              Download Admit Card
             </button>
-            <button
-              onClick={handlePrint}
-              className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-xs rounded-sm transition-all flex items-center gap-3 shadow-xl shadow-emerald-900/20 group"
-            >
-              <Printer size={18} className="group-hover:scale-110 transition-transform" />
-              Print Admit Card
-            </button>
+            <div className="flex items-center gap-2 text-[10px] text-white/30 font-bold uppercase tracking-widest">
+              <Shield size={12} />
+              Secure Digital Retrieval
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 mb-10">
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-50 border-2 border-amber-200 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-center gap-5 text-center shadow-lg shadow-amber-900/5"
+        >
+          <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0 ring-4 ring-amber-50">
+            <Info size={28} />
+          </div>
+          <div>
+            <h3 className="text-amber-900 font-black uppercase tracking-tight text-lg leading-none mb-1">Printing Restricted</h3>
+            <p className="text-amber-800 font-bold text-sm">
+              ⚠️ Printing is disabled. Please download your admit card.
+            </p>
+          </div>
+        </motion.div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-12">
