@@ -108,12 +108,64 @@
         "role": { "type": "string", "enum": ["user", "admin"], "description": "Role of the sender" }
       },
       "required": ["senderId", "senderName", "content", "timestamp", "role"]
+    },
+    "attendance_record": {
+      "title": "Attendance Record",
+      "description": "Logs individual attendance events.",
+      "type": "object",
+      "properties": {
+        "applicantId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "markedBy": { "type": "string", "description": "Admin ID who marked it" },
+        "type": { "type": "string", "enum": ["Parade", "Training", "Special Event"] }
+      },
+      "required": ["applicantId", "timestamp", "markedBy"]
+    },
+    "certificate": {
+      "title": "Certificate",
+      "description": "Digital certificates issued to cadets.",
+      "type": "object",
+      "properties": {
+        "applicantId": { "type": "string" },
+        "certificateId": { "type": "string" },
+        "type": { "type": "string", "enum": ["Participation", "Achievement", "Completion"] },
+        "issueDate": { "type": "string", "format": "date-time" },
+        "verified": { "type": "boolean" },
+        "adminId": { "type": "string" }
+      },
+      "required": ["applicantId", "certificateId", "type", "issueDate"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "System notifications for users or admins.",
+      "type": "object",
+      "properties": {
+        "targetId": { "type": "string", "description": "ID of recipient or 'ALL'" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["Alert", "Announcement", "Message"] },
+        "isRead": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "timestamp"]
     }
   },
   "firestore": {
     "/applicants/{applicantId}": {
       "schema": "applicant",
       "description": "Collection of applicants"
+    },
+    "/attendance_logs/{logId}": {
+      "schema": "attendance_record",
+      "description": "Logs of attendance events"
+    },
+    "/certificates/{certId}": {
+      "schema": "certificate",
+      "description": "Issued certificates"
+    },
+    "/notifications/{notifId}": {
+      "schema": "notification",
+      "description": "System notifications"
     },
     "/admin_config/{configId}": {
       "schema": "admin_config",

@@ -16,7 +16,7 @@ export function Navbar() {
     { name: "About", path: "https://cbccbncc.netlify.app/about", icon: Info },
     { name: "Activities", path: "https://cbccbncc.netlify.app/activities", icon: Activity },
     { name: "Cadets", path: "https://cbccbncc.netlify.app/cadets", icon: Users },
-    { name: "Gallery", path: "https://cbccbncc.netlify.app/gallery", icon: ImageIcon },
+    { name: "Gallery", path: "/gallery", icon: ImageIcon },
     { name: "Contact", path: "https://cbccbncc.netlify.app/contact", icon: Mail },
     { name: "Hall of In-Charges", path: "https://cbccbncc.netlify.app/hall-of-incharges", icon: Medal },
     { name: "How to Join", path: "https://cbccbncc.netlify.app/how-to-become-cadet", icon: UserCheck },

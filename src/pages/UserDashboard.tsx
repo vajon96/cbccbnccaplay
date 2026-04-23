@@ -4,11 +4,15 @@ import {
   User, Shield, LogOut, Edit3, Save, X, Key, 
   CheckCircle, AlertCircle, Loader2, Camera,
   FileText, Calendar, Mail, Phone, MapPin, Droplets,
-  Ruler, Weight, Download, MessageSquare
+  Ruler, Weight, Download, MessageSquare, Award, Users, Zap, Heart, Target
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { db, doc, getDoc, updateDoc, Timestamp, handleFirestoreError, OperationType, collection, addDoc } from "../firebase";
+import { db, doc, getDoc, updateDoc, Timestamp, handleFirestoreError, OperationType, collection, addDoc, onSnapshot, query, where, orderBy } from "../firebase";
 import { getSession, clearSession, hashPassword } from "../lib/auth";
+import { AttendanceStats } from "../components/modular/AttendanceStats";
+import { TrainingProgress } from "../components/modular/TrainingProgress";
+import { BadgeSystem } from "../components/modular/BadgeSystem";
+import { NotificationCenter } from "../components/modular/NotificationCenter";
 
 export function UserDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -20,6 +24,7 @@ export function UserDashboard() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [notifications, setNotifications] = useState<any[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,7 +53,18 @@ export function UserDashboard() {
       }
     };
 
+    // Real-time notifications
+    const notifQ = query(
+      collection(db, "notifications"), 
+      where("targetId", "in", [session.id, "ALL"]),
+      orderBy("timestamp", "desc")
+    );
+    const unsubNotif = onSnapshot(notifQ, (snap) => {
+      setNotifications(snap.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+    });
+
     fetchUserData();
+    return () => unsubNotif();
   }, [navigate]);
 
   const handleLogout = () => {
@@ -155,18 +171,19 @@ export function UserDashboard() {
           </div>
           
           <div className="flex items-center gap-4">
+            <NotificationCenter notifications={notifications} />
             <button 
               onClick={() => setShowPasswordModal(true)}
-              className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white"
+              className="p-2.5 bg-surface border border-white/5 rounded-xl hover:bg-white/5 transition-all group"
               title="Change Password"
             >
-              <Key size={20} />
+              <Key size={20} className="text-slate-400 group-hover:text-primary transition-colors" />
             </button>
             <button 
               onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 rounded-lg text-xs font-bold hover:bg-red-500 hover:text-white transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-500 rounded-xl text-xs font-bold hover:bg-red-500 hover:text-white transition-all border border-red-500/5 group"
             >
-              <LogOut size={16} />
+              <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" />
               Logout
             </button>
           </div>
@@ -195,37 +212,45 @@ export function UserDashboard() {
                   Verified Candidate
                 </div>
 
-                <button 
-                  onClick={() => navigate(`/admit-card/${user.id}?download=true`)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-accent text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all shadow-xl shadow-accent/20 group"
-                >
-                  <Download size={18} className="group-hover:bounce" />
-                  Download Admit Card
-                </button>
+                <div className="space-y-4">
+                  <button 
+                    onClick={() => navigate(`/admit-card/${user.id}?download=true`)}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-accent text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all shadow-xl shadow-accent/20 group"
+                  >
+                    <Download size={18} className="group-hover:bounce" />
+                    Download Admit Card
+                  </button>
 
-                <button 
-                  onClick={() => navigate("/messenger")}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-white/5 text-white border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all group mt-4"
-                >
-                  <MessageSquare size={18} className="group-hover:scale-110 transition-transform" />
-                  Open Messenger
-                </button>
+                  <button 
+                    onClick={() => navigate("/messenger")}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-white/5 text-white border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all group"
+                  >
+                    <MessageSquare size={18} className="group-hover:scale-110 transition-transform" />
+                    Open Messenger
+                  </button>
+                </div>
               </div>
             </motion.div>
 
-            <div className="glass-card p-6 rounded-3xl space-y-4">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">Quick Stats</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-surface/50 rounded-2xl border border-white/5">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Status</p>
-                  <p className="text-sm font-black text-white">{user.status}</p>
-                </div>
-                <div className="p-4 bg-surface/50 rounded-2xl border border-white/5">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Attendance</p>
-                  <p className="text-sm font-black text-white">{user.attendanceStatus}</p>
-                </div>
-              </div>
-            </div>
+            <AttendanceStats 
+              percentage={user.attendanceStatus === "Present" ? 85 : 45} 
+              totalParades={20} 
+              attended={user.attendanceStatus === "Present" ? 17 : 9} 
+            />
+
+            <TrainingProgress 
+              level={user.status === "Approved" ? "Intermediate" : "Beginner"} 
+              progress={user.status === "Approved" ? 65 : 15} 
+            />
+            
+            <BadgeSystem 
+              badges={[
+                { id: "1", name: "Discipline", icon: Shield, color: "text-blue-400", description: "Excellent behavior in platoon", unlocked: true },
+                { id: "2", name: "Sharp Shooter", icon: Target, color: "text-red-400", description: "Weapon training mastery", unlocked: false },
+                { id: "3", name: "Community", icon: Users, color: "text-emerald-400", description: "Active volunteer service", unlocked: true },
+                { id: "4", name: "Leadership", icon: Zap, color: "text-amber-400", description: "Commendable squad leading", unlocked: false },
+              ]} 
+            />
           </div>
 
           {/* Main Content */}

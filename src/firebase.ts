@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, where, onSnapshot, getDocFromServer, Timestamp, addDoc, limit } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, where, onSnapshot, getDocFromServer, Timestamp, addDoc, limit, writeBatch } from "firebase/firestore";
 import firebaseConfig from "../firebase-applet-config.json";
 
 const app = initializeApp(firebaseConfig);
@@ -26,7 +26,8 @@ export {
   getDocFromServer,
   Timestamp,
   addDoc,
-  limit
+  limit,
+  writeBatch
 };
 
 // Error Handling Spec for Firestore Operations

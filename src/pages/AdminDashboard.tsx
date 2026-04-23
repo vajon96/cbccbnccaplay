@@ -6,14 +6,18 @@ import {
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
   QrCode, Scan, Calendar, Camera, X, Sparkles, BrainCircuit, Info,
   History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
-  MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock
+  MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock, ArrowRight, Award, Target
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { Html5QrcodeScanner } from "html5-qrcode";
-import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc, where, getDocs } from "../firebase";
+import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc, where, getDocs, writeBatch } from "../firebase";
 import { getAdminInsights, getApplicantSummary } from "../services/geminiService";
 import { getSession, clearSession, hashPassword } from "../lib/auth";
+import { AuditLogs } from "../components/modular/AuditLogs";
+import { BulkActions } from "../components/modular/BulkActions";
+import { NotificationCenter } from "../components/modular/NotificationCenter";
+import { CertificateGenerator } from "../components/modular/CertificateGenerator";
 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -59,6 +63,11 @@ export function AdminDashboard() {
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
   const [showPasswordId, setShowPasswordId] = useState<string | null>(null);
+  const [selectedApplicants, setSelectedApplicants] = useState<string[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showCert, setShowCert] = useState<any>(null);
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -230,6 +239,20 @@ export function AdminDashboard() {
 
     if (!id) return;
 
+    // Duplicate prevention: check if already scanned today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const qRecord = query(
+      collection(db, "attendance_logs"),
+      where("applicantId", "==", id),
+      where("timestamp", ">=", Timestamp.fromDate(today))
+    );
+    const existingRecord = await getDocs(qRecord);
+    if (!existingRecord.empty) {
+      alert("This candidate has already been marked as present today.");
+      return;
+    }
+
     // Check permission for attendance update via scan
     if (!adminSession?.permissions?.canEdit) {
       alert("আপনার উপস্থিতি আপডেট করার অনুমতি নেই।");
@@ -252,6 +275,15 @@ export function AdminDashboard() {
           attendanceStatus: "Present",
           attendanceTime: Timestamp.now()
         });
+
+        // Log to attendance_logs
+        await addDoc(collection(db, "attendance_logs"), {
+          applicantId: id,
+          timestamp: Timestamp.now(),
+          markedBy: adminSession.id,
+          type: "Parade"
+        });
+
         setScannedApplicant({ ...applicant, id });
       } else {
         alert("আবেদনকারী পাওয়া যায়নি! (ID: " + id + ")");
@@ -358,6 +390,48 @@ export function AdminDashboard() {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedApplicants(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkAction = async (action: 'Approve' | 'Reject' | 'Delete') => {
+    if (selectedApplicants.length === 0) return;
+    if (!confirm(`Are you sure you want to ${action} ${selectedApplicants.length} candidates?`)) return;
+
+    setIsBulkProcessing(true);
+    try {
+      const batch = writeBatch(db);
+      selectedApplicants.forEach(id => {
+        const ref = doc(db, "applicants", id);
+        if (action === 'Delete') {
+          batch.delete(ref);
+        } else {
+          batch.update(ref, { status: action });
+        }
+      });
+      await batch.commit();
+
+      // Log bulk activity
+      await addDoc(collection(db, "activity_logs"), {
+        type: `BULK_${action.toUpperCase()}`,
+        targetId: "MULTIPLE",
+        actorId: adminSession.id,
+        timestamp: Timestamp.now(),
+        details: `Admin performed bulk ${action} on ${selectedApplicants.length} candidates.`
+      });
+
+      setSelectedApplicants([]);
+      alert(`Bulk ${action} completed successfully.`);
+    } catch (err) {
+      console.error("Bulk action error:", err);
+      alert("Bulk action failed.");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
   const exportToExcel = () => {
     const dataToExport = applicants.map(({ photo, ...rest }) => ({
       ...rest,
@@ -446,6 +520,7 @@ export function AdminDashboard() {
             <p className="text-white/70">সকল আবেদনকারী এবং তাদের স্ট্যাটাস পরিচালনা করুন</p>
           </div>
           <div className="flex gap-3">
+            <NotificationCenter notifications={notifications} />
             <button
               onClick={exportToExcel}
               disabled={!adminSession?.permissions?.canExport}
@@ -542,6 +617,15 @@ export function AdminDashboard() {
       {activeTab === "applicants" ? (
         <>
           <div className="space-y-6">
+            <BulkActions 
+              selectedCount={selectedApplicants.length}
+              onApprove={() => handleBulkAction('Approve')}
+              onReject={() => handleBulkAction('Reject')}
+              onDelete={() => handleBulkAction('Delete')}
+              onExport={exportToExcel}
+              onClear={() => setSelectedApplicants([])}
+              isProcessing={isBulkProcessing}
+            />
             {/* AI Insights Section */}
           <div className="glass-card p-6 rounded-[2rem] border border-white/5 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-6 opacity-5">
@@ -633,6 +717,17 @@ export function AdminDashboard() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-900 text-white">
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-center">
+                  <input 
+                    type="checkbox" 
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedApplicants(filteredApplicants.map(a => a.id));
+                      else setSelectedApplicants([]);
+                    }}
+                    checked={selectedApplicants.length === filteredApplicants.length && filteredApplicants.length > 0}
+                    className="w-4 h-4 rounded border-white/10 bg-slate-800"
+                  />
+                </th>
                 <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">নথিভুক্ত ক্যাডেট</th>
                 <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">শ্রেণি ও রোল</th>
                 <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">স্ট্যাটাস</th>
@@ -642,7 +737,15 @@ export function AdminDashboard() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredApplicants.map((app) => (
-                <tr key={app.id} className="hover:bg-white/[0.02] transition-colors group">
+                <tr key={app.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedApplicants.includes(app.id) ? 'bg-primary/5' : ''}`}>
+                  <td className="px-8 py-6 text-center">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedApplicants.includes(app.id)}
+                      onChange={() => toggleSelect(app.id)}
+                      className="w-4 h-4 rounded border-white/10 bg-slate-800 accent-primary"
+                    />
+                  </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-[1.2rem] bg-slate-800 overflow-hidden border border-white/10 shadow-lg group-hover:scale-105 transition-transform">
@@ -715,6 +818,14 @@ export function AdminDashboard() {
                           {app.password?.substring(0, 15)}...
                         </div>
                       )}
+                      <button
+                        onClick={() => setShowCert(app)}
+                        className={`p-2.5 hover:bg-primary/10 text-slate-500 hover:text-primary rounded-xl transition-all ${app.status !== 'Approved' ? 'opacity-30 grayscale cursor-not-allowed' : ''}`}
+                        disabled={app.status !== 'Approved'}
+                        title="Certificate"
+                      >
+                        <Award className="w-5 h-5" />
+                      </button>
                       <button
                         onClick={() => handleAdminLoginAsUser(app)}
                         disabled={!adminSession?.permissions?.canEdit}
@@ -884,42 +995,16 @@ export function AdminDashboard() {
     </div>
   ) : (
     <div className="space-y-6">
-          <div className="bg-white p-8 rounded-[2rem] border border-sand shadow-xl">
-            <h3 className="text-xl font-bold text-black mb-6 flex items-center gap-2">
-              <History className="text-primary" />
-              System Activity Logs
-            </h3>
-            <div className="space-y-4">
-              {logs.length === 0 ? (
-                <p className="text-center py-12 text-black/30 italic">No activity logs found.</p>
-              ) : (
-                logs.map((log) => (
-                  <div key={log.id} className="p-4 bg-sand/10 border border-sand/20 rounded-2xl flex items-start gap-4">
-                    <div className={`p-2 rounded-lg ${
-                      log.type === 'PASSWORD_CHANGED' || log.type === 'PASSWORD_RESET_BY_ADMIN' ? 'bg-red-100 text-red-600' :
-                      log.type === 'ACCOUNT_CREATED' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
-                    }`}>
-                      {log.type === 'PASSWORD_CHANGED' || log.type === 'PASSWORD_RESET_BY_ADMIN' ? <Key size={16} /> :
-                       log.type === 'ACCOUNT_CREATED' ? <CheckCircle size={16} /> : <Edit size={16} />}
-                    </div>
-                    <div className="flex-grow">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-black/40">{log.type}</span>
-                        <span className="text-[10px] text-black/30">{log.timestamp?.toDate().toLocaleString()}</span>
-                      </div>
-                      <p className="text-sm font-medium text-black/80">{log.details}</p>
-                      <div className="mt-2 flex items-center gap-4">
-                        <span className="text-[10px] font-bold text-black/40">Target: <span className="text-black/70">{log.targetId}</span></span>
-                        <span className="text-[10px] font-bold text-black/40">Actor: <span className="text-black/70">{log.actorId}</span></span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <AuditLogs logs={logs.map(l => ({
+        id: l.id,
+        type: l.type,
+        details: l.details,
+        timestamp: l.timestamp?.toDate ? l.timestamp.toDate().toISOString() : new Date().toISOString(),
+        actorName: l.actorId,
+        severity: (l.type.includes("DELETE") || l.type.includes("REJECT") || l.type.includes("ERROR")) ? "error" : "info"
+      }))} />
+    </div>
+  )}
 
       {/* QR Scanner Modal */}
       <AnimatePresence>
@@ -1040,6 +1125,34 @@ export function AdminDashboard() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Certificate Modal */}
+      <AnimatePresence>
+        {showCert && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xl p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative w-full max-w-4xl"
+            >
+              <button 
+                onClick={() => setShowCert(null)}
+                className="absolute -top-4 -right-4 p-3 bg-white text-slate-900 rounded-full shadow-2xl z-20 hover:scale-110 transition-transform"
+              >
+                <X size={20} />
+              </button>
+              <CertificateGenerator 
+                id={showCert.id}
+                name={showCert.fullNameEnglish || showCert.fullNameBangla}
+                type="Platoon Training"
+                date={new Date().toLocaleDateString()}
+                onClose={() => setShowCert(null)} 
+              />
             </motion.div>
           </div>
         )}
