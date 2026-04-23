@@ -236,6 +236,11 @@ export function AdminDashboard() {
       return;
     }
 
+    // Success Haptic Feedback
+    if (window.navigator.vibrate) {
+      window.navigator.vibrate([100, 50, 100]);
+    }
+
     const path = `applicants/${id}`;
     try {
       const docRef = doc(db, "applicants", id);
@@ -356,6 +361,7 @@ export function AdminDashboard() {
   const exportToExcel = () => {
     const dataToExport = applicants.map(({ photo, ...rest }) => ({
       ...rest,
+      height: `${rest.heightFeet}'${rest.heightInches}" (${rest.heightFeet} feet ${rest.heightInches} inches)`,
       attendanceTime: rest.attendanceTime ? new Date(rest.attendanceTime).toLocaleString() : "N/A",
       createdAt: new Date(rest.createdAt).toLocaleString()
     }));
@@ -587,12 +593,18 @@ export function AdminDashboard() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => setShowScanner(true)}
-            className="flex items-center gap-2 px-6 py-4 bg-accent text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all shadow-xl shadow-accent/20"
+            className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-[0_10px_30px_-10px_rgba(16,185,129,0.4)] relative overflow-hidden group"
           >
-            <QrCode className="w-4 h-4" /> QR স্ক্যানার
-          </button>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />
+            <div className="p-1.5 bg-white/20 rounded-lg">
+              <QrCode className="w-5 h-5" />
+            </div>
+            <span>Scan QR</span>
+          </motion.button>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -844,7 +856,9 @@ export function AdminDashboard() {
                             canDelete: false,
                             canViewLogs: true,
                             canResetPW: false,
-                            canApprove: true
+                            canApprove: true,
+                            canExport: false,
+                            canChat: true
                           });
                         }}
                         className="p-2.5 hover:bg-slate-50 text-slate-400 hover:text-primary rounded-xl transition-all"
@@ -908,69 +922,128 @@ export function AdminDashboard() {
       )}
 
       {/* QR Scanner Modal */}
-      {showScanner && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg-light/80 backdrop-blur-md">
-          <div className="glass-card border border-white/10 w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl">
-            <div className="p-6 bg-primary text-white border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                  <Camera className="w-6 h-6 text-white" />
+      <AnimatePresence>
+        {showScanner && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative w-full max-w-lg mx-4 overflow-hidden rounded-[2.5rem] bg-slate-950 border border-white/10 shadow-2xl"
+            >
+              {/* Header */}
+              <div className="p-6 flex items-center justify-between border-b border-white/5">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center">
+                    <Scan className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-white uppercase tracking-tight">Active Scanner</h2>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Scanning for Admit Cards</p>
+                  </div>
                 </div>
-                <h2 className="text-xl font-black text-white uppercase tracking-tight">Attendance QR</h2>
+                <button 
+                  onClick={() => {
+                    setShowScanner(false);
+                    setScannedApplicant(null);
+                  }}
+                  className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 text-white/40 hover:text-white transition-all"
+                >
+                  <X size={20} />
+                </button>
               </div>
-              <button 
-                onClick={() => {
-                  setShowScanner(false);
-                  setScannedApplicant(null);
-                }}
-                className="p-2 hover:bg-white/10 rounded-full text-white/60 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
 
-            <div className="p-8 space-y-6 bg-slate-900/50">
-              {!scannedApplicant ? (
-                <div className="space-y-4">
-                  <div id="reader" className="overflow-hidden rounded-[2rem] border-4 border-primary/20 shadow-2xl"></div>
-                  <p className="text-center text-[10px] text-slate-500 font-black uppercase tracking-widest">Point camera at Admit Card QR</p>
-                </div>
-              ) : (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                  <div className="flex items-center gap-5 p-6 bg-primary/5 border border-primary/10 rounded-3xl">
-                    <div className="w-24 h-24 rounded-2xl overflow-hidden border-4 border-slate-900 shadow-2xl">
-                      <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-white uppercase tracking-tight">{scannedApplicant.fullNameEnglish}</h3>
-                      <p className="text-primary font-black text-xs uppercase tracking-widest mt-1">Verification Success!</p>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">ID: {scannedApplicant.id}</p>
-                    </div>
-                  </div>
+              <div className="p-6">
+                <div className="relative">
+                  <div id="reader" className="overflow-hidden rounded-3xl border-2 border-emerald-500/30 bg-black aspect-square"></div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                      <p className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-1">Class</p>
-                      <p className="text-white font-black text-sm">{scannedApplicant.studyStatus}</p>
-                    </div>
-                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                      <p className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-1">Roll</p>
-                      <p className="text-white font-black text-sm">{scannedApplicant.classRoll}</p>
+                  {/* Scanner Overlay UI */}
+                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                    <div className="w-48 h-48 border-2 border-emerald-500/50 rounded-3xl relative animate-pulse">
+                      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-500 rounded-tl-lg" />
+                      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-emerald-500 rounded-tr-lg" />
+                      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-emerald-500 rounded-bl-lg" />
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-emerald-500 rounded-br-lg" />
                     </div>
                   </div>
-
-                  <button 
-                    onClick={() => setScannedApplicant(null)}
-                    className="w-full py-4 bg-emerald-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-500/20"
-                  >
-                    Scan Next Cadet
-                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+
+              <div className="p-6 pt-0 text-center">
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.2em]">Center code in selection frame</p>
+              </div>
+
+              {/* Instant Scan Result System - Slide-Up Panel */}
+              <AnimatePresence mode="wait">
+                {scannedApplicant && (
+                  <motion.div 
+                    initial={{ y: "100%" }}
+                    animate={{ y: 0 }}
+                    exit={{ y: "100%" }}
+                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    className="absolute inset-x-0 bottom-0 bg-white rounded-t-[3rem] p-8 shadow-[0_-20px_50px_-10px_rgba(0,0,0,0.5)] z-10"
+                  >
+                    <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
+                    
+                    <div className="flex items-center gap-6 mb-8">
+                      <div className="relative">
+                        <div className="w-24 h-24 rounded-3xl overflow-hidden border-4 border-white shadow-xl bg-slate-100">
+                          <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
+                        </div>
+                        <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
+                          <CheckCircle size={18} />
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">
+                          <Sparkles size={12} />
+                          Verified
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-900 leading-tight">{scannedApplicant.fullNameEnglish}</h3>
+                        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">ID: {scannedApplicant.id}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                       <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1.5 flex items-center gap-1.5">
+                          <Users size={12} /> Batch / Info
+                        </p>
+                        <p className="text-slate-900 font-black text-sm">{scannedApplicant.studyStatus || "N/A"}</p>
+                      </div>
+                      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1.5 flex items-center gap-1.5">
+                          <ShieldCheck size={12} /> Status
+                        </p>
+                        <p className="text-emerald-600 font-black text-sm uppercase">{scannedApplicant.status || "Pending"}</p>
+                      </div>
+                    </div>
+
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 mb-8">
+                      <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1.5 flex items-center gap-1.5">
+                        <Scan size={12} /> Height / উচচতা
+                      </p>
+                      <p className="text-slate-900 font-black text-sm">
+                        {scannedApplicant.heightFeet}'{scannedApplicant.heightInches}" ({scannedApplicant.heightFeet} feet {scannedApplicant.heightInches} inches)
+                      </p>
+                    </div>
+
+                    <motion.button 
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setScannedApplicant(null)}
+                      className="w-full py-5 bg-slate-900 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-800 transition-all shadow-2xl flex items-center justify-center gap-3"
+                    >
+                      <Scan size={18} />
+                      Scan Next Cadet
+                    </motion.button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Password Reset Modal */}
       <AnimatePresence>

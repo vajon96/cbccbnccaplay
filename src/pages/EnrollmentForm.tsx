@@ -757,6 +757,8 @@ export function EnrollmentForm() {
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">মাতা</span> <span className="text-slate-800 font-bold">{formData.motherNameEnglish}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">জন্ম তারিখ</span> <span className="text-slate-800 font-bold">{formData.dob}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">লিঙ্গ</span> <span className="text-slate-800 font-bold">{formData.gender}</span></p>
+                    <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">উচ্চতা</span> <span className="text-slate-800 font-bold">{formData.heightFeet}'{formData.heightInches}" ({formData.heightFeet} feet {formData.heightInches} inches)</span></p>
+                    <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">ওজন</span> <span className="text-slate-800 font-bold">{formData.weightKg} Kg</span></p>
                   </div>
                 </div>
                 <div className="space-y-6">

@@ -375,7 +375,7 @@ export function AdmitCard() {
                       { label: "Department / Group", value: applicant.studyStatus },
                       { label: "Mobile Number", value: applicant.studentPhone },
                       { label: "Blood Group", value: applicant.bloodGroup },
-                      { label: "Height", value: `${applicant.heightFeet}'${applicant.heightInches}"` },
+                      { label: "Height", value: `${applicant.heightFeet}'${applicant.heightInches}" (${applicant.heightFeet} feet ${applicant.heightInches} inches)` },
                       { label: "Weight", value: `${applicant.weightKg} kg` },
                     ].map((item, i) => (
                       <div key={i} className="flex items-baseline mb-0.5">

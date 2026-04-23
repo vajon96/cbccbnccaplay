@@ -326,14 +326,36 @@ export function UserDashboard() {
                     { label: "Phone Number", name: "studentPhone", icon: Phone },
                     { label: "Email Address", name: "studentEmail", icon: Mail },
                     { label: "Blood Group", name: "bloodGroup", icon: Droplets, type: "select", options: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
-                    { label: "Height (Feet)", name: "heightFeet", icon: Ruler },
-                    { label: "Height (Inches)", name: "heightInches", icon: Ruler },
+                    { label: "Height (Feet'Inches)", name: "heightCombined", icon: Ruler, isHeight: true },
                     { label: "Weight (Kg)", name: "weightKg", icon: Weight },
                   ].map((field: any) => (
                     <div key={field.name} className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{field.label}</label>
                       {editing ? (
-                        field.type === "select" ? (
+                        field.isHeight ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <p className="text-[8px] font-bold text-slate-600 uppercase">Feet</p>
+                              <input 
+                                type="number" 
+                                name="heightFeet" 
+                                value={formData.heightFeet} 
+                                onChange={handleChange}
+                                className="w-full bg-surface border border-white/10 rounded-[1.2rem] px-5 py-3 text-sm text-white outline-none focus:border-primary transition-all shadow-inner"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[8px] font-bold text-slate-600 uppercase">Inches</p>
+                              <input 
+                                type="number" 
+                                name="heightInches" 
+                                value={formData.heightInches} 
+                                onChange={handleChange}
+                                className="w-full bg-surface border border-white/10 rounded-[1.2rem] px-5 py-3 text-sm text-white outline-none focus:border-primary transition-all shadow-inner"
+                              />
+                            </div>
+                          </div>
+                        ) : field.type === "select" ? (
                           <select 
                             name={field.name} 
                             value={formData[field.name]} 
@@ -352,7 +374,11 @@ export function UserDashboard() {
                           />
                         )
                       ) : (
-                        <p className="text-sm font-bold text-slate-200">{user[field.name] || "—"}</p>
+                        <p className="text-sm font-bold text-slate-200">
+                          {field.isHeight 
+                            ? `${user.heightFeet}'${user.heightInches}" (${user.heightFeet} feet ${user.heightInches} inches)`
+                            : (user[field.name] || "—")}
+                        </p>
                       )}
                     </div>
                   ))}
