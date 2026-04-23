@@ -8,12 +8,17 @@ interface Notification {
   message: string;
   type: "Alert" | "Announcement" | "Message";
   isRead: boolean;
-  timestamp: string;
+  timestamp: any;
 }
 
 export function NotificationCenter({ notifications: initialNotifications }: { notifications: Notification[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState(initialNotifications);
+
+  useEffect(() => {
+    setNotifications(initialNotifications);
+  }, [initialNotifications]);
+
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const markAsRead = (id: string) => {
@@ -93,7 +98,9 @@ export function NotificationCenter({ notifications: initialNotifications }: { no
                           <div className="flex-grow space-y-1">
                             <div className="flex justify-between items-start">
                               <h4 className="text-xs font-black text-white uppercase tracking-tight">{notif.title}</h4>
-                              <span className="text-[9px] font-bold text-slate-500">{new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="text-[9px] font-bold text-slate-500">
+                                {new Date(notif.timestamp?.toDate ? notif.timestamp.toDate() : notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
                             </div>
                             <p className="text-[11px] text-slate-400 leading-relaxed">{notif.message}</p>
                           </div>

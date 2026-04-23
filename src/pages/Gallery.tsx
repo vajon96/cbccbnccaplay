@@ -92,6 +92,17 @@ export function Gallery() {
             <h2 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none">
               Platoon <span className="text-primary italic">Memories</span>
             </h2>
+            <div className="pt-4">
+              <a 
+                className="inline-flex items-center gap-2 px-6 py-3 text-[11px] font-black uppercase tracking-widest transition-all rounded-xl hover:bg-white/10 text-white bg-white/20 border border-white/10 shadow-xl group" 
+                href="https://cbccbncc.netlify.app/gallery" 
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                <ImageIcon size={16} className="group-hover:rotate-12 transition-transform" />
+                Visit Official Web Gallery
+              </a>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

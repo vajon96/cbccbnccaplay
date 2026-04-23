@@ -2,7 +2,7 @@ import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit, BookOpen } from "lucide-react";
-import { db, collection, setDoc, doc, Timestamp, handleFirestoreError, OperationType, addDoc } from "../firebase";
+import { db, collection, setDoc, doc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc } from "../firebase";
 import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
 import { generatePassword, hashPassword } from "../lib/auth";
 
@@ -200,7 +200,32 @@ export function EnrollmentForm() {
     }
 
     setLoading(true);
-    const id = `BNCC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    
+    // Generate 4-digit Numeric ID
+    let finalId = "";
+    let isUnique = false;
+    let attempts = 0;
+    
+    while (!isUnique && attempts < 10) {
+      const randomId = Math.floor(1000 + Math.random() * 9000).toString(); // Generates 1000-9999
+      try {
+        const checkDoc = await getDoc(doc(db, "applicants", randomId));
+        if (!checkDoc.exists()) {
+          finalId = randomId;
+          isUnique = true;
+        }
+      } catch (e) {
+        console.error("ID collision check error:", e);
+      }
+      attempts++;
+    }
+
+    if (!finalId) {
+      // Fallback if 10 attempts fail (unlikely given the density)
+      finalId = `BNCC-${Date.now().toString().slice(-6)}`;
+    }
+
+    const id = finalId;
     const rawPassword = generatePassword();
     const path = `applicants/${id}`;
     

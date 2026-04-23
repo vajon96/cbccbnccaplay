@@ -16,7 +16,7 @@ export function Navbar() {
     { name: "About", path: "https://cbccbncc.netlify.app/about", icon: Info },
     { name: "Activities", path: "https://cbccbncc.netlify.app/activities", icon: Activity },
     { name: "Cadets", path: "https://cbccbncc.netlify.app/cadets", icon: Users },
-    { name: "Gallery", path: "/gallery", icon: ImageIcon },
+    { name: "Gallery", path: "https://cbccbncc.netlify.app/gallery", icon: ImageIcon },
     { name: "Contact", path: "https://cbccbncc.netlify.app/contact", icon: Mail },
     { name: "Hall of In-Charges", path: "https://cbccbncc.netlify.app/hall-of-incharges", icon: Medal },
     { name: "How to Join", path: "https://cbccbncc.netlify.app/how-to-become-cadet", icon: UserCheck },
@@ -58,18 +58,28 @@ export function Navbar() {
           {/* Desktop Nav */}
           <div className="hidden xl:flex items-center space-x-1">
             <div className="flex items-center border-r border-white/10 pr-4 mr-4 space-x-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className={`flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-all rounded-lg hover:bg-white/10 ${
-                    location.pathname === link.path ? "text-white bg-white/20" : "text-sand/70 hover:text-white"
-                  }`}
-                >
-                  <link.icon size={14} className={location.pathname === link.path ? "text-white" : "text-sand/40"} />
-                  {link.name}
-                </Link>
-              ))}
+              {navLinks.map((link) => {
+                const isExternal = link.path.startsWith("http");
+                const className = `flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-all rounded-lg hover:bg-white/10 ${
+                  location.pathname === link.path ? "text-white bg-white/20" : "text-sand/70 hover:text-white"
+                }`;
+                const content = (
+                  <>
+                    <link.icon size={14} className={location.pathname === link.path ? "text-white" : "text-sand/40"} />
+                    {link.name}
+                  </>
+                );
+
+                return isExternal ? (
+                  <a key={link.path} href={link.path} target="_blank" rel="noopener noreferrer" className={className}>
+                    {content}
+                  </a>
+                ) : (
+                  <Link key={link.path} to={link.path} className={className}>
+                    {content}
+                  </Link>
+                );
+              })}
             </div>
 
             <div className="flex items-center space-x-4">
@@ -157,25 +167,39 @@ export function Navbar() {
 
               <div className="space-y-1">
                 <span className="block px-4 py-2 text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Quick Navigation</span>
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    onClick={() => setIsOpen(false)}
-                    className={`flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all ${
-                      location.pathname === link.path 
-                        ? "bg-white/20 text-white shadow-inner" 
-                        : "text-sand/70 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                      location.pathname === link.path ? "bg-white text-primary shadow-lg" : "bg-white/5"
-                    }`}>
-                      <link.icon size={18} />
-                    </div>
-                    <span className="font-bold text-xs uppercase tracking-wide">{link.name}</span>
-                  </Link>
-                ))}
+                {navLinks.map((link) => {
+                  const isExternal = link.path.startsWith("http");
+                  const className = `flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all ${
+                    location.pathname === link.path 
+                      ? "bg-white/20 text-white shadow-inner" 
+                      : "text-sand/70 hover:bg-white/5 hover:text-white"
+                  }`;
+                  const content = (
+                    <>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                        location.pathname === link.path ? "bg-white text-primary shadow-lg" : "bg-white/5"
+                      }`}>
+                        <link.icon size={18} />
+                      </div>
+                      <span className="font-bold text-xs uppercase tracking-wide">{link.name}</span>
+                    </>
+                  );
+
+                  return isExternal ? (
+                    <a key={link.path} href={link.path} target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)} className={className}>
+                      {content}
+                    </a>
+                  ) : (
+                    <Link
+                      key={link.path}
+                      to={link.path}
+                      onClick={() => setIsOpen(false)}
+                      className={className}
+                    >
+                      {content}
+                    </Link>
+                  );
+                })}
               </div>
               
               <div className="pt-8 px-2">

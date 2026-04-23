@@ -4,14 +4,12 @@ import {
   User, Shield, LogOut, Edit3, Save, X, Key, 
   CheckCircle, AlertCircle, Loader2, Camera,
   FileText, Calendar, Mail, Phone, MapPin, Droplets,
-  Ruler, Weight, Download, MessageSquare, Award, Users, Zap, Heart, Target
+  Ruler, Weight, Download, MessageSquare, Users,
+  Megaphone, Info
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, doc, getDoc, updateDoc, Timestamp, handleFirestoreError, OperationType, collection, addDoc, onSnapshot, query, where, orderBy } from "../firebase";
 import { getSession, clearSession, hashPassword } from "../lib/auth";
-import { AttendanceStats } from "../components/modular/AttendanceStats";
-import { TrainingProgress } from "../components/modular/TrainingProgress";
-import { BadgeSystem } from "../components/modular/BadgeSystem";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 
 export function UserDashboard() {
@@ -213,16 +211,16 @@ export function UserDashboard() {
                 </div>
 
                 <div className="space-y-4">
-                  <button 
-                    onClick={() => navigate(`/admit-card/${user.id}?download=true`)}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-accent text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all shadow-xl shadow-accent/20 group"
-                  >
-                    <Download size={18} className="group-hover:bounce" />
-                    Download Admit Card
-                  </button>
+                    <button 
+                      onClick={() => navigate(`/admit-card/${user.id}?download=true`)}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-accent text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-accent/90 transition-all shadow-xl shadow-accent/20 group"
+                    >
+                      <Download size={18} className="group-hover:bounce" />
+                      Download Admit Card
+                    </button>
 
-                  <button 
-                    onClick={() => navigate("/messenger")}
+                    <button 
+                      onClick={() => navigate("/messenger")}
                     className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-white/5 text-white border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all group"
                   >
                     <MessageSquare size={18} className="group-hover:scale-110 transition-transform" />
@@ -231,26 +229,6 @@ export function UserDashboard() {
                 </div>
               </div>
             </motion.div>
-
-            <AttendanceStats 
-              percentage={user.attendanceStatus === "Present" ? 85 : 45} 
-              totalParades={20} 
-              attended={user.attendanceStatus === "Present" ? 17 : 9} 
-            />
-
-            <TrainingProgress 
-              level={user.status === "Approved" ? "Intermediate" : "Beginner"} 
-              progress={user.status === "Approved" ? 65 : 15} 
-            />
-            
-            <BadgeSystem 
-              badges={[
-                { id: "1", name: "Discipline", icon: Shield, color: "text-blue-400", description: "Excellent behavior in platoon", unlocked: true },
-                { id: "2", name: "Sharp Shooter", icon: Target, color: "text-red-400", description: "Weapon training mastery", unlocked: false },
-                { id: "3", name: "Community", icon: Users, color: "text-emerald-400", description: "Active volunteer service", unlocked: true },
-                { id: "4", name: "Leadership", icon: Zap, color: "text-amber-400", description: "Commendable squad leading", unlocked: false },
-              ]} 
-            />
           </div>
 
           {/* Main Content */}
@@ -294,6 +272,40 @@ export function UserDashboard() {
                 </div>
               )}
             </div>
+
+            {/* Notices Section */}
+            <AnimatePresence>
+              {notifications.filter(n => n.type === "Announcement" || n.type === "Alert").length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-2 text-primary">
+                    <Megaphone size={18} />
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Admin Notices</h3>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    {notifications.filter(n => n.type === "Announcement" || n.type === "Alert").slice(0, 2).map((notif: any) => (
+                      <div key={notif.id} className={`p-6 rounded-[2rem] border ${notif.type === 'Alert' ? 'bg-red-500/5 border-red-500/20' : 'bg-primary/5 border-primary/20'} relative overflow-hidden group`}>
+                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                          {notif.type === 'Alert' ? <AlertCircle size={60} /> : <Info size={60} />}
+                        </div>
+                        <div className="relative z-10 flex flex-col gap-2">
+                          <div className="flex justify-between items-center">
+                            <h4 className={`text-sm font-black uppercase tracking-tight ${notif.type === 'Alert' ? 'text-red-400' : 'text-primary'}`}>{notif.title}</h4>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              {new Date(notif.timestamp?.toDate ? notif.timestamp.toDate() : notif.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-slate-300 text-sm leading-relaxed">{notif.message}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Personal Details */}

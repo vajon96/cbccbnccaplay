@@ -68,14 +68,36 @@ export function Footer() {
                 Navigation
               </h3>
               <ul className="space-y-3">
-                {["Home", "Enrollment", "About Us", "Gallery", "Contact"].map((link) => (
-                  <li key={link}>
-                    <a href="#" className="text-[13px] text-slate-500 hover:text-white transition-colors flex items-center gap-2 group">
+                {[
+                  { name: "Home", path: "/" },
+                  { name: "Enrollment", path: "/enroll" },
+                  { name: "About Us", path: "https://cbccbncc.netlify.app/about" },
+                  { name: "Gallery", path: "https://cbccbncc.netlify.app/gallery" },
+                  { name: "Contact", path: "https://cbccbncc.netlify.app/contact" }
+                ].map((link) => {
+                  const isExternal = link.path.startsWith("http");
+                  const className = "text-[13px] text-slate-500 hover:text-white transition-colors flex items-center gap-2 group";
+                  const inner = (
+                    <>
                       <span className="w-0 group-hover:w-2 h-px bg-primary transition-all" />
-                      {link}
-                    </a>
-                  </li>
-                ))}
+                      {link.name}
+                    </>
+                  );
+
+                  return (
+                    <li key={link.name}>
+                      {isExternal ? (
+                        <a href={link.path} target="_blank" rel="noopener noreferrer" className={className}>
+                          {inner}
+                        </a>
+                      ) : (
+                        <Link to={link.path} className={className}>
+                          {inner}
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </div>

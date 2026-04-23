@@ -139,7 +139,7 @@ export function Login() {
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 className="w-full bg-slate-900/50 border border-slate-800 rounded-xl pl-12 pr-4 py-4 text-white focus:border-primary outline-none transition-all"
-                placeholder="User ID (e.g. BNCC-123...)"
+                placeholder="User ID (e.g. 1234)"
                 required
               />
             </div>
