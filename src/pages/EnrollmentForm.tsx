@@ -2,7 +2,7 @@ import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit, BookOpen } from "lucide-react";
-import { db, collection, setDoc, doc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc } from "../firebase";
+import { db, collection, setDoc, doc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc, runTransaction } from "../firebase";
 import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
 import { generatePassword, hashPassword } from "../lib/auth";
 
@@ -201,27 +201,24 @@ export function EnrollmentForm() {
 
     setLoading(true);
     
-    // Generate 4-digit Numeric ID
+    // Generate Sequential Numeric ID starting from 1111
     let finalId = "";
-    let isUnique = false;
-    let attempts = 0;
-    
-    while (!isUnique && attempts < 10) {
-      const randomId = Math.floor(1000 + Math.random() * 9000).toString(); // Generates 1000-9999
-      try {
-        const checkDoc = await getDoc(doc(db, "applicants", randomId));
-        if (!checkDoc.exists()) {
-          finalId = randomId;
-          isUnique = true;
+    try {
+      finalId = await runTransaction(db, async (transaction) => {
+        const counterRef = doc(db, "admin_config", "counters");
+        const counterDoc = await transaction.get(counterRef);
+        
+        let nextId = 1111;
+        if (counterDoc.exists()) {
+          nextId = (counterDoc.data().lastApplicantId || 1110) + 1;
         }
-      } catch (e) {
-        console.error("ID collision check error:", e);
-      }
-      attempts++;
-    }
-
-    if (!finalId) {
-      // Fallback if 10 attempts fail (unlikely given the density)
+        
+        transaction.set(counterRef, { lastApplicantId: nextId }, { merge: true });
+        return nextId.toString();
+      });
+    } catch (e) {
+      console.error("ID generation transaction error:", e);
+      // Fallback if transaction fails
       finalId = `BNCC-${Date.now().toString().slice(-6)}`;
     }
 

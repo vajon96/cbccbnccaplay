@@ -32,7 +32,9 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast">("applicants");
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "updates">("applicants");
+  const [reviewingUpdateApplicant, setReviewingUpdateApplicant] = useState<any>(null);
+  const [processingUpdate, setProcessingUpdate] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -431,6 +433,7 @@ export function AdminDashboard() {
     total: applicants.length,
     pending: applicants.filter(a => a.status === 'Pending').length,
     approved: applicants.filter(a => a.status === 'Approved').length,
+    updates: applicants.filter(a => a.hasUpdatePending).length,
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-200 bg-bg-light font-bold">তথ্য লোড হচ্ছে...</div>;
@@ -575,6 +578,23 @@ export function AdminDashboard() {
             Broadcast
           </div>
           {activeTab === "broadcast" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
+        </button>
+        <button
+          onClick={() => setActiveTab("updates")}
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+            activeTab === "updates" ? "text-primary" : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Edit size={18} />
+            Updates
+            {stats.updates > 0 && (
+              <span className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                {stats.updates}
+              </span>
+            )}
+          </div>
+          {activeTab === "updates" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
         </button>
       </div>
 
@@ -820,6 +840,238 @@ export function AdminDashboard() {
             )}
           </div>
         </>
+      ) : activeTab === "updates" ? (
+        <div className="space-y-8 pb-20">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20">
+              <Edit className="text-primary" size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white uppercase tracking-tight">Pending Profile Updates</h2>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Verify and approve candidate profile changes</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {applicants.filter(a => a.hasUpdatePending).map((app) => (
+              <motion.div 
+                key={app.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-card p-6 rounded-3xl border border-white/5 space-y-4 hover:border-primary/30 transition-all cursor-pointer"
+                onClick={() => setReviewingUpdateApplicant(app)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-surface overflow-hidden border border-white/10 shrink-0">
+                    <img src={app.photo} alt="" className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-tight">{app.fullNameEnglish}</h4>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{app.id}</p>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span>Date Requested</span>
+                    <span className="text-white">
+                      {app.updateRequestedAt?.toDate ? app.updateRequestedAt.toDate().toLocaleDateString() : "Unknown"}
+                    </span>
+                  </div>
+                </div>
+                <button className="w-full py-3 bg-primary/10 text-primary rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all">
+                  Review Changes
+                </button>
+              </motion.div>
+            ))}
+            {applicants.filter(a => a.hasUpdatePending).length === 0 && (
+              <div className="col-span-full py-32 text-center space-y-4">
+                <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto opacity-20">
+                  <CheckCircle size={40} className="text-slate-500" />
+                </div>
+                <h3 className="text-lg font-black text-slate-600 uppercase italic">No Updates Pending</h3>
+              </div>
+            )}
+          </div>
+
+          <AnimatePresence>
+            {reviewingUpdateApplicant && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setReviewingUpdateApplicant(null)}
+                  className="absolute inset-0 bg-bg-light/95 backdrop-blur-xl"
+                />
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="relative w-full max-w-5xl glass-card rounded-[3rem] h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-white/10"
+                >
+                  {/* Modal Header */}
+                  <div className="p-8 border-b border-white/5 flex items-center justify-between bg-primary/5">
+                    <div className="flex items-center gap-6">
+                      <div className="w-20 h-20 rounded-[2rem] bg-surface overflow-hidden border-2 border-primary/20 p-1">
+                        <img src={reviewingUpdateApplicant.photo} alt="" className="w-full h-full object-cover rounded-[1.8rem]" />
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">Review Profile Update</h3>
+                        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">
+                          {reviewingUpdateApplicant.fullNameEnglish} — {reviewingUpdateApplicant.id}
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setReviewingUpdateApplicant(null)}
+                      className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-slate-500 hover:text-white transition-all"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
+
+                  {/* Modal Content - Scrollable */}
+                  <div className="flex-grow overflow-y-auto p-8 space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Current Data */}
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-[10px] font-black text-slate-500 uppercase">Old</div>
+                          <h4 className="text-sm font-black text-white uppercase tracking-widest">Current Profile</h4>
+                        </div>
+                        <div className="glass-card p-6 rounded-2xl border border-white/5 space-y-4">
+                          {Object.keys(reviewingUpdateApplicant.pendingData).map((key) => {
+                            const val = reviewingUpdateApplicant[key];
+                            const newVal = reviewingUpdateApplicant.pendingData[key];
+                            if (key === 'photo' || key === 'id' || key === 'password' || key === 'pendingData' || key === 'hasUpdatePending' || key === 'updateRequestedAt' || key === 'status' || key === 'createdAt') return null;
+                            
+                            return (
+                              <div key={key} className="space-y-1">
+                                <p className="text-[8px] font-black uppercase text-slate-500 tracking-widest">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                                <p className="text-sm font-bold text-slate-400">{val || "—"}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* New Data (Pending) */}
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center text-[10px] font-black text-emerald-500 uppercase">New</div>
+                          <h4 className="text-sm font-black text-white uppercase tracking-widest">Proposed Changes</h4>
+                        </div>
+                        <div className="glass-card p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.02] space-y-4">
+                          {Object.keys(reviewingUpdateApplicant.pendingData).map((key) => {
+                            const val = reviewingUpdateApplicant[key];
+                            const newVal = reviewingUpdateApplicant.pendingData[key];
+                            if (key === 'photo' || key === 'id' || key === 'password' || key === 'pendingData' || key === 'hasUpdatePending' || key === 'updateRequestedAt' || key === 'status' || key === 'createdAt') return null;
+                            
+                            const isChanged = val !== newVal;
+                            
+                            return (
+                              <div key={key} className={`space-y-1 p-2 rounded-lg transition-colors ${isChanged ? 'bg-emerald-500/10 border-l-2 border-emerald-500' : ''}`}>
+                                <p className={`text-[8px] font-black uppercase tracking-widest ${isChanged ? 'text-emerald-500' : 'text-slate-500'}`}>
+                                  {key.replace(/([A-Z])/g, ' $1').trim()} {isChanged && "✨"}
+                                </p>
+                                <p className={`text-sm font-bold ${isChanged ? 'text-white' : 'text-slate-400'}`}>{newVal || "—"}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="p-8 border-t border-white/5 bg-surface/50 flex gap-4">
+                    <button 
+                      onClick={async () => {
+                        if (!confirm("Are you sure you want to REJECT these changes? The user will have to resubmit.")) return;
+                        setProcessingUpdate(true);
+                        try {
+                          await updateDoc(doc(db, "applicants", reviewingUpdateApplicant.id), {
+                            hasUpdatePending: false,
+                            pendingData: null
+                          });
+                          
+                          // Notification to user
+                          await addDoc(collection(db, "notifications"), {
+                            title: "Update Request Rejected",
+                            message: "Your profile update request was rejected by an administrator. Please check your details and try again.",
+                            type: "Alert",
+                            targetId: reviewingUpdateApplicant.id,
+                            timestamp: Timestamp.now(),
+                            isRead: false
+                          });
+
+                          setReviewingUpdateApplicant(null);
+                          alert("Update rejected.");
+                        } catch (e) {
+                          console.error(e);
+                        } finally {
+                          setProcessingUpdate(false);
+                        }
+                      }}
+                      disabled={processingUpdate}
+                      className="flex-1 py-4 bg-red-500/10 text-red-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                    >
+                      Reject Changes
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        if (!confirm("Are you sure you want to APPROVE and MERGE these changes?")) return;
+                        setProcessingUpdate(true);
+                        try {
+                          const { pendingData, ...rest } = reviewingUpdateApplicant;
+                          const mergedData = {
+                            ...pendingData,
+                            hasUpdatePending: false,
+                            pendingData: null,
+                            updatedAt: Timestamp.now()
+                          };
+
+                          await updateDoc(doc(db, "applicants", reviewingUpdateApplicant.id), mergedData);
+                          
+                          // Log activity
+                          await addDoc(collection(db, "activity_logs"), {
+                            type: "PROFILE_UPDATE_APPROVED",
+                            targetId: reviewingUpdateApplicant.id,
+                            actorId: adminSession.id,
+                            timestamp: Timestamp.now(),
+                            details: "Admin approved profile update request."
+                          });
+
+                          // Notification to user
+                          await addDoc(collection(db, "notifications"), {
+                            title: "Update Request Approved",
+                            message: "Your profile has been successfully updated after administrator review.",
+                            type: "Announcement",
+                            targetId: reviewingUpdateApplicant.id,
+                            timestamp: Timestamp.now(),
+                            isRead: false
+                          });
+
+                          setReviewingUpdateApplicant(null);
+                          alert("Update approved and merged!");
+                        } catch (e) {
+                          console.error(e);
+                        } finally {
+                          setProcessingUpdate(false);
+                        }
+                      }}
+                      disabled={processingUpdate}
+                      className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-2"
+                    >
+                      {processingUpdate ? <Loader2 className="animate-spin" /> : <ShieldCheck size={18} />}
+                      Approve & Update Profile
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
       ) : activeTab === "analytics" ? (
         <div className="space-y-8 pb-12">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

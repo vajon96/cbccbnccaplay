@@ -79,30 +79,38 @@ export function UserDashboard() {
     try {
       const docRef = doc(db, "applicants", user.id);
       
-      // Calculate changes for logging
-      const changes: any = {};
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== user[key] && key !== 'password') {
-          changes[key] = { old: user[key], new: formData[key] };
-        }
-      });
+      // Save changes to pendingData for admin approval
+      const updatePayload = {
+        pendingData: formData,
+        hasUpdatePending: true,
+        updateRequestedAt: Timestamp.now()
+      };
 
-      await updateDoc(docRef, formData);
+      await updateDoc(docRef, updatePayload);
       
       // Log activity
-      if (Object.keys(changes).length > 0) {
-        await addDoc(collection(db, "activity_logs"), {
-          type: "PROFILE_UPDATED",
-          targetId: user.id,
-          actorId: user.id,
-          timestamp: Timestamp.now(),
-          details: `User updated profile fields: ${Object.keys(changes).join(", ")}`,
-          changes
-        });
-      }
+      await addDoc(collection(db, "activity_logs"), {
+        type: "PROFILE_UPDATE_REQUESTED",
+        targetId: user.id,
+        actorId: user.id,
+        timestamp: Timestamp.now(),
+        details: "User submitted profile changes for approval"
+      });
 
-      setUser(formData);
+      // Send notification to admins (Broadcast internally)
+      await addDoc(collection(db, "notifications"), {
+        title: "Profile Update Pending",
+        message: `Cadet ${user.fullNameEnglish} (${user.id}) has requested a profile update.`,
+        type: "Alert",
+        targetId: "ADMIN", // Special target for admins
+        actorId: user.id,
+        timestamp: Timestamp.now(),
+        isRead: false
+      });
+
+      setUser({ ...user, ...updatePayload });
       setEditing(false);
+      alert("আবেদনটি জমার দেওয়ার জন্য ধন্যবাদ। অ্যাডমিন যাচাই করার পর আপনার প্রোফাইল আপডেট করা হবে।");
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `applicants/${user.id}`);
     } finally {
@@ -233,6 +241,23 @@ export function UserDashboard() {
 
           {/* Main Content */}
           <div className="lg:col-span-8 space-y-8">
+            {/* Update Pending Banner */}
+            {user.hasUpdatePending && (
+              <motion.div 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="p-4 bg-accent/10 border border-accent/20 rounded-2xl flex items-center gap-4"
+              >
+                <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent shrink-0">
+                  <Info size={20} />
+                </div>
+                <div className="flex-grow">
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight">Update Request Pending</h4>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Your profile changes are currently being reviewed by an administrator.</p>
+                </div>
+              </motion.div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-surface rounded-2xl flex items-center justify-center border border-white/5">
