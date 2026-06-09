@@ -199,30 +199,28 @@ export function EnrollmentForm() {
       return;
     }
 
+    // Sequential ID Generation starting from 1111
     setLoading(true);
-    
-    // Generate Sequential Numeric ID starting from 1111
-    let finalId = "";
+    let id = "";
     try {
-      finalId = await runTransaction(db, async (transaction) => {
-        const counterRef = doc(db, "admin_config", "counters");
-        const counterDoc = await transaction.get(counterRef);
+      id = await runTransaction(db, async (transaction) => {
+        const counterDocRef = doc(db, "counters", "applicant_id");
+        const counterDoc = await transaction.get(counterDocRef);
         
         let nextId = 1111;
         if (counterDoc.exists()) {
-          nextId = (counterDoc.data().lastApplicantId || 1110) + 1;
+          nextId = counterDoc.data().currentId + 1;
         }
         
-        transaction.set(counterRef, { lastApplicantId: nextId }, { merge: true });
+        transaction.set(counterDocRef, { currentId: nextId });
         return nextId.toString();
       });
     } catch (e) {
-      console.error("ID generation transaction error:", e);
+      console.error("Sequential ID generation error:", e);
       // Fallback if transaction fails
-      finalId = `BNCC-${Date.now().toString().slice(-6)}`;
+      id = Math.floor(10000 + Math.random() * 90000).toString(); 
     }
 
-    const id = finalId;
     const rawPassword = generatePassword();
     const path = `applicants/${id}`;
     

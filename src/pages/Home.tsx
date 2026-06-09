@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import { CheckCircle, Users, Award, ShieldCheck, ArrowRight, Info, FileText, Activity, Phone, Sparkles, BrainCircuit, Send, Loader2 } from "lucide-react";
 import { getQuickFAQ } from "../services/geminiService";
+import { CircularViewerModal } from "../components/modular/CircularViewerModal";
 
 export function Home() {
   const [faqQuestion, setFaqQuestion] = useState("");
   const [faqAnswer, setFaqAnswer] = useState("");
   const [isFaqLoading, setIsFaqLoading] = useState(false);
+  const [isCircularOpen, setIsCircularOpen] = useState(false);
 
   const handleFaqSubmit = async () => {
     if (!faqQuestion.trim() || isFaqLoading) return;
@@ -57,13 +59,20 @@ export function Home() {
           >
             <Link
               to="/enroll"
-              className="group px-8 py-4 bg-accent text-white font-bold rounded-xl flex items-center gap-2 hover:bg-accent/90 transition-all transform hover:scale-105 shadow-lg shadow-accent/20"
+              className="group px-8 py-4 bg-accent text-white font-bold rounded-xl flex items-center gap-2 hover:bg-accent/90 transition-all transform hover:scale-105 shadow-lg shadow-accent/20 cursor-pointer"
             >
               আবেদন করুন <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
+            <button
+              onClick={() => setIsCircularOpen(true)}
+              className="group px-8 py-4 bg-slate-900/60 hover:bg-slate-900 text-white font-bold rounded-xl border border-white/10 flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg cursor-pointer"
+            >
+              <FileText className="w-5 h-5 text-primary" />
+              সার্কুলার ডাউনলোড
+            </button>
             <a
               href="#eligibility"
-              className="px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-sand transition-all border border-primary/10 shadow-sm"
+              className="px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-sand transition-all border border-primary/10 shadow-sm cursor-pointer"
             >
               বিস্তারিত জানুন
             </a>
@@ -404,6 +413,11 @@ export function Home() {
           </div>
         </div>
       </section>
+
+      <CircularViewerModal 
+        isOpen={isCircularOpen} 
+        onClose={() => setIsCircularOpen(false)} 
+      />
     </div>
   );
 }

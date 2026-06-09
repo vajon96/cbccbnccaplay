@@ -1,25 +1,23 @@
 import { Link, useLocation } from "react-router-dom";
 import { 
-  Shield, Menu, X, Home, Info, Activity, Users, 
-  Image as ImageIcon, Mail, Medal, UserCheck, 
-  UserPlus, MessageCircle, LogIn 
+  Menu, X, Home, Users, 
+  Image as ImageIcon, Medal, 
+  UserPlus, MessageCircle, LogIn, FileText
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { CircularViewerModal } from "./modular/CircularViewerModal";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isCircularModalOpen, setIsCircularModalOpen] = useState(false);
   const location = useLocation();
 
   const navLinks = [
     { name: "Main Website", path: "https://cbccbncc.netlify.app/", icon: Home },
-    { name: "About", path: "https://cbccbncc.netlify.app/about", icon: Info },
-    { name: "Activities", path: "https://cbccbncc.netlify.app/activities", icon: Activity },
     { name: "Cadets", path: "https://cbccbncc.netlify.app/cadets", icon: Users },
     { name: "Gallery", path: "https://cbccbncc.netlify.app/gallery", icon: ImageIcon },
-    { name: "Contact", path: "https://cbccbncc.netlify.app/contact", icon: Mail },
     { name: "Hall of In-Charges", path: "https://cbccbncc.netlify.app/hall-of-incharges", icon: Medal },
-    { name: "How to Join", path: "https://cbccbncc.netlify.app/how-to-become-cadet", icon: UserCheck },
   ];
 
   const authLinks = [
@@ -93,6 +91,13 @@ export function Navbar() {
                   {link.name}
                 </Link>
               ))}
+              <button
+                onClick={() => setIsCircularModalOpen(true)}
+                className="px-5 py-2 border border-white/25 hover:border-white/55 text-white bg-white/5 hover:bg-white/15 text-[11px] font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <FileText size={13} className="text-primary-dark" />
+                Circular
+              </button>
               <Link
                 to="/enroll"
                 className="ml-4 px-6 py-2 bg-white text-primary font-black uppercase tracking-widest text-[11px] rounded-full hover:bg-sand transition-all shadow-xl shadow-black/20 flex items-center gap-2 group"
@@ -105,27 +110,34 @@ export function Navbar() {
 
           {/* Mobile/Tablet Menu Button */}
           <div className="xl:hidden flex items-center gap-3">
-            <div className="flex items-center gap-2 mr-2">
+            <div className="flex items-center gap-2 mr-1">
               {authLinks.map((link) => (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white"
+                  className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white"
                   title={link.name}
                 >
-                  <link.icon size={18} />
+                  <link.icon size={16} />
                 </Link>
               ))}
+              <button
+                onClick={() => setIsCircularModalOpen(true)}
+                className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10"
+                title="Circular"
+              >
+                <FileText size={16} />
+              </button>
             </div>
             <Link
               to="/enroll"
-              className="px-4 py-2 bg-white text-primary font-black uppercase tracking-widest text-[10px] rounded-full shadow-lg"
+              className="px-4 py-2 bg-white text-primary font-black uppercase tracking-widest text-[10px] rounded-full shadow-lg shrink-0"
             >
               Join
             </Link>
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="p-2 text-sand hover:text-white ring-1 ring-white/10 rounded-lg"
+              className="p-2 text-sand hover:text-white ring-1 ring-white/10 rounded-lg shrink-0"
             >
               {isOpen ? <X /> : <Menu />}
             </button>
@@ -229,6 +241,11 @@ export function Navbar() {
           />
         )}
       </AnimatePresence>
+
+      <CircularViewerModal 
+        isOpen={isCircularModalOpen} 
+        onClose={() => setIsCircularModalOpen(false)} 
+      />
     </nav>
   );
 }

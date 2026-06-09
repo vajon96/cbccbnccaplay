@@ -134,12 +134,70 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "message", "timestamp"]
+    },
+    "counter": {
+      "title": "Counter",
+      "description": "Tracker for sequential IDs.",
+      "type": "object",
+      "properties": {
+        "currentId": { "type": "integer", "description": "The last used ID" }
+      },
+      "required": ["currentId"]
+    },
+    "circular": {
+      "title": "Circular",
+      "description": "Represents an enrollment/recruitment circular.",
+      "type": "object",
+      "properties": {
+        "referenceNumber": { "type": "string" },
+        "startDate": { "type": "string" },
+        "deadlineDate": { "type": "string" },
+        "publicationDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "title": { "type": "string" },
+        "introduction": { "type": "string" },
+        "purpose": { "type": "string" },
+        "eligibility": { "type": "string" },
+        "requiredDocuments": { "type": "string" },
+        "applicationProcedure": { "type": "string" },
+        "importantDates": { "type": "string" },
+        "verificationProcess": { "type": "string" },
+        "rulesAndConditions": { "type": "string" },
+        "contactInfo": { "type": "string" },
+        "footer": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["referenceNumber", "startDate", "deadlineDate", "status", "title"]
+    },
+    "circular_setting": {
+      "title": "Circular Setting",
+      "description": "Stores general settings for the circular module.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "value": { "type": "boolean" }
+      },
+      "required": ["key", "value"]
     }
   },
   "firestore": {
+    "/circulars/{circularId}": {
+      "schema": "circular",
+      "description": "System generated enrollment circulars"
+    },
+    "/circular_settings/{settingId}": {
+      "schema": "circular_setting",
+      "description": "General settings for the circular module"
+    },
     "/applicants/{applicantId}": {
       "schema": "applicant",
       "description": "Collection of applicants"
+    },
+    "/counters/{counterId}": {
+      "schema": "counter",
+      "description": "Sequential ID counters"
     },
     "/attendance_logs/{logId}": {
       "schema": "attendance_record",

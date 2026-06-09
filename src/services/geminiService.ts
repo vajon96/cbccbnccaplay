@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -181,5 +181,74 @@ export async function getQuickFAQ(question: string) {
   } catch (error) {
     console.error("Quick FAQ Error:", error);
     return "দুঃখিত, আমি এই মুহূর্তে উত্তর দিতে পারছি না। (Sorry, I cannot answer right now.)";
+  }
+}
+
+export async function generateAICircular(startDate: string, deadlineDate: string, refNumber: string) {
+  try {
+    const prompt = `
+    You are an AI that understands its own website and organization to generate an official recruitment/enrollment circular.
+    Analyze the organization: Cox's Bazar City College BNCC Platoon (কক্সবাজার সিটি কলেজ BNCC মিশ্র প্লাটুন).
+    Leader: Ujjal Kanti Deb, Platoon Commander (+880 1812-430454), Professor Under Officer.
+    Affiliation: 15 BNCC Battalion, Karnaphuli Regiment.
+    
+    Category of website: Admission / Membership / Cadet Enrollment.
+    Key Enrollment Info:
+    - Motto: Knowledge, Discipline, Spirit (জ্ঞান, শৃঙ্খলা, স্বেচ্ছাসেবা).
+    - Requirements: Regular student of 11th class or 1st year Honours, minimum GPA 3.00 in SSC, unmarried, good health.
+    - Physical Standards: 
+      - Male: Height 5'6", Chest 30" (normal) / 32" (expanded).
+      - Female: Height 5'2".
+    - Registration Process: Fill out the online registration form at this website, upload a passport-sized clear portrait photo, automatically generate a sequential Cadet User ID (starting from 1111) upon registration, and download a custom Admit Card featuring a unique QR code. On parade days, physical screening, written tests, and viva selection, attendance is marked by scanning this QR code in real-time inside the Admin panel.
+    - Documents Required: SSC certificate/transcript photocopies (2 copies), college admission/fees receipt, passport size photo (2 copies), blood group test report (1 photocopy), parent NID photocopy, student NID or Birth Registration photocopy.
+    - Benefit Highlights: Preferential advantages in armed forces selection, free military training & uniform, foreign cadet exchange program quotas, character building.
+    
+    Generate are official circular fields detailing all the information above. The system must write the values in formal, high-quality, professional Unicode Bengali (Bangla). Use authentic, disciplined military recruiting terminology.
+    All variables provided must be incorporated:
+    - Application Start Date: ${startDate}
+    - Application Deadline: ${deadlineDate}
+    - Reference Number: ${refNumber}
+    - Date of publication: ${new Date().toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
+    
+    Provide the output strictly conforming to the requested schema. Return the fields in Bangla.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING, description: "Official Title of the circular in Bengali" },
+            introduction: { type: Type.STRING, description: "Overview introduction paragraph in Bengali introducing BNCC values" },
+            purpose: { type: Type.STRING, description: "The core purpose of recruitment in Bengali" },
+            eligibility: { type: Type.STRING, description: "Qualifications and physical standards in Bengali" },
+            requiredDocuments: { type: Type.STRING, description: "List of required documents in Bengali" },
+            applicationProcedure: { type: Type.STRING, description: "Guide on how to apply online, upload photo, and get QR admit card in Bengali" },
+            importantDates: { type: Type.STRING, description: "List of dates (Start: ${startDate}, End: ${deadlineDate}, Publication: today) in Bengali" },
+            verificationProcess: { type: Type.STRING, description: "Selection phases (physical screening, written, viva, QR scan attendance) in Bengali" },
+            rulesAndConditions: { type: Type.STRING, description: "Rules and terms and conditions in Bengali" },
+            contactInfo: { type: Type.STRING, description: "Contact information in Bengali" },
+            footer: { type: Type.STRING, description: "Official footer signed by commander with ref number in Bengali" },
+            category: { type: Type.STRING, description: "Detected category of the system" }
+          },
+          required: [
+            "title", "introduction", "purpose", "eligibility", "requiredDocuments",
+            "applicationProcedure", "importantDates", "verificationProcess",
+            "rulesAndConditions", "contactInfo", "footer", "category"
+          ]
+        }
+      }
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text.trim());
+    }
+    throw new Error("Empty response from AI");
+  } catch (error) {
+    console.error("AI Circular {generateAICircular} Error:", error);
+    throw error;
   }
 }
