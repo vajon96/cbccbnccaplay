@@ -16,7 +16,6 @@ import { Gallery } from "./pages/Gallery";
 import { Admin2Login } from "./pages/Admin2Login";
 import { Admin2Dashboard } from "./pages/Admin2Dashboard";
 import { Navbar } from "./components/Navbar";
-import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { ChatBot } from "./components/ChatBot";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -26,7 +25,6 @@ export default function App() {
     <ErrorBoundary>
       <Router>
         <div className="min-h-screen flex flex-col">
-          <Header />
           <Navbar />
           <main className="flex-grow">
             <Routes>
