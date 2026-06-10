@@ -7,7 +7,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { db, doc, getDoc } from "../firebase";
+import { db, doc, getDoc, setDoc, collection, Timestamp } from "../firebase";
+import { getSession } from "../lib/auth";
 
 export function PublicQrScan() {
   const [loading, setLoading] = useState(false);
@@ -442,15 +443,30 @@ export function PublicQrScan() {
 
                     {/* Camera permission/error state */}
                     {cameraStatus === "error" && (
-                      <div className="absolute inset-0 bg-slate-950 p-6 flex flex-col items-center justify-center text-center gap-4">
-                        <Camera className="w-10 h-10 text-red-500" />
-                        <p className="text-xs text-red-400 font-bold leading-relaxed">{cameraPermissionError}</p>
-                        <button
-                          onClick={() => setActiveScanner(prev => !prev)}
-                          className="bg-emerald-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-400 transition-colors"
-                        >
-                          আবার চেষ্টা করুন
-                        </button>
+                      <div className="absolute inset-0 bg-slate-950 p-6 flex flex-col items-center justify-center text-center gap-4 z-20">
+                        <Camera className="w-10 h-10 text-red-500 animate-pulse" />
+                        <div className="space-y-1">
+                          <p className="text-xs text-red-400 font-bold leading-relaxed">{cameraPermissionError}</p>
+                          <p className="text-[10px] text-slate-400 leading-normal font-bold">
+                            আইফ্রেম (Preview IFrame) বা ব্রাউজার সিকিউরিটি ক্যামেরা অ্যাক্সেস ব্লক করে থাকতে পারে। সরাসরি নতুন ট্যাবে অ্যাপটি খুললে চমৎকারভাবে ক্যামেরা চালু হবে।
+                          </p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 w-full justify-center">
+                          <button
+                            onClick={() => setActiveScanner(prev => !prev)}
+                            className="bg-slate-800 text-slate-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-700 transition-colors"
+                          >
+                            আবার চেষ্টা করুন
+                          </button>
+                          <a 
+                            href={window.location.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[10px] rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-1 text-center"
+                          >
+                            নতুন ট্যাবে খুলুন (Open in New Tab)
+                          </a>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -577,11 +593,58 @@ export function PublicQrScan() {
                       if (!inputId) return;
                       setLoading(true);
                       setError(null);
+
+                      // 1. Check if authorized role: only Super Admin and QR Admin can manually search. Public/user rolls are blocked.
+                      const session = getSession();
+                      const isAuthorized = session?.role === "super_admin" || session?.role === "qr_admin";
+                      if (!isAuthorized) {
+                        setError("QR Verification Required. Please scan QR Code to view details. সাধারণ ব্যবহারকারীদের জন্য ম্যানুয়াল ক্যাডেট সার্চ করার সুবিধা বন্ধ রয়েছে।");
+                        setTimeout(() => setError(null), 5000);
+                        setLoading(false);
+
+                        // Log event
+                        try {
+                          await setDoc(doc(collection(db, "security_logs")), {
+                            attemptType: "Manual Access Blocked",
+                            timestamp: Timestamp.now(),
+                            userRole: session?.role || "public_user",
+                            userId: session?.id || session?.username || "anonymous",
+                            reason: "Manual lookup attempted by public user or unauthorized role",
+                            attemptedId: inputId
+                          });
+                        } catch (logErr) {
+                          console.error("Failed to write safety security_log:", logErr);
+                        }
+                        return;
+                      }
+
                       try {
                         const docRef = doc(db, "applicants", inputId);
                         const docSnap = await getDoc(docRef);
                         if (docSnap.exists()) {
                           const rawData = docSnap.data();
+
+                          // 2. GENDER-BASED SECURITY RULE: Block female manual lookup completely (even for verified admins on public page)
+                          if (rawData.gender === "Female") {
+                            setError("Access Restricted - Female cadet profiles can only be verified via secure QR Scan. নিরাপত্তা নীতিমালায় নারী ক্যাডেটদের ম্যানুয়াল সার্চ সম্পূর্ণ নিষিদ্ধ।");
+                            setTimeout(() => setError(null), 6000);
+
+                            // Log event
+                            try {
+                              await setDoc(doc(collection(db, "security_logs")), {
+                                attemptType: "Manual Access Blocked",
+                                timestamp: Timestamp.now(),
+                                userRole: session?.role || "unknown",
+                                userId: session?.id || session?.username || "unknown",
+                                reason: "Manual ID lookup of female cadet was completely blocked",
+                                attemptedId: inputId
+                              });
+                            } catch (logErr) {
+                              console.error("Failed to write safety security_log:", logErr);
+                            }
+                            return;
+                          }
+
                           const approvedStatus = rawData.status === "Approved" || rawData.status === "Joined";
                           const publicProfile = {
                             id: inputId,

@@ -690,23 +690,30 @@ export function AdminQrDashboard() {
                   {cameraPermissionError && (
                     <div className="absolute inset-0 bg-slate-950/95 p-6 flex flex-col items-center justify-center text-center space-y-4 z-20">
                       <XCircle className="w-12 h-12 text-rose-500" />
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-black text-white uppercase tracking-tight">ক্যামেরা অ্যাক্সেস ব্যর্থ</h4>
-                        <p className="text-xs text-slate-400 leading-relaxed font-bold">{cameraPermissionError}</p>
+                      <div className="space-y-1 max-w-xs">
+                        <h4 className="text-sm font-black text-white uppercase tracking-tight">ক্যামেরা অ্যাক্সেস ব্যর্থ (NotAllowedError)</h4>
+                        <p className="text-xs text-slate-400 leading-relaxed font-bold">
+                          {cameraPermissionError} <br />
+                          <span className="text-rose-400 mt-2 block leading-normal">
+                            আইফ্রেম (Preview IFrame) বা ব্রাউজার সিকিউরিটি ক্যামেরা অ্যাক্সেস ব্লক করে থাকতে পারে। সরাসরি নতুন ট্যাবে অ্যাপটি খুললে চমৎকারভাবে ক্যামেরা চালু হবে।
+                          </span>
+                        </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2 w-full justify-center">
                         <button 
                           onClick={() => window.location.reload()}
                           className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-black text-[10px] rounded-xl uppercase tracking-wider transition-all"
                         >
-                          Retry Setup
+                          আবার চেষ্টা করুন (Retry)
                         </button>
-                        <button 
-                          onClick={() => alert("সেটিংসে গিয়ে ব্রাউজারটির ক্যামেরা পারমিশন 'Allow' করুন।")}
-                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-[10px] rounded-xl uppercase tracking-wider transition-all"
+                        <a 
+                          href={window.location.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[10px] rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-1 text-center"
                         >
-                          How to Allow
-                        </button>
+                          নতুন ট্যাবে খুলুন (Open in New Tab)
+                        </a>
                       </div>
                     </div>
                   )}
@@ -910,14 +917,60 @@ export function AdminQrDashboard() {
                   if (!inputId) return;
                   setSearchingDatabase(true);
                   setError(null);
+
+                  // 1. Check if authorized role: only Super Admin and QR Admin are allowed to search manually.
+                  const isAuthorized = adminSession?.role === "super_admin" || adminSession?.role === "qr_admin";
+                  if (!isAuthorized) {
+                    setError("Access Restricted - Please Use QR Verification. আপনার বর্তমান রোল দ্বারা ম্যানুয়ালি সার্চ করা অনুমোদিত নয়।");
+                    setTimeout(() => setError(null), 5000);
+                    setSearchingDatabase(false);
+
+                    // Log event
+                    try {
+                      await setDoc(doc(collection(db, "security_logs")), {
+                        attemptType: "Manual Access Blocked",
+                        timestamp: Timestamp.now(),
+                        userRole: adminSession?.role || "unknown",
+                        userId: adminSession?.id || adminSession?.username || "unknown",
+                        reason: "Manual lookup attempted by unauthorized admin role",
+                        attemptedId: inputId
+                      });
+                    } catch (logErr) {
+                      console.error("Failed to write safety security_log:", logErr);
+                    }
+                    return;
+                  }
+
                   try {
                     const docRef = doc(db, "applicants", inputId);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
-                      const cadetData = docSnap.data();
-                      setScannedCadet({ id: inputId, ...cadetData });
-                      setHeight(cadetData.height || "");
-                      setWeight(cadetData.weight || "");
+                      const cadetDocData = docSnap.data();
+
+                      // 2. GENDER-BASED SECURITY RULE: Block female manual lookup completely (even for admins)
+                      if (cadetDocData.gender === "Female") {
+                        setError("Access Restricted - Female cadet profiles can only be verified via secure QR Scan. নিরাপত্তা নীতিমালায় নারী ক্যাডেটদের ম্যানুয়াল সার্চ সম্পূর্ণ নিষিদ্ধ।");
+                        setTimeout(() => setError(null), 6000);
+
+                        // Log event
+                        try {
+                          await setDoc(doc(collection(db, "security_logs")), {
+                            attemptType: "Manual Access Blocked",
+                            timestamp: Timestamp.now(),
+                            userRole: adminSession?.role || "unknown",
+                            userId: adminSession?.id || adminSession?.username || "unknown",
+                            reason: "Manual ID lookup of female cadet was completely blocked",
+                            attemptedId: inputId
+                          });
+                        } catch (logErr) {
+                          console.error("Failed to write female manual lookup security_log:", logErr);
+                        }
+                        return;
+                      }
+
+                      setScannedCadet({ id: inputId, ...cadetDocData });
+                      setHeight(cadetDocData.height || "");
+                      setWeight(cadetDocData.weight || "");
                       setSuccess("ক্যাডেট তথ্য সফলভাবে পাওয়া গেছে!");
                       setTimeout(() => setSuccess(null), 3000);
                       targetField.value = ""; // clear after success
