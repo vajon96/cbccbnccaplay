@@ -42,7 +42,7 @@ export function Home() {
             <span className="inline-block px-4 py-1.5 mb-6 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-[0.2em]">
               Bangladesh National Cadet Corps
             </span>
-            <h1 className="text-5xl md:text-7xl font-extrabold text-white leading-tight">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold text-white leading-tight">
               বাংলাদেশ ন্যাশনাল ক্যাডেট কোর <br />
               <span className="text-primary">BNCC</span>
             </h1>

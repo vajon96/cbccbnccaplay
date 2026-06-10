@@ -7,7 +7,7 @@ import {
   X, Sparkles, BrainCircuit, Info,
   History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
   MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock, ArrowRight,
-  TrendingUp, PieChart as PieChartIcon, BarChart as BarChartIcon, Bell, Megaphone, Activity
+  TrendingUp, PieChart as PieChartIcon, BarChart as BarChartIcon, Bell, Megaphone, Activity, QrCode
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -22,6 +22,7 @@ import { AuditLogs } from "../components/modular/AuditLogs";
 import { BulkActions } from "../components/modular/BulkActions";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { AICircularManager } from "../components/modular/AICircularManager";
+import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -67,6 +68,11 @@ export function AdminDashboard() {
   const [selectedApplicants, setSelectedApplicants] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Admin QR login management state
+  const [selectedQrAdmin, setSelectedQrAdmin] = useState<any>(null);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState<{username: string, password: string} | null>(null);
   
   // Broadcast State
   const [broadcastTitle, setBroadcastTitle] = useState("");
@@ -169,6 +175,56 @@ export function AdminDashboard() {
       console.error("Create admin error:", err);
       const errorMessage = err?.message || "Unknown error";
       alert(`Failed to create admin: ${errorMessage}`);
+    } finally {
+      setCreatingAdmin(false);
+    }
+  };
+
+  const handleGenerateQrAdmin = async () => {
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const genUsername = `qr_admin_${randomSuffix}`;
+    
+    // Generate system random password
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let genPassword = "";
+    for (let i = 0; i < 12; i++) {
+      genPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    setCreatingAdmin(true);
+    try {
+      const hashedPassword = await hashPassword(genPassword);
+      await addDoc(collection(db, "admins"), {
+        name: `QR Admin ${randomSuffix}`,
+        username: genUsername,
+        password: hashedPassword,
+        role: "qr_admin",
+        permissions: {
+          canAdd: false,
+          canEdit: true,
+          canDelete: false,
+          canViewLogs: false,
+          canResetPW: false,
+          canApprove: false,
+          canExport: false,
+          canChat: false
+        },
+        createdAt: Timestamp.now()
+      });
+
+      // Log activity
+      await addDoc(collection(db, "activity_logs"), {
+        type: "ADMIN_CREATED",
+        targetId: genUsername,
+        actorId: adminSession?.id || "super_admin",
+        timestamp: Timestamp.now(),
+        details: `Super Admin generated system QR Admin account: ${genUsername}`
+      });
+
+      setGeneratedCredentials({ username: genUsername, password: genPassword });
+    } catch (err: any) {
+      console.error("Generate QR Admin error:", err);
+      alert("Failed to generate QR Admin.");
     } finally {
       setCreatingAdmin(false);
     }
@@ -456,12 +512,12 @@ export function AdminDashboard() {
     <div className="min-h-screen bg-bg-light">
       <div className="max-w-7xl mx-auto px-4 py-12 space-y-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-primary p-8 rounded-[2rem] text-white shadow-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-primary p-6 md:p-8 rounded-[2rem] text-white shadow-xl">
           <div>
-            <h1 className="text-3xl font-bold text-white">অ্যাডমিন ড্যাশবোর্ড</h1>
-            <p className="text-white/70">সকল আবেদনকারী এবং তাদের স্ট্যাটাস পরিচালনা করুন</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">অ্যাডমিন ড্যাশবোর্ড</h1>
+            <p className="text-white/70 text-sm">সকল আবেদনকারী এবং তাদের স্ট্যাটাস পরিচালনা করুন</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <NotificationCenter notifications={notifications} />
             <button
               onClick={exportToExcel}
@@ -512,10 +568,10 @@ export function AdminDashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-4 border-b border-white/5 pb-1">
+      <div className="flex border-b border-white/5 pb-1 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth gap-1 md:gap-4">
         <button
           onClick={() => setActiveTab("applicants")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
             activeTab === "applicants" ? "text-primary" : "text-slate-500 hover:text-slate-300"
           }`}
         >
@@ -528,7 +584,7 @@ export function AdminDashboard() {
         <button
           onClick={() => setActiveTab("logs")}
           disabled={!adminSession?.permissions?.canViewLogs}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
             activeTab === "logs" ? "text-primary" : "text-slate-500 hover:text-slate-300"
           } ${!adminSession?.permissions?.canViewLogs ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
         >
@@ -543,7 +599,7 @@ export function AdminDashboard() {
           <>
             <button
               onClick={() => setActiveTab("admins")}
-              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
                 activeTab === "admins" ? "text-primary" : "text-slate-500 hover:text-slate-300"
               }`}
             >
@@ -555,7 +611,7 @@ export function AdminDashboard() {
             </button>
             <button
               onClick={() => setActiveTab("circular")}
-              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
                 activeTab === "circular" ? "text-primary" : "text-slate-500 hover:text-slate-300"
               }`}
             >
@@ -569,7 +625,7 @@ export function AdminDashboard() {
         )}
         <button
           onClick={() => setActiveTab("analytics")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
             activeTab === "analytics" ? "text-primary" : "text-slate-500 hover:text-slate-300"
           }`}
         >
@@ -581,7 +637,7 @@ export function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("broadcast")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative ${
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
             activeTab === "broadcast" ? "text-primary" : "text-slate-500 hover:text-slate-300"
           }`}
         >
@@ -1033,12 +1089,21 @@ export function AdminDashboard() {
           </h3>
           <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Administrative User Access Control</p>
         </div>
-        <button
-          onClick={() => setShowAddAdmin(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20"
-        >
-          <UserPlus className="w-4 h-4" /> নতুন এডমিন যোগ করুন
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleGenerateQrAdmin}
+            disabled={creatingAdmin}
+            className="flex items-center gap-2 px-6 py-3 bg-rose-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-600/20 disabled:opacity-50 cursor-pointer"
+          >
+            {creatingAdmin ? <Loader2 className="animate-spin w-4 h-4" /> : <QrCode className="w-4 h-4" />} QR এডমিন তৈরি করুন (System-Gen)
+          </button>
+          <button
+            onClick={() => setShowAddAdmin(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" /> নতুন এডমিন যোগ করুন
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-2xl">
@@ -1065,7 +1130,24 @@ export function AdminDashboard() {
                 </td>
                 <td className="px-8 py-6 text-xs text-slate-500 font-bold uppercase">Permanent</td>
                 <td className="px-8 py-6 text-right">
-                  <Shield className="w-5 h-5 text-emerald-500 inline-block" />
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedQrAdmin({
+                          id: "super_admin",
+                          username: "admin",
+                          name: "Super Admin",
+                          role: "super_admin"
+                        });
+                        setIsQrModalOpen(true);
+                      }}
+                      className="p-2.5 hover:bg-slate-50 text-slate-400 hover:text-primary rounded-xl transition-all animate-pulse"
+                      title="অ্যাডমিন QR কোড জেনারেটর"
+                    >
+                      <QrCode className="w-5 h-5 text-rose-500" />
+                    </button>
+                    <Shield className="w-5 h-5 text-emerald-500 inline-block" />
+                  </div>
                 </td>
               </tr>
               {admins.map((admin) => (
@@ -1080,7 +1162,7 @@ export function AdminDashboard() {
                   </td>
                   <td className="px-8 py-6">
                     <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-primary/20 bg-primary/5 text-primary">
-                      ADMIN
+                      {admin.role ? admin.role.replace("_", " ").toUpperCase() : "ADMIN"}
                     </span>
                   </td>
                   <td className="px-8 py-6 text-xs text-slate-500">
@@ -1088,6 +1170,21 @@ export function AdminDashboard() {
                   </td>
                   <td className="px-8 py-6 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedQrAdmin({
+                            id: admin.id,
+                            username: admin.username,
+                            name: admin.name,
+                            role: admin.role || "sub_admin"
+                          });
+                          setIsQrModalOpen(true);
+                        }}
+                        className="p-2.5 hover:bg-slate-50 text-slate-400 hover:text-rose-500 rounded-xl transition-all"
+                        title="অ্যাডমিন QR কোড জেনারেটর"
+                      >
+                        <QrCode size={18} className="text-rose-500" />
+                      </button>
                       <button
                         onClick={() => {
                           setEditingAdminId(admin.id);
@@ -1193,6 +1290,18 @@ export function AdminDashboard() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Admin QR Code Modal */}
+      {selectedQrAdmin && (
+        <AdminQrCodeModal
+          isOpen={isQrModalOpen}
+          onClose={() => {
+            setIsQrModalOpen(false);
+            setSelectedQrAdmin(null);
+          }}
+          admin={selectedQrAdmin}
+        />
+      )}
 
       {/* Add Admin Modal */}
       <AnimatePresence>
@@ -1369,6 +1478,59 @@ export function AdminDashboard() {
                   {updatingPermissions ? <Loader2 className="animate-spin mx-auto" size={18} /> : "আপডেট করুন"}
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Generated QR Admin Credentials Display Modal */}
+      <AnimatePresence>
+        {generatedCredentials && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setGeneratedCredentials(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white p-10 rounded-[2.5rem] space-y-6 shadow-2xl border border-white z-10"
+            >
+              <div className="text-center space-y-3">
+                <div className="w-16 h-16 bg-rose-105 text-rose-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner bg-rose-100">
+                  <ShieldCheck size={32} />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800 font-display">QR এডমিন তৈরি হয়েছে!</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">System-Generated Credentials</p>
+              </div>
+
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Username</p>
+                  <p className="text-sm font-black text-slate-800 font-mono tracking-wider select-all">{generatedCredentials.username}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Password</p>
+                  <p className="text-sm font-black text-rose-600 font-mono tracking-wider select-all">{generatedCredentials.password}</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
+                  পাসওয়ার্ডটি কপি করে সুক্ষিত রাখুন। এই পাসওয়ার্ড এবং ইউজারনেম দিয়ে ডিরেক্ট লগইন করে QR স্ক্যানার এবং আজকের এটেনডেন্স ম্যানেজ প্যানেল ব্যবহার করা যাবে।
+                </p>
+              </div>
+
+              <button 
+                onClick={() => setGeneratedCredentials(null)}
+                className="w-full py-4 bg-primary text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary/95 transition-all shadow-xl shadow-primary/20 cursor-pointer"
+              >
+                পড়া শেষ / বন্ধ করুন
+              </button>
             </motion.div>
           </div>
         )}

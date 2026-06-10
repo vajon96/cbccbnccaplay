@@ -27,19 +27,53 @@ export function Admin2Dashboard() {
   }, [navigate]);
 
   useEffect(() => {
-    if (!loading && scanning && !scannedApplicant) {
-      const scanner = new Html5QrcodeScanner(
-        "reader-admin2",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        /* verbose= */ false
-      );
+    if (loading || !scanning || scannedApplicant) return;
 
-      scanner.render(onScanSuccess, onScanFailure);
+    let isActive = true;
+    let scanner: Html5QrcodeScanner | null = null;
 
-      return () => {
-        scanner.clear().catch(error => console.error("Failed to clear scanner", error));
-      };
-    }
+    const initScanner = () => {
+      if (!isActive) return;
+      const targetElement = document.getElementById("reader-admin2");
+      if (!targetElement) {
+        // Retry shortly if the element isn't in the DOM yet
+        setTimeout(initScanner, 50);
+        return;
+      }
+
+      try {
+        scanner = new Html5QrcodeScanner(
+          "reader-admin2",
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          /* verbose= */ false
+        );
+
+        scanner.render(
+          async (decodedText) => {
+            if (!isActive) return;
+            await onScanSuccess(decodedText);
+          },
+          onScanFailure
+        );
+      } catch (err) {
+        console.error("Scanner initialization failed in Admin2Dashboard:", err);
+      }
+    };
+
+    // Slight initial deferral for rendering
+    const timer = setTimeout(initScanner, 100);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+      if (scanner) {
+        try {
+          scanner.clear().catch(error => console.error("Failed to clear scanner", error));
+        } catch (e) {
+          console.error("Error during Admin2Dashboard scanner cleanup:", e);
+        }
+      }
+    };
   }, [loading, scanning, scannedApplicant]);
 
   const onScanSuccess = async (decodedText: string) => {
@@ -141,9 +175,9 @@ export function Admin2Dashboard() {
     <div className="min-h-screen bg-sand py-12 px-4">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-primary p-8 rounded-[2rem] text-white shadow-xl">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-6 bg-primary p-6 md:p-8 rounded-[2rem] text-white shadow-xl text-center lg:text-left">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20 shrink-0">
               <Shield className="w-8 h-8" />
             </div>
             <div>
@@ -151,7 +185,7 @@ export function Admin2Dashboard() {
               <p className="text-white/70 text-sm">QR স্ক্যানিং এবং উপস্থিতি ব্যবস্থাপনা</p>
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 sm:gap-3">
             <button
               onClick={exportAttendance}
               disabled={exporting}

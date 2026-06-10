@@ -1,6 +1,9 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Lock, ArrowRight, Eye, EyeOff, User as UserIcon, Loader2 } from "lucide-react";
+import { 
+  Shield, Lock, ArrowRight, Eye, EyeOff, 
+  User as UserIcon, Loader2 
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { db, doc, getDoc, handleFirestoreError, OperationType, collection, query, where, getDocs } from "../firebase";
 import { comparePassword, setSession } from "../lib/auth";
@@ -13,6 +16,7 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Handle standard login
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -59,22 +63,28 @@ export function Login() {
         const adminData = adminSnapshot.docs[0].data();
         const isMatch = await comparePassword(password, adminData.password);
         if (isMatch) {
+          const userRole = adminData.role || "admin";
           setSession({
             id: adminSnapshot.docs[0].id,
-            role: adminData.role || "admin",
+            role: userRole,
             name: adminData.name,
             permissions: adminData.permissions || {
-              canAdd: false,
+              canAdd: userRole !== "qr_admin",
               canEdit: true,
               canDelete: false,
-              canViewLogs: true,
+              canViewLogs: userRole !== "qr_admin",
               canResetPW: false,
-              canApprove: true,
+              canApprove: userRole !== "qr_admin",
               canExport: false,
-              canChat: true
+              canChat: userRole !== "qr_admin"
             }
           });
-          navigate("/admin/dashboard");
+          
+          if (userRole === "qr_admin") {
+            navigate("/admin/qr-dashboard");
+          } else {
+            navigate("/admin/dashboard");
+          }
           return;
         }
       }
@@ -110,31 +120,46 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-slate-950">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-slate-950 relative overflow-hidden">
+      {/* Background decorations conforming to strict styling rules */}
+      <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-primary via-rose-500 to-accent" />
+      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full glass-card p-10 rounded-3xl space-y-8"
+        className="max-w-md w-full glass-card p-10 rounded-3xl space-y-8 border border-white/5 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] z-10"
       >
         <div className="text-center space-y-3">
-          <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto">
+          <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-primary/20">
             <Shield className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-2xl font-black text-white uppercase tracking-tighter">BNCC Portal Login</h1>
-          <p className="text-slate-400 text-sm">Enter your credentials to access your dashboard</p>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
+            Enter your credentials to enter Portal
+          </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl">
-              <p className="text-red-400 text-xs text-center font-bold">{error}</p>
-            </div>
-          )}
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-center"
+          >
+            <p className="text-red-400 text-xs font-bold">{error}</p>
+          </motion.div>
+        )}
 
+        <motion.form
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          onSubmit={handleLogin}
+          className="space-y-6"
+        >
           <div className="space-y-4">
             <div className="relative">
               <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
               <input
+                id="login-username-input"
                 type="text"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
@@ -147,6 +172,7 @@ export function Login() {
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
               <input
+                id="login-password-input"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -155,6 +181,7 @@ export function Login() {
                 required
               />
               <button
+                id="login-toggle-password-btn"
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors"
@@ -164,18 +191,21 @@ export function Login() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-primary text-white font-black uppercase tracking-widest text-xs rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
-          >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : "Login to Dashboard"}
-            {!loading && <ArrowRight size={18} />}
-          </button>
-        </form>
+          <div className="space-y-3">
+            <button
+              id="login-submit-btn"
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-primary text-white font-black uppercase tracking-widest text-xs rounded-xl flex items-center justify-center gap-2 hover:bg-primary/95 transition-all disabled:opacity-50 shadow-lg shadow-primary/20 cursor-pointer"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : "Login to Dashboard"}
+              {!loading && <ArrowRight size={18} />}
+            </button>
+          </div>
+        </motion.form>
 
         <div className="text-center">
-          <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest">
+          <p className="text-slate-600 text-[9px] uppercase font-bold tracking-widest">
             Cox's Bazar City College BNCC Platoon
           </p>
         </div>

@@ -15,6 +15,8 @@ import { Messenger } from "./pages/Messenger";
 import { Gallery } from "./pages/Gallery";
 import { Admin2Login } from "./pages/Admin2Login";
 import { Admin2Dashboard } from "./pages/Admin2Dashboard";
+import { AdminQrDashboard } from "./pages/AdminQrDashboard";
+import { PublicQrScan } from "./pages/PublicQrScan";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { ChatBot } from "./components/ChatBot";
@@ -35,8 +37,10 @@ export default function App() {
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/messenger" element={<Messenger />} />
               <Route path="/gallery" element={<Gallery />} />
+              <Route path="/qr-scan" element={<PublicQrScan />} />
               <Route path="/admin" element={<Login />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/qr-dashboard" element={<AdminQrDashboard />} />
               <Route path="/admin2" element={<Admin2Login />} />
               <Route path="/admin2/dashboard" element={<Admin2Dashboard />} />
             </Routes>

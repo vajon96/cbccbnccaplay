@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   Menu, X, Home, Users, 
   Image as ImageIcon, Medal, 
-  UserPlus, MessageCircle, LogIn, FileText
+  UserPlus, MessageCircle, LogIn, FileText, Scan
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,6 +15,7 @@ export function Navbar() {
 
   const navLinks = [
     { name: "Main Website", path: "https://cbccbncc.netlify.app/", icon: Home },
+    { name: "Verify QR", path: "/qr-scan", icon: Scan },
     { name: "Cadets", path: "https://cbccbncc.netlify.app/cadets", icon: Users },
     { name: "Gallery", path: "https://cbccbncc.netlify.app/gallery", icon: ImageIcon },
     { name: "Hall of In-Charges", path: "https://cbccbncc.netlify.app/hall-of-incharges", icon: Medal },

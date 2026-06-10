@@ -288,13 +288,20 @@ export function EnrollmentForm() {
             }`}>
               <s.icon className="w-5 h-5" />
             </div>
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${
+            <span className={`text-[10px] font-bold uppercase tracking-wider hidden md:block ${
               step >= s.id ? "text-primary" : "text-black/30"
             }`}>
               {s.title}
             </span>
           </div>
         ))}
+      </div>
+
+      {/* Mobile Step Indicator */}
+      <div className="md:hidden text-center mb-6">
+        <p className="text-xs font-black uppercase text-primary tracking-widest bg-primary/10 py-2.5 px-4 rounded-xl inline-block">
+          ধাপ {step} / ৫: {steps[step - 1].title}
+        </p>
       </div>
 
       <div className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(15,23,42,0.1)] border border-slate-100 overflow-hidden relative">

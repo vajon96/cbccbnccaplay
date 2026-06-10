@@ -109,3 +109,52 @@ h1, h2, h3, h4, .font-display {
     print-color-adjust: exact !important;
   }
 }
+
+/* Premium styling for html5-qrcode scanner inputs & buttons */
+#reader-admin2 button, #reader button {
+  background-color: var(--color-primary, #e11d48) !important;
+  color: white !important;
+  font-size: 0.75rem !important; /* text-xs */
+  font-weight: 700 !important; /* font-bold */
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 0.625rem 1.25rem !important; /* px-5 py-2.5 */
+  border-radius: 0.75rem !important; /* rounded-xl */
+  border: none !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  cursor: pointer !important;
+  transition: all 150ms ease-in-out !important;
+  display: inline-block !important;
+  margin: 0.25rem !important;
+  min-height: 44px !important;
+}
+
+#reader-admin2 button:hover, #reader button:hover {
+  background-color: var(--color-secondary, #9f1239) !important;
+  transform: translateY(-1px) !important;
+}
+
+#reader-admin2 select, #reader select {
+  background-color: #1e293b !important; /* bg-slate-800 */
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  font-size: 0.75rem !important;
+  padding: 0.625rem 1.25rem !important;
+  border-radius: 0.75rem !important;
+  outline: none !important;
+  cursor: pointer !important;
+  margin: 0.25rem !important;
+  min-height: 44px !important;
+}
+
+#reader-admin2 a, #reader a {
+  color: var(--color-primary, #e11d48) !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  text-decoration: underline !important;
+  margin: 0.25rem !important;
+  display: inline-block !important;
+}
+#reader-admin2 a:hover, #reader a:hover {
+  color: var(--color-secondary, #9f1239) !important;
+}
