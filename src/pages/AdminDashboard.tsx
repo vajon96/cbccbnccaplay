@@ -30,6 +30,7 @@ export function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [bnccFilter, setBnccFilter] = useState<"All" | "Previous" | "NonPrevious">("All");
   const [aiInsights, setAiInsights] = useState("");
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
@@ -466,7 +467,10 @@ export function AdminDashboard() {
                           (app.classRoll || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (app.emisId || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "All" || app.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesBncc = bnccFilter === "All" || 
+                        (bnccFilter === "Previous" && app.previousBNCC === true) ||
+                        (bnccFilter === "NonPrevious" && !app.previousBNCC);
+    return matchesSearch && matchesStatus && matchesBncc;
   });
 
   const runAiInsights = async () => {
@@ -713,6 +717,15 @@ export function AdminDashboard() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <select
+                  value={bnccFilter}
+                  onChange={(e) => setBnccFilter(e.target.value as any)}
+                  className="bg-surface border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
+                >
+                  <option value="All">সকল অভিজ্ঞতা (All Applicants)</option>
+                  <option value="Previous">পূর্বের বিএনসিসি ক্যাডেট (BNCC Cadets)</option>
+                  <option value="NonPrevious">নতুন আবেদনকারী (Non-BNCC)</option>
+                </select>
+                <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="bg-surface border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
@@ -801,7 +814,19 @@ export function AdminDashboard() {
                         </td>
                         <td className="px-8 py-6">
                           <p className="text-sm font-bold text-slate-200">{app.studyStatus}</p>
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Roll: {app.classRoll}</p>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Roll: {app.classRoll}</p>
+                          <div className="flex flex-col gap-1">
+                            {app.previousBNCC && (
+                              <span className="inline-block bg-rose-500/10 text-rose-400 text-[9px] font-bold px-2 py-0.5 rounded border border-rose-500/10 uppercase tracking-wide max-w-max">
+                                BNCC: {app.previousRank === "Other" ? app.previousRankOther : app.previousRank}
+                              </span>
+                            )}
+                            {app.coCurricularActivities && app.coCurricularActivities.length > 0 && (
+                              <span className="inline-block bg-orange-500/10 text-orange-400 text-[9px] font-bold px-2 py-0.5 rounded border border-orange-500/10 tracking-wide max-w-max" title={app.coCurricularActivities.join(", ")}>
+                                Co-Curricular ({app.coCurricularActivities.length})
+                              </span>
+                            )}
+                          </div>
                         </td>
                           <td className="px-8 py-6">
                             <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${

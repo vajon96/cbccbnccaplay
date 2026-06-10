@@ -447,6 +447,13 @@ export function AdmitCard() {
                       </div>
                     ))}
                   </div>
+
+                  {applicant.hscGpa && applicant.hscGpa.trim() !== "" && (
+                    <div className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-md max-w-max">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span className="text-[10px] font-black text-emerald-700 tracking-wider font-montserrat uppercase">✓ HSC PASSED</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Examination Notice */}

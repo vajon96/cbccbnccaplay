@@ -262,12 +262,22 @@ export function Home() {
             className="bg-primary p-8 md:p-12 rounded-[3rem] text-white shadow-2xl space-y-8"
           >
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center">
-                <Users className="w-8 h-8 text-white" />
+              <div className="w-20 h-20 bg-slate-900/50 rounded-2xl overflow-hidden border-2 border-accent/40 flex items-center justify-center shadow-lg shrink-0">
+                <img 
+                  src="https://cbccbncc.netlify.app/POU.png" 
+                  alt="উজ্জ্বল কান্তি দেব" 
+                  className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-300"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    // Fallback to placeholder avatar indicator
+                    e.currentTarget.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
+                  }}
+                />
               </div>
               <div>
-                <h4 className="text-xl font-bold">উজ্জ্বল কান্তি দেব</h4>
-                <p className="text-white/60 text-sm">প্রফেসর আন্ডার অফিসার ও প্লাটুন কমান্ডার</p>
+                <h4 className="text-xl font-bold flex items-center gap-1.5 text-white">উজ্জ্বল কান্তি দেব</h4>
+                <p className="text-accent text-xs font-black uppercase tracking-widest mt-0.5">প্রফেসর আন্ডার অফিসার ও প্লাটুন কমান্ডার</p>
+                <span className="inline-block mt-1 bg-white/10 text-white/90 text-[10px] px-2 py-0.5 rounded-full font-bold">PUO & Platoon Commander</span>
               </div>
             </div>
 

@@ -48,7 +48,16 @@ export function EnrollmentForm() {
     session: "",
     emisId: "",
     collegeName: "Cox's Bazar City College",
-    photo: ""
+    photo: "",
+    previousBNCC: false,
+    previousInstitution: "",
+    previousBattalionRegiment: "",
+    previousRank: "Cadet",
+    previousRankOther: "",
+    serviceDuration: "",
+    registrationNumber: "",
+    coCurricularActivities: [] as string[],
+    otherCoCurricularActivity: ""
   });
 
   const [aiPhotoFeedback, setAiPhotoFeedback] = useState("");
@@ -329,7 +338,7 @@ export function EnrollmentForm() {
                   <input
                     type="text"
                     name={field.name}
-                    value={formData[field.name as keyof typeof formData]}
+                    value={formData[field.name as keyof typeof formData] as string}
                     onChange={handleChange}
                     className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-primary/50 focus:ring-4 focus:ring-primary/5 outline-none transition-all duration-200 placeholder:text-slate-300 shadow-sm"
                     placeholder={field.placeholder}
@@ -367,7 +376,7 @@ export function EnrollmentForm() {
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">{field.label}</label>
                   <select
                     name={field.name}
-                    value={formData[field.name as keyof typeof formData]}
+                    value={formData[field.name as keyof typeof formData] as string}
                     onChange={handleChange}
                     className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-primary/50 focus:ring-4 focus:ring-primary/5 outline-none transition-all duration-200 cursor-pointer shadow-sm"
                   >
@@ -394,7 +403,7 @@ export function EnrollmentForm() {
                   <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">{field.label}</label>
                   <textarea
                     name={field.name}
-                    value={formData[field.name as keyof typeof formData]}
+                    value={formData[field.name as keyof typeof formData] as string}
                     onChange={handleChange}
                     rows={2}
                     className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-primary/50 focus:ring-4 focus:ring-primary/5 outline-none transition-all duration-200 resize-none shadow-sm"
@@ -434,7 +443,7 @@ export function EnrollmentForm() {
                     <input
                       type="number"
                       name={field.name}
-                      value={formData[field.name as keyof typeof formData]}
+                      value={formData[field.name as keyof typeof formData] as any}
                       onChange={handleChange}
                       className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-primary/50 focus:ring-4 focus:ring-primary/5 outline-none transition-all duration-200 shadow-sm"
                     />
@@ -507,7 +516,7 @@ export function EnrollmentForm() {
                       {field.type === "select" ? (
                         <select
                           name={field.name}
-                          value={formData[field.name as keyof typeof formData]}
+                          value={formData[field.name as keyof typeof formData] as string}
                           onChange={handleChange}
                           className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 font-bold focus:border-primary/50 outline-none transition-all shadow-sm"
                         >
@@ -517,7 +526,7 @@ export function EnrollmentForm() {
                         <input
                           type="text"
                           name={field.name}
-                          value={formData[field.name as keyof typeof formData]}
+                          value={formData[field.name as keyof typeof formData] as string}
                           onChange={handleChange}
                           placeholder={field.placeholder}
                           className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 font-bold focus:border-primary/50 outline-none transition-all placeholder:text-slate-300 shadow-sm"
@@ -558,7 +567,7 @@ export function EnrollmentForm() {
                       {field.type === "select" ? (
                         <select
                           name={field.name}
-                          value={formData[field.name as keyof typeof formData]}
+                          value={formData[field.name as keyof typeof formData] as string}
                           onChange={handleChange}
                           className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 font-bold focus:border-accent/50 outline-none transition-all shadow-sm"
                         >
@@ -568,7 +577,7 @@ export function EnrollmentForm() {
                         <input
                           type="text"
                           name={field.name}
-                          value={formData[field.name as keyof typeof formData]}
+                          value={formData[field.name as keyof typeof formData] as string}
                           onChange={handleChange}
                           className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 font-bold focus:border-accent/50 outline-none transition-all shadow-sm"
                         />
@@ -653,6 +662,195 @@ export function EnrollmentForm() {
                       value={formData.emisId} 
                       onChange={handleChange} 
                       className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-primary/50 outline-none transition-all shadow-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Previous BNCC Experience Section */}
+              <div className="group space-y-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-200/60 shadow-sm transition-all duration-300 hover:shadow-md hover:bg-slate-50">
+                <div className="flex items-center gap-4 border-b border-slate-200 pb-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-lg shadow-rose-600/20">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-black font-extrabold text-lg tracking-tight">পূর্ববর্তী বিএনসিসি অভিজ্ঞতা (Previous BNCC Experience)</h3>
+                    <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest leading-none mt-1">Previous BNCC History</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-700">আপনি কি পূর্বে বিএনসিসি ক্যাডেট ছিলেন? (Have you previously been a BNCC Cadet?)</label>
+                    <div className="flex gap-4">
+                      {[
+                        { label: "হ্যাঁ (Yes)", value: true },
+                        { label: "না (No)", value: false }
+                      ].map((opt) => (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, previousBNCC: opt.value })}
+                          className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-200 border-2 ${
+                            formData.previousBNCC === opt.value
+                              ? "bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/10"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {formData.previousBNCC && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-200/60"
+                    >
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">পূর্ববর্তী শিক্ষাপ্রতিষ্ঠানের নাম (Institution Name)</label>
+                        <input
+                          type="text"
+                          name="previousInstitution"
+                          value={formData.previousInstitution}
+                          onChange={handleChange}
+                          placeholder="স্কুল/কলেজের নাম"
+                          className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-rose-500 outline-none transition-all shadow-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">ব্যাটালিয়ন / রেজিমেন্ট (Battalion/Regiment - Optional)</label>
+                        <input
+                          type="text"
+                          name="previousBattalionRegiment"
+                          value={formData.previousBattalionRegiment}
+                          onChange={handleChange}
+                          placeholder="যেমন- কর্ণফুলী রেজিমেন্ট"
+                          className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-rose-500 outline-none transition-all shadow-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">পূর্ববর্তী পদবি (Previous Rank/Position)</label>
+                        <select
+                          name="previousRank"
+                          value={formData.previousRank}
+                          onChange={handleChange}
+                          className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-rose-500 outline-none transition-all shadow-sm"
+                        >
+                          {["Cadet", "Lance Corporal", "Corporal", "Sergeant", "Under Officer", "Cadet Captain", "Other"].map((rank) => (
+                            <option key={rank} value={rank}>{rank}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {formData.previousRank === "Other" && (
+                        <div className="space-y-2">
+                          <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">অন্যান্য পদবি লিখুন (Specify Rank)</label>
+                          <input
+                            type="text"
+                            name="previousRankOther"
+                            value={formData.previousRankOther}
+                            onChange={handleChange}
+                            placeholder="Specify Other Rank"
+                            className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-rose-500 outline-none transition-all shadow-sm"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">বিএনসিসি সেবাকাল (Service Duration)</label>
+                        <input
+                          type="text"
+                          name="serviceDuration"
+                          value={formData.serviceDuration}
+                          onChange={handleChange}
+                          placeholder="যেমন- ১ বছর / ২ বছর"
+                          className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-rose-500 outline-none transition-all shadow-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">বিএনসিসি রেজিস্ট্রেশন নম্বর (Registration No. - Optional)</label>
+                        <input
+                          type="text"
+                          name="registrationNumber"
+                          value={formData.registrationNumber}
+                          onChange={handleChange}
+                          placeholder="যদি থাকে"
+                          className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-rose-500 outline-none transition-all shadow-sm"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+
+              {/* Co-Curricular Activities Section */}
+              <div className="group space-y-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-200/60 shadow-sm transition-all duration-300 hover:shadow-md hover:bg-slate-50">
+                <div className="flex items-center gap-4 border-b border-slate-200 pb-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-black font-extrabold text-lg tracking-tight">সহ-শিক্ষা কার্যক্রম (Co-Curricular Activities)</h3>
+                    <p className="text-[10px] text-orange-500 font-bold uppercase tracking-widest leading-none mt-1">Select and check all that apply to you</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-80 overflow-y-auto p-2 border border-slate-100 rounded-xl bg-white/70">
+                    {[
+                      "Debate", "Public Speaking", "Scouting", "Rover Scouting", "Red Crescent",
+                      "Cultural Activities", "Singing", "Music", "Dance", "Acting", "Photography",
+                      "Videography", "Graphic Design", "Sports", "Football", "Cricket", "Volleyball",
+                      "Basketball", "Badminton", "Athletics", "Martial Arts", "Karate", "Taekwondo",
+                      "Swimming", "Hiking", "Mountaineering", "Social Work", "Volunteering",
+                      "Community Service", "Blood Donation Activities", "Disaster Management",
+                      "First Aid Training", "Leadership Programs", "Event Management", "Anchoring",
+                      "Content Creation", "Journalism", "Computer Skills", "Programming", "Robotics",
+                      "Science Club", "Language Club", "Environmental Activities", "Youth Development Programs"
+                    ].map((activity) => {
+                      const isSelected = formData.coCurricularActivities.includes(activity);
+                      return (
+                        <label
+                          key={activity}
+                          className={`flex items-center gap-2 p-2.5 rounded-xl border-2 text-xs font-bold transition-all duration-200 cursor-pointer select-none ${
+                            isSelected
+                              ? "bg-orange-50 border-orange-500 text-orange-700 font-extrabold"
+                              : "bg-white border-slate-100 text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            className="accent-orange-500 rounded h-4 w-4 shrink-0"
+                            onChange={() => {
+                              const updated = isSelected
+                                ? formData.coCurricularActivities.filter(a => a !== activity)
+                                : [...formData.coCurricularActivities, activity];
+                              setFormData({ ...formData, coCurricularActivities: updated });
+                            }}
+                          />
+                          <span className="truncate">{activity}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">অন্যান্য কার্যক্রম (Other Activity)</label>
+                    <input
+                      type="text"
+                      name="otherCoCurricularActivity"
+                      value={formData.otherCoCurricularActivity}
+                      onChange={handleChange}
+                      placeholder="যেমন- বিতর্ক প্রতিযোগিতা বা কোনো নির্দিষ্ট দক্ষতা"
+                      className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-900 font-bold focus:border-orange-500 outline-none transition-all shadow-sm"
                     />
                   </div>
                 </div>
@@ -791,13 +989,20 @@ export function EnrollmentForm() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-slate-100 pb-2">
                     <BookOpen className="w-4 h-4 text-primary" />
-                    <h3 className="text-slate-800 font-extrabold uppercase tracking-tight text-xs">একাডেমিক তথ্য</h3>
+                    <h3 className="text-slate-800 font-extrabold uppercase tracking-tight text-xs">একাডেমিক ও অন্যান্য তথ্য</h3>
                   </div>
                   <div className="space-y-3 text-sm">
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">শ্রেণি</span> <span className="text-slate-800 font-bold">{formData.studyStatus}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">রোল</span> <span className="text-slate-800 font-bold">{formData.classRoll}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">সেশন</span> <span className="text-slate-800 font-bold">{formData.session}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">কলেজ</span> <span className="text-slate-800 font-bold">{formData.collegeName}</span></p>
+                    <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">পূর্ববর্তী বিএনসিসি অভিজ্ঞতা</span> <span className="text-slate-800 font-bold">{formData.previousBNCC ? `হ্যাঁ (${formData.previousInstitution} - ${formData.previousRank})` : "না"}</span></p>
+                    {formData.coCurricularActivities.length > 0 && (
+                      <p className="flex flex-col">
+                        <span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">সহ-শিক্ষা কার্যক্রম (Co-Curricular)</span>
+                        <span className="text-slate-800 font-bold text-xs">{formData.coCurricularActivities.join(", ")}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

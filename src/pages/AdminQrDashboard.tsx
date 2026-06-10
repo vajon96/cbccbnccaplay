@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Scan, LogOut, Shield, QrCode, Camera, CheckCircle, XCircle, 
-  User, Clock, Loader2, Award, Calendar, AlertCircle, Edit, Save, Plus, HelpCircle
+  User, Clock, Loader2, Award, Calendar, AlertCircle, Edit, Save, Plus, HelpCircle,
+  Zap, ZapOff, Volume2, VolumeX, RotateCw, Check, Sliders
 } from "lucide-react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   db, doc, updateDoc, getDoc, getDocs, setDoc, query, where, collection, Timestamp,
@@ -34,6 +35,20 @@ export function AdminQrDashboard() {
   // Cadet verification extra fields state
   const [cadetHistory, setCadetHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Advanced Camera experience states
+  const qrCodeRef = useRef<Html5Qrcode | null>(null);
+  const [cameras, setCameras] = useState<any[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>("");
+  const [flashlightActive, setFlashlightActive] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(5);
+  const [supportTorch, setSupportTorch] = useState(false);
+  const [supportZoom, setSupportZoom] = useState(false);
+  const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
+  const [cameraStatus, setCameraStatus] = useState<"initializing" | "ready" | "scanning" | "error">("initializing");
+  const [scanSuccessTrigger, setScanSuccessTrigger] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(true);
   
   const navigate = useNavigate();
   const todayStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
@@ -110,34 +125,149 @@ export function AdminQrDashboard() {
     };
   }, [loading, adminSession, todayStr]);
 
-  // Initializing the camera scanner with safe DOM checking
+  const playSuccessSound = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.25);
+    } catch (err) {
+      console.warn("Sound synthesis error:", err);
+    }
+  };
+
+  const handleToggleFlashlight = async () => {
+    if (!qrCodeRef.current || !qrCodeRef.current.isScanning) return;
+    try {
+      const capabilities = qrCodeRef.current.getRunningTrackCapabilities() as any;
+      if (capabilities && "torch" in capabilities) {
+        const nextState = !flashlightActive;
+        await qrCodeRef.current.applyVideoConstraints({
+          advanced: [{ torch: nextState } as any]
+        });
+        setFlashlightActive(nextState);
+      }
+    } catch (err) {
+      console.warn("Torch constraint application failed:", err);
+    }
+  };
+
+  const handleZoomChange = async (val: number) => {
+    if (!qrCodeRef.current || !qrCodeRef.current.isScanning) return;
+    try {
+      const capabilities = qrCodeRef.current.getRunningTrackCapabilities() as any;
+      if (capabilities && "zoom" in capabilities) {
+        const min = capabilities.zoom.min || 1;
+        const max = capabilities.zoom.max || 5;
+        const nextZoom = Math.max(min, Math.min(val, max));
+        await qrCodeRef.current.applyVideoConstraints({
+          advanced: [{ zoom: nextZoom } as any]
+        });
+        setZoomLevel(nextZoom);
+      }
+    } catch (err) {
+      console.warn("Zoom constraint application failed:", err);
+    }
+  };
+
+  const toggleFrontBackCamera = async () => {
+    if (cameras.length < 2) return;
+    
+    const currentCamera = cameras.find(c => c.id === selectedCameraId);
+    if (!currentCamera) return;
+
+    const lbl = currentCamera.label.toLowerCase();
+    const isCurrentBack = lbl.includes("back") || lbl.includes("rear") || 
+                          lbl.includes("environment") || lbl.includes("wide") || 
+                          lbl.includes("outward");
+
+    let nextCamera = null;
+    if (isCurrentBack) {
+      nextCamera = cameras.find(c => {
+        const l = c.label.toLowerCase();
+        return l.includes("front") || l.includes("user") || l.includes("forward");
+      });
+    } else {
+      nextCamera = cameras.find(c => {
+        const l = c.label.toLowerCase();
+        return l.includes("back") || l.includes("rear") || l.includes("environment") || l.includes("wide");
+      });
+    }
+
+    if (!nextCamera) {
+      nextCamera = cameras.find(c => c.id !== selectedCameraId);
+    }
+
+    if (nextCamera) {
+      setSelectedCameraId(nextCamera.id);
+      setFlashlightActive(false);
+      setZoomLevel(1);
+    }
+  };
+
+  const getCameraQualityLabel = () => {
+    if (!qrCodeRef.current || !qrCodeRef.current.isScanning) return "AUTO FOCUS";
+    try {
+      const settings = qrCodeRef.current.getRunningTrackSettings();
+      const w = settings.width || 0;
+      const h = settings.height || 0;
+      if (w >= 1920 || h >= 1080) return "1080p Full HD";
+      if (w >= 1280 || h >= 720) return "720p HD";
+      return "SD Quality";
+    } catch (err) {
+      return "Auto High-Speed";
+    }
+  };
+
+  // Initializing the camera scanner with Html5Qrcode Custom Experience
   useEffect(() => {
     if (loading || !scannerActive || scannedCadet) return;
 
+    let html5QrCode: Html5Qrcode | null = null;
     let isActive = true;
-    let scanner: Html5QrcodeScanner | null = null;
 
-    const initScanner = () => {
+    const startScanner = async (cameraId: string) => {
       if (!isActive) return;
-      const targetElement = document.getElementById("reader-admin-dashboard");
-      if (!targetElement) {
-        // Retry shortly if the element isn't in the DOM yet
-        setTimeout(initScanner, 50);
+
+      const target = document.getElementById("reader-admin-dashboard");
+      if (!target) {
+        setTimeout(() => startScanner(cameraId), 100);
         return;
       }
 
       try {
-        scanner = new Html5QrcodeScanner(
-          "reader-admin-dashboard",
-          { fps: 15, qrbox: { width: 250, height: 250 } },
-          /* verbose= */ false
-        );
+        setCameraStatus("initializing");
+        
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader-admin-dashboard");
+          qrCodeRef.current = html5QrCode;
+        }
 
         const onScanSuccess = async (decodedText: string) => {
           if (!isActive) return;
+          
+          setScanSuccessTrigger(true);
+          setTimeout(() => setScanSuccessTrigger(false), 800);
+          
+          if (window.navigator && window.navigator.vibrate) {
+            window.navigator.vibrate(150);
+          }
+
+          if (audioEnabled) {
+            playSuccessSound();
+          }
+
           let cadetId = "";
           try {
-            // Handle JSON or raw text
             const data = JSON.parse(decodedText);
             cadetId = data.id || data.roll || decodedText;
           } catch (e) {
@@ -147,7 +277,6 @@ export function AdminQrDashboard() {
           if (!cadetId) return;
 
           try {
-            // Fetch cadet details from applicants
             const docRef = doc(db, "applicants", cadetId);
             const docSnap = await getDoc(docRef);
 
@@ -155,16 +284,11 @@ export function AdminQrDashboard() {
               const cadetData = docSnap.data();
               setScannedCadet({ id: cadetId, ...cadetData });
               
-              // Pre-populate physical fields
               setHeight(cadetData.height || "");
               setWeight(cadetData.weight || "");
               
               setSuccess("ক্যাডেট তথ্য সফলভাবে পাওয়া গেছে!");
               setTimeout(() => setSuccess(null), 3000);
-              
-              // Audio alert
-              const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-600.wav");
-              audio.play().catch(() => {});
             } else {
               setError(`ক্যাডেট আইডি ${cadetId} পাওয়া যায়নি!`);
               setTimeout(() => setError(null), 4000);
@@ -174,27 +298,108 @@ export function AdminQrDashboard() {
           }
         };
 
-        scanner.render(onScanSuccess, () => {});
-      } catch (err) {
-        console.error("Scanner initialization failed in AdminQrDashboard:", err);
+        const config = {
+          fps: 24, // Boost frame rate for faster detection
+          qrbox: (w: number, h: number) => {
+            const size = Math.min(w, h) * 0.72;
+            return { width: size, height: size };
+          },
+          aspectRatio: 1.333333
+        };
+
+        await html5QrCode.start(
+          cameraId,
+          config,
+          onScanSuccess,
+          () => {} // Silent failures
+        );
+
+        setCameraStatus("scanning");
+        setCameraPermissionError(null);
+
+        // Fetch torch / zoom metadata
+        try {
+          const capabilities = html5QrCode.getRunningTrackCapabilities() as any;
+          setSupportTorch(capabilities && "torch" in capabilities);
+          setSupportZoom(capabilities && "zoom" in capabilities);
+          if (capabilities && capabilities.zoom) {
+            setMaxZoom(capabilities.zoom.max || 5);
+          }
+        } catch (capError) {
+          console.warn("Could not query device camera capabilities:", capError);
+        }
+
+      } catch (err: any) {
+        console.error("Camera startup failed:", err);
+        setCameraStatus("error");
+        setCameraPermissionError("ক্যামেরা অন করতে ব্যর্থ হয়েছে। অনুগ্রহ করে সেটিংস থেকে ক্যামেরা পারমিশন চেক করুন।");
       }
     };
 
-    // Slight initial deferral to ensure elements are mounted in the browser render tree
-    const timer = setTimeout(initScanner, 100);
+    const initializeDevices = async () => {
+      try {
+        setCameraStatus("initializing");
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          setCameras(devices);
+          setCameraPermissionError(null);
+
+          const rearCameras = devices.filter((device) => {
+            const lbl = device.label.toLowerCase();
+            return (
+              lbl.includes("back") ||
+              lbl.includes("rear") ||
+              lbl.includes("environment") ||
+              lbl.includes("main") ||
+              lbl.includes("wide") ||
+              lbl.includes("outward") ||
+              lbl.includes("0")
+            );
+          });
+
+          // Priority order: Wide, Back, Rear, Index 0, All Devices fallback
+          let defaultCamera = rearCameras.find((device) => device.label.toLowerCase().includes("wide")) ||
+                             rearCameras.find((device) => device.label.toLowerCase().includes("back")) ||
+                             rearCameras[0] ||
+                             devices[0];
+
+          if (selectedCameraId) {
+            const hasPrev = devices.some(d => d.id === selectedCameraId);
+            if (hasPrev) {
+              startScanner(selectedCameraId);
+              return;
+            }
+          }
+
+          setSelectedCameraId(defaultCamera.id);
+          startScanner(defaultCamera.id);
+        } else {
+          setCameraStatus("error");
+          setCameraPermissionError("ডিভাইসে কোনো লাইভ ক্যামেরা সেন্সর পাওয়া যায়নি!");
+        }
+      } catch (err: any) {
+        console.error("Cataloging system cameras failed:", err);
+        setCameraStatus("error");
+        setCameraPermissionError("ক্যামেরা ব্যবহারে অনুমতি দেওয়া হয়নি (Permission Denied)। অনুগ্রহ করে সেটিংসে পারমিশন দিন।");
+      }
+    };
+
+    const timer = setTimeout(initializeDevices, 100);
 
     return () => {
       isActive = false;
       clearTimeout(timer);
-      if (scanner) {
+      if (html5QrCode) {
         try {
-          scanner.clear().catch(error => console.error("Scanner clear on AdminQrDashboard error", error));
+          if (html5QrCode.isScanning) {
+            html5QrCode.stop().catch(err => console.error("Scanner stop error on exit:", err));
+          }
         } catch (e) {
-          console.error("Error during scanner cleanup:", e);
+          console.error("Cleanup error in scanner effect:", e);
         }
       }
     };
-  }, [loading, scannerActive, scannedCadet]);
+  }, [loading, scannerActive, scannedCadet, selectedCameraId]);
 
   const handleLogout = () => {
     clearSession();
@@ -402,24 +607,116 @@ export function AdminQrDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
           {/* Scanner view */}
-          <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-white/5 space-y-6 flex flex-col justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-rose-500/20 rounded-2xl flex items-center justify-center border border-rose-500/30">
-                <Camera className="w-5 h-5 text-rose-500 animate-pulse" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black uppercase tracking-tight text-white">লাইভ এটেনডেন্স স্ক্যানার</h2>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Auto Detects Cadet QR Admit Cards</p>
+          <div className="bg-slate-900 p-6 md:p-8 rounded-[2.5rem] border border-white/5 space-y-6 flex flex-col justify-between">
+            <style>{`
+              @keyframes scanLineAnimation {
+                0% { top: 10%; opacity: 0.4; }
+                50% { top: 90%; opacity: 1; }
+                100% { top: 10%; opacity: 0.4; }
+              }
+            `}</style>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-rose-500/20 rounded-2xl flex items-center justify-center border border-rose-500/30">
+                  <Camera className="w-5 h-5 text-rose-500 animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                    লাইভ স্ক্যানার
+                    <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 tracking-widest font-black uppercase inline-block animate-pulse">
+                      ● active
+                    </span>
+                  </h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Advanced Lens Controls & AF Optimization</p>
+                </div>
               </div>
             </div>
             
             <div className="relative">
               {!scannedCadet ? (
-                <div className="overflow-hidden rounded-3xl border-4 border-rose-500 bg-black shadow-2xl relative">
-                  <div id="reader-admin-dashboard" className="w-full" />
+                <div className="relative overflow-hidden rounded-3xl border-4 border-rose-500 bg-black shadow-2xl aspect-[4/3] w-full max-w-md mx-auto flex items-center justify-center">
+                  
+                  {/* The active video feed target */}
+                  <div id="reader-admin-dashboard" className="absolute inset-0 w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full" />
+                  
+                  {/* Scan Line Animation */}
+                  {cameraStatus === "scanning" && (
+                    <div 
+                      className="absolute left-[10%] right-[10%] h-[3px] bg-rose-500 shadow-[0_0_12px_#f43f5e] pointer-events-none z-10"
+                      style={{ animation: "scanLineAnimation 3.5s infinite ease-in-out" }}
+                    />
+                  )}
+
+                  {/* Corner Guides for Professional Look */}
+                  <div className="absolute inset-10 pointer-events-none z-10 select-none">
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-rose-500 rounded-tl-xl transition-all" />
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-rose-500 rounded-tr-xl transition-all" />
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-rose-500 rounded-bl-xl transition-all" />
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-rose-500 rounded-br-xl transition-all" />
+                  </div>
+
+                  {/* Camera Status Overlay screens */}
+                  {cameraStatus === "initializing" && (
+                    <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center space-y-3 z-20">
+                      <Loader2 className="w-8 h-8 text-rose-500 animate-spin" />
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">ক্যামেরা চালু হচ্ছে (Camera Booting)...</p>
+                    </div>
+                  )}
+
+                  {cameraPermissionError && (
+                    <div className="absolute inset-0 bg-slate-950/95 p-6 flex flex-col items-center justify-center text-center space-y-4 z-20">
+                      <XCircle className="w-12 h-12 text-rose-500" />
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-black text-white uppercase tracking-tight">ক্যামেরা অ্যাক্সেস ব্যর্থ</h4>
+                        <p className="text-xs text-slate-400 leading-relaxed font-bold">{cameraPermissionError}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => window.location.reload()}
+                          className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-black text-[10px] rounded-xl uppercase tracking-wider transition-all"
+                        >
+                          Retry Setup
+                        </button>
+                        <button 
+                          onClick={() => alert("সেটিংসে গিয়ে ব্রাউজারটির ক্যামেরা পারমিশন 'Allow' করুন।")}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-[10px] rounded-xl uppercase tracking-wider transition-all"
+                        >
+                          How to Allow
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {cameraStatus === "scanning" && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-950/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 text-[10px] font-black text-rose-400 uppercase tracking-widest text-center whitespace-nowrap z-15 shadow-2xl flex items-center gap-1.5 animate-pulse">
+                      <Check className="w-3.5 h-3.5 text-rose-500 animate-bounce" />
+                      QR Code Ready for Scanning
+                    </div>
+                  )}
+
+                  {/* Success Detection Instant Overlay flash */}
+                  <AnimatePresence>
+                    {scanSuccessTrigger && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-emerald-500/25 flex items-center justify-center border-4 border-emerald-500 z-30"
+                      >
+                        <motion.div 
+                          initial={{ scale: 0.5, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className="bg-emerald-500 text-white rounded-full p-4 shadow-2xl shadow-emerald-500/30"
+                        >
+                          <Check className="w-12 h-12 stroke-[3]" />
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               ) : (
-                <div className="h-64 rounded-3xl border-2 border-slate-800 bg-slate-950 flex flex-col items-center justify-center space-y-4">
+                <div className="aspect-[4/3] w-full max-w-md mx-auto rounded-3xl border-2 border-slate-800 bg-slate-950 flex flex-col items-center justify-center space-y-4">
                   <QrCode className="w-16 h-16 text-slate-600 animate-pulse" />
                   <p className="text-xs text-slate-500 font-bold">স্ক্যান্ড ক্যাডেট বর্তমানে প্রসেস করা হচ্ছে</p>
                   <button 
@@ -434,10 +731,149 @@ export function AdminQrDashboard() {
                 </div>
               )}
             </div>
-            
-            <div className="flex items-center justify-center gap-2.5 text-rose-400 font-bold bg-rose-500/5 border border-rose-500/15 py-3.5 rounded-2xl">
-              <Scan className="w-4 h-4 animate-spin" />
-              <p className="text-xs uppercase tracking-wider">ক্যামেরা অথবা বারকোড রিডারে ধরুন</p>
+
+            {/* Camera Controls Panel */}
+            <div className="space-y-4 pt-2">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Switch camera list select */}
+                <div className="flex-1 min-w-[150px] relative">
+                  <select
+                    value={selectedCameraId}
+                    onChange={(e) => {
+                      setSelectedCameraId(e.target.value);
+                      setFlashlightActive(false);
+                      setZoomLevel(1);
+                    }}
+                    className="w-full bg-white/5 border border-white/5 text-white rounded-2xl p-4 text-xs font-black uppercase tracking-widest outline-none cursor-pointer focus:border-rose-500 shadow-inner appearance-none pr-8"
+                  >
+                    {cameras.length === 0 ? (
+                      <option className="bg-slate-900 text-slate-400">Loading Lenses...</option>
+                    ) : (
+                      cameras.map((c, idx) => (
+                        <option key={c.id} value={c.id} className="bg-slate-900 text-white font-bold py-2">
+                          {c.label || `Camera Lens ${idx + 1}`}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                    ▼
+                  </div>
+                  <div className="absolute left-3 -top-2 bg-slate-900 px-2 text-[8px] font-black text-rose-400 uppercase tracking-widest">
+                    ACTIVE LENS
+                  </div>
+                </div>
+
+                {/* Torch Switch */}
+                <button
+                  type="button"
+                  onClick={handleToggleFlashlight}
+                  disabled={!supportTorch}
+                  className={`flex flex-col items-center gap-1.5 p-3.5 rounded-2xl transition-all border shrink-0 cursor-pointer ${
+                    flashlightActive 
+                      ? "bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-lg shadow-amber-500/5"
+                      : "bg-white/5 border-white/5 text-slate-400 hover:text-white"
+                  } disabled:opacity-20 disabled:pointer-events-none`}
+                  title={supportTorch ? "Toggle Flashlight" : "Flashlight Not Supported"}
+                >
+                  {flashlightActive ? <Zap className="w-4 h-4 fill-amber-400 text-amber-400" /> : <ZapOff className="w-4 h-4" />}
+                  <span className="text-[9px] font-black uppercase tracking-wider">Torch</span>
+                </button>
+
+                {/* Instant Flip Camera Toggle */}
+                <button
+                  type="button"
+                  onClick={toggleFrontBackCamera}
+                  disabled={cameras.length < 2}
+                  className="flex flex-col items-center gap-1.5 p-3.5 rounded-2xl bg-white/5 border border-white/5 text-slate-400 hover:text-white disabled:opacity-20 shrink-0 cursor-pointer active:scale-95 transition-all"
+                  title="instant layout switch"
+                >
+                  <RotateCw className="w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-wider">Flip</span>
+                </button>
+
+                {/* Sound Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setAudioEnabled(!audioEnabled)}
+                  className={`flex flex-col items-center gap-1.5 p-3.5 rounded-2xl transition-all border shrink-0 cursor-pointer ${
+                    audioEnabled 
+                      ? "bg-rose-500/10 border-rose-500/40 text-rose-400 shadow-lg"
+                      : "bg-white/5 border-white/5 text-slate-400 hover:text-white"
+                  }`}
+                  title="Toggle Success Audio Sound Beep"
+                >
+                  {audioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                  <span className="text-[9px] font-black uppercase tracking-wider">Audio</span>
+                </button>
+              </div>
+
+              {/* Zoom Controls segment with continuous sliders and preset shortcuts */}
+              <div className="bg-white/5 border border-white/5 p-4 rounded-3xl space-y-2.5">
+                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Zoom Multiplier</span>
+                  </div>
+                  <span className="font-mono text-rose-400 font-bold bg-rose-500/5 px-2 py-0.5 rounded border border-rose-500/10">
+                    {zoomLevel.toFixed(1)}x
+                  </span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(zoomLevel - 0.5)}
+                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 text-white font-black text-xs cursor-pointer flex items-center justify-center transition-all active:scale-90"
+                    title="Zoom Out"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min="1"
+                    max={maxZoom}
+                    step="0.1"
+                    value={zoomLevel}
+                    onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+                    className="flex-1 accent-rose-500 cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(zoomLevel + 0.5)}
+                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 text-white font-black text-xs cursor-pointer flex items-center justify-center transition-all active:scale-90"
+                    title="Zoom In"
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 1.5, 2, 3].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => handleZoomChange(v)}
+                      className={`px-3 py-1 font-mono text-[9px] font-bold rounded-lg transition-all ${
+                        Math.abs(zoomLevel - v) < 0.1
+                          ? "bg-rose-500 text-white font-black shadow-lg shadow-rose-500/15"
+                          : "bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10"
+                      } cursor-pointer`}
+                    >
+                      {v}.0x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status information footer tags */}
+              <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-slate-500 bg-slate-950/40 p-3 rounded-2xl border border-white/5">
+                <p className="flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+                  <span>Continuous Auto Focus (AF)</span>
+                </p>
+                <p className="font-mono bg-white/5 px-2 py-0.5 rounded text-rose-400 font-black">
+                  {getCameraQualityLabel()}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -633,6 +1069,21 @@ export function AdminQrDashboard() {
                         <p className="text-[9px] uppercase tracking-wider text-slate-500">ধর্ম ও লিঙ্গ</p>
                         <p className="text-white text-xs">{scannedCadet.religion || "N/A"} | {scannedCadet.gender || "N/A"}</p>
                       </div>
+                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5 md:col-span-2">
+                        <p className="text-[9px] uppercase tracking-wider text-rose-400 font-bold">পূর্ববর্তী বিএনসিসি অভিজ্ঞতা</p>
+                        <p className="text-white text-xs">
+                          {scannedCadet.previousBNCC ? `হ্যাঁ (পদবি: ${scannedCadet.previousRank === "Other" ? scannedCadet.previousRankOther : scannedCadet.previousRank}, প্রতিষ্ঠান: ${scannedCadet.previousInstitution}, সেবাকাল: ${scannedCadet.serviceDuration})` : "নেই (No)"}
+                        </p>
+                      </div>
+                      {scannedCadet.coCurricularActivities && scannedCadet.coCurricularActivities.length > 0 && (
+                        <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5 md:col-span-2">
+                          <p className="text-[9px] uppercase tracking-wider text-orange-400 font-bold">সহ-শিক্ষা কার্যক্রম (Co-Curricular)</p>
+                          <p className="text-white text-xs leading-normal">
+                            {scannedCadet.coCurricularActivities.join(", ")}
+                            {scannedCadet.otherCoCurricularActivity ? ` (${scannedCadet.otherCoCurricularActivity})` : ""}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
