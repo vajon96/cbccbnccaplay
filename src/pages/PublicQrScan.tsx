@@ -3,7 +3,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { 
   Scan, Camera, ShieldCheck, ShieldAlert, User, 
   Award, RefreshCw, Loader2, ArrowLeft,
-  Zap, ZapOff, Volume2, VolumeX, RotateCw, Check, Sliders
+  Zap, ZapOff, Volume2, VolumeX, RotateCw, Check, Sliders, Search
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -206,6 +206,8 @@ export function PublicQrScan() {
                 studyStatus: rawData.studyStatus,
                 photo: rawData.photo,
                 status: rawData.status,
+                collegeName: rawData.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)",
+                platoonName: "কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন (Cox's Bazar City College BNCC Platoon)",
                 isValidCadet: approvedStatus
               };
 
@@ -231,8 +233,12 @@ export function PublicQrScan() {
           aspectRatio: 1.333333
         };
 
+        const cameraSelector = (cameraId === "environment" || cameraId === "user")
+          ? { facingMode: cameraId }
+          : cameraId;
+
         await html5QrCode.start(
-          cameraId,
+          cameraSelector as any,
           config,
           onScanSuccess,
           () => {} // Silent failures
@@ -297,13 +303,24 @@ export function PublicQrScan() {
           setSelectedCameraId(defaultCamera.id);
           startScanner(defaultCamera.id);
         } else {
-          setCameraStatus("error");
-          setCameraPermissionError("ডিভাইসে কোনো লাইভ ক্যামেরা সেন্সর পাওয়া যায়নি!");
+          console.warn("No camera devices enumerated, falling back to direct environment stream");
+          const fallbackDevices = [
+            { id: "environment", label: "Rear Camera (Auto Fallback)" },
+            { id: "user", label: "Front Camera (Auto Fallback)" }
+          ];
+          setCameras(fallbackDevices);
+          setSelectedCameraId("environment");
+          startScanner("environment");
         }
       } catch (err: any) {
-        console.error("Camera catalog failed:", err);
-        setCameraStatus("error");
-        setCameraPermissionError("ক্যামেরা পারমিশন ডিনাইড (Denied)। অনুগ্রহ করে অনুমতি প্রদান করুন।");
+        console.warn("Camera catalog failed, falling back to direct environment stream:", err);
+        const fallbackDevices = [
+          { id: "environment", label: "Rear Camera (Auto Fallback)" },
+          { id: "user", label: "Front Camera (Auto Fallback)" }
+        ];
+        setCameras(fallbackDevices);
+        setSelectedCameraId("environment");
+        startScanner("environment");
       }
     };
 
@@ -547,6 +564,68 @@ export function PublicQrScan() {
                       </div>
                     </div>
                   )}
+
+                  {/* Manual Input Fallback Verification Search */}
+                  <div className="bg-slate-900 border border-white/5 p-5 rounded-3xl space-y-3">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider font-bengali block">
+                      অথবা ক্যাডেট আইডি দিয়ে ম্যানুয়ালি ভেরিফাই করুন (Manual Fallback)
+                    </span>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const targetField = e.currentTarget.elements.namedItem("manualCadetId") as HTMLInputElement;
+                      const inputId = targetField?.value?.trim() || "";
+                      if (!inputId) return;
+                      setLoading(true);
+                      setError(null);
+                      try {
+                        const docRef = doc(db, "applicants", inputId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                          const rawData = docSnap.data();
+                          const approvedStatus = rawData.status === "Approved" || rawData.status === "Joined";
+                          const publicProfile = {
+                            id: inputId,
+                            fullNameEnglish: rawData.fullNameEnglish,
+                            fullNameBangla: rawData.fullNameBangla,
+                            academicYear: rawData.academicYear,
+                            studyStatus: rawData.studyStatus,
+                            photo: rawData.photo,
+                            status: rawData.status,
+                            collegeName: rawData.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)",
+                            platoonName: "কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন (Cox's Bazar City College BNCC Platoon)",
+                            isValidCadet: approvedStatus
+                          };
+                          setCadetData(publicProfile);
+                          targetField.value = "";
+                        } else {
+                          setError("ক্যাডেট তথ্য পাওয়া যায়নি! সঠিক কিউআর বা আইডি ভেরিফাই করুন।");
+                          setTimeout(() => setError(null), 4000);
+                        }
+                      } catch (err) {
+                        console.error("Public manual lookup error:", err);
+                        setError("তথ্য ভেরিফাই করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+                        setTimeout(() => setError(null), 4000);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }} className="flex gap-2">
+                      <input
+                        type="text"
+                        name="manualCadetId"
+                        placeholder="ক্যাডেট আইডি লিখুন (যেমন: ID: gRpxq9fKaY3L...)"
+                        className="flex-1 bg-white/5 border border-white/5 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 text-xs outline-none focus:border-emerald-500 font-mono font-bold"
+                      />
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="px-4 py-3.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                        যাচাই
+                      </button>
+                    </form>
+                  </div>
+
                 </div>
               )}
             </motion.div>
@@ -606,8 +685,20 @@ export function PublicQrScan() {
                     <p className="text-xs font-bold text-white">{cadetData.academicYear || "N/A"}</p>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black">GROUP / PLATOON branch</span>
-                    <p className="text-xs font-bold text-white uppercase">{cadetData.studyStatus || "N/A"}</p>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black font-bengali">প্রতিষ্ঠান (Institution)</span>
+                    <p className="text-xs font-bold text-white uppercase">{cadetData.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)"}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black font-bengali">প্লাটুন (Platoon Branch)</span>
+                    <p className="text-xs font-bold text-slate-300 uppercase">{cadetData.platoonName || "কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন (Cox's Bazar City College BNCC Platoon)"}</p>
+                  </div>
+                  <div className="col-span-2 text-center pt-2">
+                    <span className="text-[9.5px] uppercase tracking-wider text-slate-500 font-black block mb-1">VERIFICATION STATUS</span>
+                    <span className={`inline-block px-3 py-1 text-[9.5px] font-black tracking-widest text-white uppercase rounded-full ${
+                      cadetData.status === "Approved" || cadetData.status === "Joined" ? "bg-emerald-500 animate-pulse" : "bg-amber-600"
+                    }`}>
+                      {cadetData.status || "Pending"}
+                    </span>
                   </div>
                 </div>
               </div>

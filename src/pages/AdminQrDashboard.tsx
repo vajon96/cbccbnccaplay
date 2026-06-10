@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   Scan, LogOut, Shield, QrCode, Camera, CheckCircle, XCircle, 
   User, Clock, Loader2, Award, Calendar, AlertCircle, Edit, Save, Plus, HelpCircle,
-  Zap, ZapOff, Volume2, VolumeX, RotateCw, Check, Sliders
+  Zap, ZapOff, Volume2, VolumeX, RotateCw, Check, Sliders, Search
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,7 @@ import { getSession, clearSession } from "../lib/auth";
 export function AdminQrDashboard() {
   const [adminSession, setAdminSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [searchingDatabase, setSearchingDatabase] = useState(false);
   const [scannerActive, setScannerActive] = useState(true);
   const [scannedCadet, setScannedCadet] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -276,6 +277,8 @@ export function AdminQrDashboard() {
 
           if (!cadetId) return;
 
+          setSearchingDatabase(true);
+          setError(null);
           try {
             const docRef = doc(db, "applicants", cadetId);
             const docSnap = await getDoc(docRef);
@@ -295,6 +298,11 @@ export function AdminQrDashboard() {
             }
           } catch (err) {
             console.error("Scan profile lookup failed:", err);
+            setError("ডাটাবেজ থেকে ক্যাডেট রেকর্ড খুঁজতে ব্যর্থ হয়েছে।");
+            setTimeout(() => setError(null), 4000);
+            handleFirestoreError(err, OperationType.GET, `applicants/${cadetId}`);
+          } finally {
+            setSearchingDatabase(false);
           }
         };
 
@@ -307,8 +315,12 @@ export function AdminQrDashboard() {
           aspectRatio: 1.333333
         };
 
+        const cameraSelector = (cameraId === "environment" || cameraId === "user")
+          ? { facingMode: cameraId }
+          : cameraId;
+
         await html5QrCode.start(
-          cameraId,
+          cameraSelector as any,
           config,
           onScanSuccess,
           () => {} // Silent failures
@@ -374,13 +386,24 @@ export function AdminQrDashboard() {
           setSelectedCameraId(defaultCamera.id);
           startScanner(defaultCamera.id);
         } else {
-          setCameraStatus("error");
-          setCameraPermissionError("ডিভাইসে কোনো লাইভ ক্যামেরা সেন্সর পাওয়া যায়নি!");
+          console.warn("No camera devices enumerated, falling back to direct environment stream");
+          const fallbackDevices = [
+            { id: "environment", label: "Rear Camera (Auto Fallback)" },
+            { id: "user", label: "Front Camera (Auto Fallback)" }
+          ];
+          setCameras(fallbackDevices);
+          setSelectedCameraId("environment");
+          startScanner("environment");
         }
       } catch (err: any) {
-        console.error("Cataloging system cameras failed:", err);
-        setCameraStatus("error");
-        setCameraPermissionError("ক্যামেরা ব্যবহারে অনুমতি দেওয়া হয়নি (Permission Denied)। অনুগ্রহ করে সেটিংসে পারমিশন দিন।");
+        console.warn("Cataloging system cameras failed, retrying with direct device stream fallback:", err);
+        const fallbackDevices = [
+          { id: "environment", label: "Rear Camera (Auto Fallback)" },
+          { id: "user", label: "Front Camera (Auto Fallback)" }
+        ];
+        setCameras(fallbackDevices);
+        setSelectedCameraId("environment");
+        startScanner("environment");
       }
     };
 
@@ -874,6 +897,59 @@ export function AdminQrDashboard() {
                   {getCameraQualityLabel()}
                 </p>
               </div>
+
+              {/* Manual Input Search Fallback */}
+              <div className="bg-slate-950/60 p-4 rounded-3xl border border-white/5 space-y-3">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  অথবা ক্যাডেট আইডি দিয়ে ম্যানুয়ালি খুঁজুন (Manual Input Fallback)
+                </span>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const targetField = e.currentTarget.elements.namedItem("manualCadetId") as HTMLInputElement;
+                  const inputId = targetField?.value?.trim() || "";
+                  if (!inputId) return;
+                  setSearchingDatabase(true);
+                  setError(null);
+                  try {
+                    const docRef = doc(db, "applicants", inputId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                      const cadetData = docSnap.data();
+                      setScannedCadet({ id: inputId, ...cadetData });
+                      setHeight(cadetData.height || "");
+                      setWeight(cadetData.weight || "");
+                      setSuccess("ক্যাডেট তথ্য সফলভাবে পাওয়া গেছে!");
+                      setTimeout(() => setSuccess(null), 3000);
+                      targetField.value = ""; // clear after success
+                    } else {
+                      setError(`ক্যাডেট আইডি "${inputId}" ডাটাবেজে পাওয়া যায়নি!`);
+                      setTimeout(() => setError(null), 4000);
+                    }
+                  } catch (err) {
+                    console.error("Manual profile search failed:", err);
+                    setError("ডাটাবেজ অনুসন্ধান করতে ব্যর্থ হয়েছে।");
+                    setTimeout(() => setError(null), 4000);
+                  } finally {
+                    setSearchingDatabase(false);
+                  }
+                }} className="flex gap-2">
+                  <input
+                    type="text"
+                    name="manualCadetId"
+                    placeholder="ক্যাডেট আইডি লিখুন (যেমন: Application ID)"
+                    className="flex-1 bg-white/5 border border-white/5 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-xs outline-none focus:border-rose-500 font-mono font-bold"
+                  />
+                  <button
+                    type="submit"
+                    disabled={searchingDatabase}
+                    className="px-4 py-3 bg-rose-500 hover:bg-rose-600 disabled:bg-rose-500/50 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    {searchingDatabase ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                    খুঁজুন
+                  </button>
+                </form>
+              </div>
+
             </div>
           </div>
 
@@ -1068,6 +1144,16 @@ export function AdminQrDashboard() {
                       <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
                         <p className="text-[9px] uppercase tracking-wider text-slate-500">ধর্ম ও লিঙ্গ</p>
                         <p className="text-white text-xs">{scannedCadet.religion || "N/A"} | {scannedCadet.gender || "N/A"}</p>
+                      </div>
+                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
+                        <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">প্রতিষ্ঠান (Institution)</p>
+                        <p className="text-white font-normal">{scannedCadet.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)"}</p>
+                      </div>
+                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
+                        <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">এসএসসি জিপিএ ও ফলাফল (SSC Result)</p>
+                        <p className="text-white font-normal">
+                          {scannedCadet.sscGpa ? `জিপিএ: ${scannedCadet.sscGpa} (${scannedCadet.sscGroup || "N/A"}), বোর্ড: ${scannedCadet.sscBoard || "Chattogram"}, সন: ${scannedCadet.sscYear || "N/A"}` : "N/A"}
+                        </p>
                       </div>
                       <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5 md:col-span-2">
                         <p className="text-[9px] uppercase tracking-wider text-rose-400 font-bold">পূর্ববর্তী বিএনসিসি অভিজ্ঞতা</p>
