@@ -448,7 +448,7 @@ export function UserDashboard() {
                   <Key className="text-primary" size={28} />
                 </div>
                 <h3 className="text-xl font-black text-white uppercase tracking-tight">Security Reset</h3>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Update your access key</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Update your password</p>
               </div>
 
               <div className="space-y-4">
@@ -459,7 +459,7 @@ export function UserDashboard() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">New Password Key</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">New Password</label>
                   <input 
                     type="password" 
                     value={newPassword}
@@ -469,7 +469,7 @@ export function UserDashboard() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Confirm Key</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Confirm Password</label>
                   <input 
                     type="password" 
                     value={confirmPassword}

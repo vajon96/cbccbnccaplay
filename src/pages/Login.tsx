@@ -2,11 +2,12 @@ import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Shield, Lock, ArrowRight, Eye, EyeOff, 
-  User as UserIcon, Loader2 
+  User as UserIcon, Loader2, HelpCircle
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { db, doc, getDoc, handleFirestoreError, OperationType, collection, query, where, getDocs } from "../firebase";
 import { comparePassword, setSession } from "../lib/auth";
+import { ResetPasswordModal } from "../components/ResetPasswordModal";
 
 export function Login() {
   const [userId, setUserId] = useState("");
@@ -14,6 +15,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const navigate = useNavigate();
 
   // Handle standard login
@@ -189,6 +191,17 @@ export function Login() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+
+            <div className="flex justify-end pr-1">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(true)}
+                className="text-[10px] font-black uppercase text-rose-500 hover:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer tracking-wider"
+              >
+                <HelpCircle size={12} />
+                পাসওয়ার্ড ভুলে গেছেন? / Forgot Password?
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -210,6 +223,12 @@ export function Login() {
           </p>
         </div>
       </motion.div>
+
+      <ResetPasswordModal 
+        isOpen={showResetModal} 
+        onClose={() => setShowResetModal(false)} 
+        onSuccess={(uid) => setUserId(uid)} 
+      />
     </div>
   );
 }

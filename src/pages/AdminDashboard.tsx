@@ -35,9 +35,10 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular">("applicants");
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "passwordResets">("applicants");
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
+  const [passwordResets, setPasswordResets] = useState<any[]>([]);
   const [adminSession, setAdminSession] = useState<any>(null);
   
   // Create Admin State
@@ -116,6 +117,26 @@ export function AdminDashboard() {
       setLogs(logsData);
     });
 
+    // Fetch password resets
+    const resetsQ = query(collection(db, "password_resets"), orderBy("createdAt", "desc"));
+    const resetsUnsubscribe = onSnapshot(resetsQ, (snapshot) => {
+      const resetsData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      }));
+      setPasswordResets(resetsData);
+    });
+
+    // Fetch notifications
+    const notifQ = query(collection(db, "notifications"), orderBy("timestamp", "desc"));
+    const notifUnsubscribe = onSnapshot(notifQ, (snapshot) => {
+      const notifData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      }));
+      setNotifications(notifData);
+    });
+
     // Fetch admins (only for super admin)
     let adminsUnsubscribe = () => {};
     if (session.role === "super_admin") {
@@ -133,6 +154,8 @@ export function AdminDashboard() {
       unsubscribe();
       logsUnsubscribe();
       adminsUnsubscribe();
+      resetsUnsubscribe();
+      notifUnsubscribe();
     };
   }, [navigate]);
 
@@ -651,6 +674,21 @@ export function AdminDashboard() {
           </div>
           {activeTab === "broadcast" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
         </button>
+        <button
+          onClick={() => setActiveTab("passwordResets")}
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
+            activeTab === "passwordResets" ? "text-red-400" : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Key size={18} className={activeTab === "passwordResets" ? "text-red-400" : ""} />
+            Password Resets
+            {passwordResets.filter(r => r.status === "pending").length > 0 && (
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+            )}
+          </div>
+          {activeTab === "passwordResets" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-rose-500 rounded-t-full" />}
+        </button>
       </div>
 
       {activeTab === "applicants" ? (
@@ -1103,6 +1141,171 @@ export function AdminDashboard() {
               }
             }} 
           />
+        </div>
+      ) : activeTab === "passwordResets" ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <ShieldAlert className="text-rose-500 animate-pulse" />
+                পাসওয়ার্ড রিসেট সিকিউরিটি এলার্টস
+              </h3>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Live Identity Verification & Reset Tracking</p>
+            </div>
+            
+            <div className="text-xs font-bold text-slate-500">
+              Total Requests: <span className="text-rose-500">{passwordResets.length}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {passwordResets.length > 0 ? (
+              passwordResets.map((reset: any) => (
+                <div 
+                  key={reset.id} 
+                  className={`bg-white border rounded-3xl p-6 shadow-sm overflow-hidden flex flex-col justify-between relative ${
+                    reset.status === "pending" ? "border-rose-200 shadow-rose-100/50" : "border-slate-100"
+                  }`}
+                >
+                  {/* Status Indicator */}
+                  <div className="absolute top-4 right-4 z-10">
+                    <span className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-full border ${
+                      reset.status === "pending" 
+                        ? "bg-rose-500/10 text-rose-600 border-rose-200" 
+                        : "bg-emerald-500/10 text-emerald-600 border-emerald-200"
+                    }`}>
+                      {reset.status === "pending" ? "Pending Approval / Active Reset" : "Completed / Resolved"}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Live Snapshot frame */}
+                    <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-100">
+                      {reset.photo ? (
+                        <img 
+                          src={reset.photo} 
+                          alt="Live verification snapshot" 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover scale-x-[-1]"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-400">
+                          <Camera className="w-10 h-10 mb-2 animate-pulse" />
+                          <p className="text-[10px] font-bold uppercase">No Image Captured</p>
+                        </div>
+                      )}
+                      
+                      {/* Watermark timestamp */}
+                      <div className="absolute bottom-2 left-2 right-2 bg-slate-950/70 py-1.5 px-3 rounded-lg backdrop-blur-sm flex justify-between text-[8px] font-mono font-black text-rose-400 uppercase tracking-widest">
+                        <span>LIVE ATTEMPT</span>
+                        <span>{reset.createdAt?.toDate ? reset.createdAt.toDate().toLocaleTimeString() : "N/A"}</span>
+                      </div>
+                    </div>
+
+                    {/* Applicant Identity list */}
+                    <div className="space-y-3.5 pt-1">
+                      <div>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Candidate Info</span>
+                        <h4 className="text-base font-black text-slate-800 tracking-tight leading-tight">{reset.name}</h4>
+                        <p className="text-xs font-mono font-bold text-slate-500 mt-1">ID: {reset.applicantId}</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3">
+                        <div>
+                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Contact No</span>
+                          <span className="text-xs font-bold text-slate-700 font-mono select-all">{reset.mobile}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Date & Time</span>
+                          <span className="text-xs font-bold text-slate-600">
+                            {reset.createdAt?.toDate ? reset.createdAt.toDate().toLocaleDateString() : "N/A"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Security Geolocation & IP */}
+                      <div className="bg-slate-50 p-4 border border-slate-100 rounded-2xl space-y-3">
+                        <div className="flex items-center gap-2.5">
+                          <Globe className="w-4 h-4 text-teal-500" />
+                          <div>
+                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">IP Address</span>
+                            <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{reset.ipAddress || "N/A"}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          <MapPin className="w-4 h-4 text-rose-500" />
+                          <div className="flex-grow flex items-center justify-between">
+                            <div>
+                              <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">Geo coordinates</span>
+                              <span className="text-xs font-mono font-bold text-slate-700 leading-none block">
+                                {reset.latitude && reset.longitude 
+                                  ? `${reset.latitude.toFixed(4)}, ${reset.longitude.toFixed(4)}` 
+                                  : "Blocked / Not Shared"}
+                              </span>
+                            </div>
+                            {reset.latitude && reset.longitude && (
+                              <a 
+                                href={`https://www.google.com/maps/search/?api=1&query=${reset.latitude},${reset.longitude}`} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="text-[9px] font-black uppercase text-rose-500 hover:text-rose-600 border border-rose-200 hover:bg-rose-50 rounded-lg px-2 py-1 flex items-center gap-1 transition-all"
+                              >
+                                Google Map <ExternalLink size={8} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {reset.status === "pending" && (
+                    <div className="mt-5 pt-4 border-t border-slate-100 flex gap-3">
+                      <button 
+                        onClick={async () => {
+                          try {
+                            if (!confirm("Are you sure you want to dismiss this security alert?")) return;
+                            await deleteDoc(doc(db, "password_resets", reset.id));
+                          } catch (e) {
+                            console.error("Dismiss reset log error:", e);
+                          }
+                        }}
+                        className="flex-1 py-3 border border-slate-100 hover:bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all"
+                      >
+                        Dismiss Alert
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, "password_resets", reset.id), {
+                              status: "resolved",
+                              resolvedAt: Timestamp.now()
+                            });
+                          } catch (e) {
+                            console.error("Resolve reset error:", e);
+                          }
+                        }}
+                        className="flex-grow py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer text-center transition-all"
+                      >
+                        Mark as resolved
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full py-16 text-center space-y-4 bg-white border border-slate-100 rounded-[2.5rem]">
+                <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                  <Key size={32} />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-800">কোনো পাসওয়ার্ড রিসেট অনুরোধ নেই </h4>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">No Real-time Security Alerts Registered</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       ) : activeTab === "admins" ? (
     <div className="space-y-6">

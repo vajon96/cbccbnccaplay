@@ -224,7 +224,7 @@ export function AdmitCard() {
                     <span className="font-mono font-black text-lg text-slate-900">{applicant.id}</span>
                   </div>
                   <div className="p-4 bg-bg-light/50 backdrop-blur border border-white/5 rounded flex flex-col gap-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-500">Access Key</span>
+                    <span className="text-[10px] font-bold uppercase text-slate-500">Password</span>
                     <span className="font-mono font-black text-lg text-primary">{rawPassword}</span>
                   </div>
                 </div>
