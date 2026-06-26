@@ -603,7 +603,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
                 <div className="space-y-4">
                   <div className="bg-rose-500/5 border border-rose-500/10 p-4 rounded-2xl">
                     <p className="text-[11px] text-rose-400 leading-relaxed font-bold">
-                      📸 নিরাপত্তা নিশ্চিত করতে আপনার একটি ছবি প্রদান করুন (লাইভ ছবি অথবা ফাইল আপলোড)। এটি পাসওয়ার্ড পরিবর্তনের জন্য বাধ্যতামূলক।
+                      📸 নিরাপত্তা নিশ্চিত করতে আপনার একটি লাইভ ছবি প্রদান করুন। এটি পাসওয়ার্ড পরিবর্তনের জন্য বাধ্যতামূলক।
                     </p>
                   </div>
 
@@ -657,7 +657,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
                         }}
                         className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 cursor-pointer transition-all border border-white/5"
                       >
-                        <RotateCcw size={14} /> পুনরায় ছবি তুলুন / আপলোড করুন
+                        <RotateCcw size={14} /> পুনরায় ছবি তুলুন
                       </button>
                     ) : (
                       <>
@@ -678,25 +678,17 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
                             <Camera size={14} /> ক্যামেরা চালু করুন
                           </button>
                         )}
-
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="py-3.5 px-6 bg-slate-800 hover:bg-slate-700 text-zinc-300 text-[10px] font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 cursor-pointer transition-all border border-white/5"
-                        >
-                          <Upload size={14} /> ফাইল আপলোড করুন
-                        </button>
                       </>
                     )}
-
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
                   </div>
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
 
                   {/* Next Step Control */}
                   <button
