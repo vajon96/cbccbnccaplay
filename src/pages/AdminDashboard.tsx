@@ -82,6 +82,7 @@ export function AdminDashboard() {
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastType, setBroadcastType] = useState("Announcement");
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
+  const [editingNotificationId, setEditingNotificationId] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -427,34 +428,90 @@ export function AdminDashboard() {
     }
     setSendingBroadcast(true);
     try {
-      await addDoc(collection(db, "notifications"), {
-        title: broadcastTitle,
-        message: broadcastMessage,
-        type: broadcastType,
-        targetId: "ALL", // Every cadet sees this
-        isRead: false,
-        timestamp: Timestamp.now(),
-        actorId: adminSession.id
-      });
+      if (editingNotificationId) {
+        // Update existing notification
+        await updateDoc(doc(db, "notifications", editingNotificationId), {
+          title: broadcastTitle,
+          message: broadcastMessage,
+          type: broadcastType,
+          timestamp: Timestamp.now(), // Update timestamp so it shows up as fresh/updated
+          actorId: adminSession.id
+        });
 
-      // Log activity
-      await addDoc(collection(db, "activity_logs"), {
-        type: "BROADCAST_SENT",
-        targetId: "ALL_CADETS",
-        actorId: adminSession.id,
-        timestamp: Timestamp.now(),
-        details: `Admin sent a broadcast message: ${broadcastTitle} - ${broadcastMessage.substring(0, 50)}...`
-      });
+        // Log activity
+        await addDoc(collection(db, "activity_logs"), {
+          type: "BROADCAST_EDITED",
+          targetId: "ALL_CADETS",
+          actorId: adminSession.id,
+          timestamp: Timestamp.now(),
+          details: `Admin updated broadcast message: ${broadcastTitle} - ${broadcastMessage.substring(0, 50)}...`
+        });
 
-      setBroadcastMessage("");
-      setBroadcastTitle("");
-      alert("Announcement sent to all cadets!");
+        setBroadcastMessage("");
+        setBroadcastTitle("");
+        setEditingNotificationId(null);
+        alert("Broadcast notice updated successfully!");
+      } else {
+        // Create new notification
+        await addDoc(collection(db, "notifications"), {
+          title: broadcastTitle,
+          message: broadcastMessage,
+          type: broadcastType,
+          targetId: "ALL", // Every cadet sees this
+          isRead: false,
+          timestamp: Timestamp.now(),
+          actorId: adminSession.id
+        });
+
+        // Log activity
+        await addDoc(collection(db, "activity_logs"), {
+          type: "BROADCAST_SENT",
+          targetId: "ALL_CADETS",
+          actorId: adminSession.id,
+          timestamp: Timestamp.now(),
+          details: `Admin sent a broadcast message: ${broadcastTitle} - ${broadcastMessage.substring(0, 50)}...`
+        });
+
+        setBroadcastMessage("");
+        setBroadcastTitle("");
+        alert("Announcement sent to all cadets!");
+      }
     } catch (err) {
       console.error("Broadcast error:", err);
-      alert("Failed to send broadcast.");
+      alert("Failed to save broadcast notice.");
     } finally {
       setSendingBroadcast(false);
     }
+  };
+
+  const handleDeleteBroadcast = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this broadcast notice? This action cannot be undone.")) return;
+    try {
+      await deleteDoc(doc(db, "notifications", id));
+      // Log activity
+      await addDoc(collection(db, "activity_logs"), {
+        type: "BROADCAST_DELETED",
+        targetId: "ALL_CADETS",
+        actorId: adminSession.id,
+        timestamp: Timestamp.now(),
+        details: `Admin deleted broadcast notice ID: ${id}`
+      });
+      alert("Broadcast notice deleted successfully.");
+      if (editingNotificationId === id) {
+        setBroadcastTitle("");
+        setBroadcastMessage("");
+        setEditingNotificationId(null);
+      }
+    } catch (err) {
+      console.error("Delete broadcast error:", err);
+      alert("Failed to delete broadcast notice.");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setBroadcastTitle("");
+    setBroadcastMessage("");
+    setEditingNotificationId(null);
   };
 
   const exportToExcel = () => {
@@ -1054,8 +1111,12 @@ export function AdminDashboard() {
               <div className="w-20 h-20 bg-primary/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <Bell className="text-primary" size={40} />
               </div>
-              <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Broadcast Notice</h2>
-              <p className="text-slate-500 font-bold text-xs uppercase tracking-[0.2em]">Send announcement to all registered cadets</p>
+              <h2 className="text-3xl font-black text-white uppercase tracking-tighter">
+                {editingNotificationId ? "Edit Broadcast Notice" : "Broadcast Notice"}
+              </h2>
+              <p className="text-slate-500 font-bold text-xs uppercase tracking-[0.2em]">
+                {editingNotificationId ? "Modify published notice for all devices" : "Send announcement to all registered cadets"}
+              </p>
             </div>
 
             <div className="space-y-6 relative z-10">
@@ -1101,14 +1162,34 @@ export function AdminDashboard() {
                 ))}
               </div>
 
-              <button
-                onClick={handleBroadcast}
-                disabled={sendingBroadcast || !broadcastMessage.trim() || !broadcastTitle.trim()}
-                className="w-full py-5 bg-primary text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl flex items-center justify-center gap-3 hover:bg-primary/90 transition-all shadow-2xl shadow-primary/30 disabled:opacity-50 group"
-              >
-                {sendingBroadcast ? <Loader2 className="animate-spin" size={20} /> : <Megaphone size={20} className="group-hover:rotate-12 transition-transform" />}
-                Send Broadcast Message
-              </button>
+              <div className="flex gap-4">
+                {editingNotificationId && (
+                  <button
+                    onClick={handleCancelEdit}
+                    className="flex-1 py-5 bg-slate-800 text-slate-300 font-black uppercase tracking-[0.2em] text-xs rounded-2xl hover:bg-slate-700 transition-all border border-white/5"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+                <button
+                  onClick={handleBroadcast}
+                  disabled={sendingBroadcast || !broadcastMessage.trim() || !broadcastTitle.trim()}
+                  className={`py-5 text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl flex items-center justify-center gap-3 transition-all disabled:opacity-50 group shadow-2xl ${
+                    editingNotificationId 
+                      ? "flex-1 bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30" 
+                      : "w-full bg-primary hover:bg-primary/90 shadow-primary/30"
+                  }`}
+                >
+                  {sendingBroadcast ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : editingNotificationId ? (
+                    <CheckCircle size={20} className="group-hover:scale-110 transition-transform" />
+                  ) : (
+                    <Megaphone size={20} className="group-hover:rotate-12 transition-transform" />
+                  )}
+                  {editingNotificationId ? "Update Notice" : "Send Broadcast Message"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1121,6 +1202,99 @@ export function AdminDashboard() {
               <p className="text-xs text-slate-500 leading-relaxed">
                 Broadcast messages are sent instantly and will appear in the candidate's personal notification center. All transmissions are logged in the system audit trail.
               </p>
+            </div>
+          </div>
+
+          {/* Published Notices Section */}
+          <div className="glass-card p-10 rounded-[3rem] border border-white/5 shadow-2xl space-y-6 relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/5 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                  <Megaphone className="text-primary" size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Active Broadcasts</h3>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Manage published announcements</p>
+                </div>
+              </div>
+              <div className="text-[10px] bg-slate-800 text-slate-400 font-black px-3 py-1.5 rounded-full uppercase tracking-widest border border-white/5">
+                Total: {notifications.filter((n: any) => n.targetId === "ALL").length}
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
+              {notifications.filter((n: any) => n.targetId === "ALL").length === 0 ? (
+                <div className="text-center py-12 space-y-3">
+                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto text-slate-600">
+                    <Megaphone size={32} />
+                  </div>
+                  <p className="text-xs font-black text-slate-500 uppercase tracking-widest">No Broadcast Notices Found</p>
+                </div>
+              ) : (
+                notifications.filter((n: any) => n.targetId === "ALL").map((notif: any) => {
+                  let badgeColor = "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
+                  let Icon = Info;
+                  if (notif.type === "Alert") {
+                    badgeColor = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+                    Icon = AlertCircle;
+                  } else if (notif.type === "Message") {
+                    badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                    Icon = MessageSquare;
+                  }
+
+                  return (
+                    <div 
+                      key={notif.id}
+                      className={`p-6 bg-slate-900/50 rounded-2xl border border-white/5 space-y-4 hover:border-white/10 transition-all ${
+                        editingNotificationId === notif.id ? "border-primary/50 bg-primary/5 animate-pulse" : ""
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1.5 flex-grow">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full border ${badgeColor} flex items-center gap-1`}>
+                              <Icon size={10} />
+                              {notif.type}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-bold">
+                              {notif.timestamp?.toDate 
+                                ? notif.timestamp.toDate().toLocaleString() 
+                                : new Date(notif.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-black text-white leading-snug">{notif.title}</h4>
+                        </div>
+                        
+                        {/* Edit / Delete Buttons */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => {
+                              setEditingNotificationId(notif.id);
+                              setBroadcastTitle(notif.title);
+                              setBroadcastMessage(notif.message);
+                              setBroadcastType(notif.type);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                            title="Edit Notice"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBroadcast(notif.id)}
+                            className="p-2 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white rounded-xl transition-all border border-rose-500/10"
+                            title="Delete Notice"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{notif.message}</p>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

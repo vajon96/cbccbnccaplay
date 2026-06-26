@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Download, Loader2, Sparkles, AlertTriangle, FileText } from "lucide-react";
-import { db, collection, getDocs, query, where, limit } from "../../firebase";
+import { db, collection, getDocs, query, where, limit, onSnapshot } from "../../firebase";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -19,48 +19,62 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let unsubscribeSettings: (() => void) | null = null;
+    let unsubscribeCirculars: (() => void) | null = null;
+
     if (isOpen) {
-      loadPublicCircular();
-    }
-  }, [isOpen]);
+      setLoading(true);
+      setErrorMsg(null);
+      setCircular(null);
 
-  const loadPublicCircular = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    setCircular(null);
-    try {
-      // 1. Check Settings
-      const settingsSnap = await getDocs(collection(db, "circular_settings"));
-      const publicAccessDoc = settingsSnap.docs.find(d => d.data().key === "public_access");
-      const isAllowed = publicAccessDoc ? publicAccessDoc.data().value : true;
-      setPublicAccessAllowed(isAllowed);
+      // 1. Listen to settings
+      const settingsRef = collection(db, "circular_settings");
+      unsubscribeSettings = onSnapshot(settingsRef, (settingsSnap) => {
+        const publicAccessDoc = settingsSnap.docs.find(d => d.data().key === "public_access");
+        const isAllowed = publicAccessDoc ? publicAccessDoc.data().value : true;
+        setPublicAccessAllowed(isAllowed);
 
-      if (!isAllowed) {
-        setErrorMsg("দুঃখিত, অ্যাডমিন কর্তৃক সার্কুলার অ্যাক্সেস এই মুহূর্তে নিষ্ক্রিয় করা আছে।");
+        if (!isAllowed) {
+          setErrorMsg("দুঃখিত, অ্যাডমিন কর্তৃক সার্কুলার অ্যাক্সেস এই মুহূর্তে নিষ্ক্রিয় করা আছে।");
+          setCircular(null);
+          setLoading(false);
+          return;
+        }
+
+        // If public access is allowed, listen to the active published circular
+        if (!unsubscribeCirculars) {
+          const q = query(
+            collection(db, "circulars"), 
+            where("status", "==", "published"),
+            limit(1)
+          );
+          unsubscribeCirculars = onSnapshot(q, (circularSnap) => {
+            if (circularSnap.empty) {
+              setCircular(null);
+              setErrorMsg("দুঃখিত, এই মুহূর্তে কোনো সার্কুলার উপলব্ধ নেই। (No circular is currently available)");
+            } else {
+              setCircular(circularSnap.docs[0].data());
+              setErrorMsg(null);
+            }
+            setLoading(false);
+          }, (err) => {
+            console.error("Real-time circular fetch error:", err);
+            setErrorMsg("সার্কুলার তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+            setLoading(false);
+          });
+        }
+      }, (err) => {
+        console.error("Real-time settings fetch error:", err);
+        setErrorMsg("সার্কুলার তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
         setLoading(false);
-        return;
-      }
-
-      // 2. Fetch Active Published Circular
-      const q = query(
-        collection(db, "circulars"), 
-        where("status", "==", "published"),
-        limit(1)
-      );
-      const circularSnap = await getDocs(q);
-
-      if (circularSnap.empty) {
-        setErrorMsg("দুঃখিত, এই মুহূর্তে কোনো সার্কুলার উপলব্ধ নেই। (No circular is currently available)");
-      } else {
-        setCircular(circularSnap.docs[0].data());
-      }
-    } catch (e) {
-      console.error(e);
-      setErrorMsg("সার্কুলার তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
-    } finally {
-      setLoading(false);
+      });
     }
-  };
+
+    return () => {
+      if (unsubscribeSettings) unsubscribeSettings();
+      if (unsubscribeCirculars) unsubscribeCirculars();
+    };
+  }, [isOpen]);
 
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;

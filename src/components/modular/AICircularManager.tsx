@@ -4,7 +4,7 @@ import {
   X, AlertCircle, Loader2, Download, Trash2, Edit2, ShieldAlert,
   ShieldCheck, Eye, Copy, Power, Settings as SettingsIcon, Archive
 } from "lucide-react";
-import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, Timestamp } from "../../firebase";
+import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot } from "../../firebase";
 import { generateAICircular } from "../../services/geminiService";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -39,6 +39,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   const [circulars, setCirculars] = useState<any[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
   const [savingCircular, setSavingCircular] = useState(false);
+  const [editingCircularId, setEditingCircularId] = useState<string | null>(null);
   
   // Settings State
   const [publicAccessEnabled, setPublicAccessEnabled] = useState(true);
@@ -50,8 +51,25 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
 
   // Load baseline values (Archive & Settings)
   useEffect(() => {
-    fetchArchive();
+    setLoadingArchive(true);
+    const q = query(collection(db, "circulars"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const items = snap.docs.map(docDoc => ({
+        id: docDoc.id,
+        ...docDoc.data()
+      }));
+      setCirculars(items);
+      setLoadingArchive(false);
+    }, (err) => {
+      console.error("Error loading circulars in real-time:", err);
+      setLoadingArchive(false);
+    });
+
     fetchSettings();
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const fetchSettings = async () => {
@@ -104,20 +122,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   };
 
   const fetchArchive = async () => {
-    setLoadingArchive(true);
-    try {
-      const q = query(collection(db, "circulars"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      const items = snap.docs.map(docDoc => ({
-        id: docDoc.id,
-        ...docDoc.data()
-      }));
-      setCirculars(items);
-    } catch (e) {
-      console.error("Error loading circulars:", e);
-    } finally {
-      setLoadingArchive(false);
-    }
+    // Handled in real-time by onSnapshot subscription
   };
 
   const generateReferenceNumber = (count: number) => {
@@ -137,6 +142,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
       setRefNumber(draftRef);
       const data = await generateAICircular(startDate, deadlineDate, draftRef);
       setCircularData(data);
+      setEditingCircularId(null); // Reset since this is a newly generated AI circular
       await onLogActivity("CIRCULAR_AI_GENERATED", `Super Admin generated an AI Enrollment Circular with Ref: ${draftRef}`);
     } catch (e) {
       console.error(e);
@@ -152,7 +158,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
     try {
       // If we are publishing, we must unpublish any other active ones first
       if (status === "published") {
-        const activePublished = circulars.filter(c => c.status === "published");
+        const activePublished = circulars.filter(c => c.status === "published" && c.id !== editingCircularId);
         for (const active of activePublished) {
           await updateDoc(doc(db, "circulars", active.id), {
             status: "unpublished",
@@ -167,18 +173,30 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
         startDate,
         deadlineDate,
         status,
-        publicationDate: new Date().toISOString(),
-        createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       };
 
-      await addDoc(collection(db, "circulars"), payload);
-      await onLogActivity(`CIRCULAR_SAVED_${status.toUpperCase()}`, `Saved enrollment circular as ${status} with Ref: ${refNumber}`);
-      alert(`Circular successfully saved as ${status}!`);
+      if (editingCircularId) {
+        // Edit existing document
+        await updateDoc(doc(db, "circulars", editingCircularId), payload);
+        await onLogActivity(`CIRCULAR_UPDATED_${status.toUpperCase()}`, `Updated enrollment circular with Ref: ${refNumber} as ${status}`);
+        alert(`Circular successfully updated as ${status}!`);
+      } else {
+        // Create new document
+        const fullPayload = {
+          ...payload,
+          publicationDate: new Date().toISOString(),
+          createdAt: Timestamp.now()
+        };
+        await addDoc(collection(db, "circulars"), fullPayload);
+        await onLogActivity(`CIRCULAR_SAVED_${status.toUpperCase()}`, `Saved enrollment circular as ${status} with Ref: ${refNumber}`);
+        alert(`Circular successfully saved as ${status}!`);
+      }
+
       setCircularData(null);
+      setEditingCircularId(null);
       setStartDate("");
       setDeadlineDate("");
-      fetchArchive();
     } catch (e) {
       console.error(e);
       alert("Failed to save circular to database.");
@@ -190,7 +208,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   const handleStatusChange = async (id: string, newStatus: "draft" | "published" | "unpublished") => {
     try {
       if (newStatus === "published") {
-        const activePublished = circulars.filter(c => c.status === "published");
+        const activePublished = circulars.filter(c => c.status === "published" && c.id !== id);
         for (const active of activePublished) {
           await updateDoc(doc(db, "circulars", active.id), {
             status: "unpublished",
@@ -204,7 +222,6 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
         updatedAt: Timestamp.now()
       });
       await onLogActivity("CIRCULAR_STATUS_CHANGED", `Changed state of circular ${id} to ${newStatus}`);
-      fetchArchive();
     } catch (e) {
       console.error(e);
       alert("Failed to update status.");
@@ -216,7 +233,6 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
     try {
       await deleteDoc(doc(db, "circulars", id));
       await onLogActivity("CIRCULAR_DELETED", `Super Admin deleted circular document: ${id}`);
-      fetchArchive();
       alert("Circular removed successfully.");
     } catch (e) {
       console.error(e);
@@ -242,6 +258,29 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
     setStartDate(item.startDate || "");
     setDeadlineDate(item.deadlineDate || "");
     setRefNumber(generateReferenceNumber(circulars.length));
+    setEditingCircularId(null); // Duplicating creates a new document, so reset this
+    setActiveSubTab("generate");
+  };
+
+  const handleEdit = (item: any) => {
+    setCircularData({
+      title: item.title,
+      introduction: item.introduction,
+      purpose: item.purpose,
+      eligibility: item.eligibility,
+      requiredDocuments: item.requiredDocuments,
+      applicationProcedure: item.applicationProcedure,
+      importantDates: item.importantDates,
+      verificationProcess: item.verificationProcess,
+      rulesAndConditions: item.rulesAndConditions,
+      contactInfo: item.contactInfo,
+      footer: item.footer,
+      category: item.category || "Admission / Membership"
+    });
+    setStartDate(item.startDate || "");
+    setDeadlineDate(item.deadlineDate || "");
+    setRefNumber(item.referenceNumber);
+    setEditingCircularId(item.id);
     setActiveSubTab("generate");
   };
 
@@ -306,7 +345,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
         </div>
         
         {[
-          { id: "generate", label: "Generate & Edit", icon: Sparkles, badge: circularData ? "Editing" : undefined },
+          { id: "generate", label: editingCircularId ? "Edit Circular" : "Generate & Edit", icon: Sparkles, badge: editingCircularId ? "Editing" : circularData ? "Draft" : undefined },
           { id: "archive", label: "Circular Archive", icon: Archive, badge: circulars.length > 0 ? `${circulars.length}` : undefined },
           { id: "settings", label: "Settings", icon: SettingsIcon }
         ].map((sub) => (
@@ -342,15 +381,16 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
           <div className="pt-6 mt-6 border-t border-white/5 text-center">
             <button
               onClick={() => {
-                if (confirm("Cancel draft and lose changes?")) {
+                if (confirm(editingCircularId ? "Cancel editing and lose changes?" : "Cancel draft and lose changes?")) {
                   setCircularData(null);
+                  setEditingCircularId(null);
                   setStartDate("");
                   setDeadlineDate("");
                 }
               }}
               className="px-4 py-2 border border-red-500/20 text-red-500 hover:bg-red-500/10 text-[9px] font-bold uppercase tracking-widest rounded-lg transition-all"
             >
-              Clear Current Draft
+              {editingCircularId ? "Cancel Editing" : "Clear Current Draft"}
             </button>
           </div>
         )}
@@ -677,6 +717,14 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                           Unpublish
                         </button>
                       )}
+
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                        title="Edit Circular"
+                      >
+                        <Edit2 size={16} />
+                      </button>
 
                       <button
                         onClick={() => handleDuplicate(item)}
