@@ -93,6 +93,21 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
     };
   }, []);
 
+  // Auto-start camera when we are in Step 2, and stop it otherwise
+  useEffect(() => {
+    if (isOpen && step === 2) {
+      const timer = setTimeout(() => {
+        startCamera();
+      }, 150);
+      return () => {
+        clearTimeout(timer);
+        stopCamera();
+      };
+    } else {
+      stopCamera();
+    }
+  }, [isOpen, step]);
+
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
@@ -104,18 +119,50 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
   const startCamera = async () => {
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" }
-      });
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      let stream: MediaStream;
+      try {
+        // Strongly prioritize and force the front camera
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "user" },
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: false
+        });
+      } catch (err) {
+        console.warn("Retrying camera with alternative constraints:", err);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user" },
+            audio: false
+          });
+        } catch (innerErr) {
+          console.warn("Falling back to basic video stream:", innerErr);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.error("Video element play failed:", playErr);
+        }
       }
       setCameraActive(true);
     } catch (err: any) {
-      console.error("Camera capture failed:", err);
-      setError("ক্যামেরা অন করতে ব্যর্থ হয়েছে। অনুগ্রহ করে ক্যামেরার পারমিশন দিন।");
+      console.error("Camera capture failed completely:", err);
+      setError("ক্যামেরা অন করতে ব্যর্থ হয়েছে। অনুগ্রহ করে ক্যামেরার পারমিশন দিন এবং ফ্রন্ট ক্যামেরা সচল রাখুন।");
     }
   };
 
@@ -512,18 +559,22 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
-                    ) : cameraActive ? (
-                      <video
-                        ref={videoRef}
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover scale-x-[-1]"
-                      />
                     ) : (
-                      <div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
-                        <Camera className="w-12 h-12 text-zinc-600 animate-pulse" />
-                        <p className="text-zinc-500 text-[11px] font-black uppercase tracking-widest">ক্যামেরা নিষ্ক্রিয়</p>
-                      </div>
+                      <>
+                        <video
+                          ref={videoRef}
+                          playsInline
+                          muted
+                          autoPlay
+                          className={`w-full h-full object-cover scale-x-[-1] ${cameraActive ? "block" : "hidden"}`}
+                        />
+                        {!cameraActive && (
+                          <div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
+                            <Camera className="w-12 h-12 text-zinc-600 animate-pulse" />
+                            <p className="text-zinc-500 text-[11px] font-black uppercase tracking-widest">ক্যামেরা নিষ্ক্রিয়</p>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     <canvas ref={canvasRef} className="hidden" />
