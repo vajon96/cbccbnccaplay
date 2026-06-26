@@ -751,14 +751,14 @@ export function AdminDashboard() {
                   placeholder="নাম অথবা আইডি দিয়ে খুঁজুন..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-surface border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-white focus:border-primary outline-none transition-all shadow-xl"
+                  className="w-full bg-[#476075] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-white focus:border-primary outline-none transition-all shadow-xl"
                 />
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <select
                   value={bnccFilter}
                   onChange={(e) => setBnccFilter(e.target.value as any)}
-                  className="bg-surface border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
+                  className="bg-[#8aa5ba] border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
                 >
                   <option value="All">সকল অভিজ্ঞতা (All Applicants)</option>
                   <option value="Previous">পূর্বের বিএনসিসি ক্যাডেট (BNCC Cadets)</option>
@@ -767,7 +767,7 @@ export function AdminDashboard() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-surface border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
+                  className="bg-[#6e859f] border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
                 >
                   <option value="All">সকল স্ট্যাটাস</option>
                   <option value="Pending">পেন্ডিং</option>
