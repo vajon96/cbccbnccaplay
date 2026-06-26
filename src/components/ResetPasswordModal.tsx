@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  X, ShieldAlert, Key, Camera, CheckCircle, AlertCircle, 
-  MapPin, Globe, Loader2, ArrowRight, Sparkles, HelpCircle 
+  X, ShieldAlert, Key, CheckCircle, AlertCircle, 
+  MapPin, Globe, Loader2, ArrowRight, HelpCircle 
 } from "lucide-react";
-import { db, collection, setDoc, doc, getDoc, updateDoc, addDoc, Timestamp, getDocs, query, where } from "../firebase";
+import { db, collection, setDoc, doc, getDoc, updateDoc, addDoc, Timestamp } from "../firebase";
 import { hashPassword } from "../lib/auth";
 
 interface ResetPasswordModalProps {
@@ -29,26 +29,18 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
 
   const [verifiedApplicant, setVerifiedApplicant] = useState<any>(null);
 
-  // Step 2: Camera Capture
-  const [cameraActive, setCameraActive] = useState(false);
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  // Background Geolocation & IP tracking for security audit trails
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [ipAddress, setIpAddress] = useState<string>("Retrieving...");
   const [locatingState, setLocatingState] = useState<"idle" | "fetching" | "success" | "denied">("idle");
-  const [photoSaved, setPhotoSaved] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  // Step 3: Password update
+  // Step 2: Password update
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Setup geolocation and IP
+  // Retrieve geolocation and IP in background when modal is open and on step 2
   useEffect(() => {
     if (isOpen && step === 2) {
-      // Get location immediately
       setLocatingState("fetching");
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -69,7 +61,6 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
         setLocatingState("denied");
       }
 
-      // Fetch IP address
       fetch("https://api.ipify.org?format=json")
         .then(res => res.json())
         .then(data => {
@@ -85,102 +76,6 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
         });
     }
   }, [isOpen, step]);
-
-  // Handle closing stream when unmounting
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
-  // Auto-start camera when we are in Step 2, and stop it otherwise
-  useEffect(() => {
-    if (isOpen && step === 2) {
-      const timer = setTimeout(() => {
-        startCamera();
-      }, 150);
-      return () => {
-        clearTimeout(timer);
-        stopCamera();
-      };
-    } else {
-      stopCamera();
-    }
-  }, [isOpen, step]);
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setCameraActive(false);
-  };
-
-  const startCamera = async () => {
-    setError(null);
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-
-      let stream: MediaStream;
-      try {
-        // Strongly prioritize and force the front camera
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "user" },
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          },
-          audio: false
-        });
-      } catch (err) {
-        console.warn("Retrying camera with alternative constraints:", err);
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "user" },
-            audio: false
-          });
-        } catch (innerErr) {
-          console.warn("Falling back to basic video stream:", innerErr);
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false
-          });
-        }
-      }
-
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          console.error("Video element play failed:", playErr);
-        }
-      }
-      setCameraActive(true);
-    } catch (err: any) {
-      console.error("Camera capture failed completely:", err);
-      setError("ক্যামেরা অন করতে ব্যর্থ হয়েছে। অনুগ্রহ করে ক্যামেরার পারমিশন দিন এবং ফ্রন্ট ক্যামেরা সচল রাখুন।");
-    }
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg");
-        setCapturedPhoto(dataUrl);
-        stopCamera();
-      }
-    }
-  };
 
   const clean = (str: string) => {
     return (str || "").trim().toLowerCase();
@@ -210,7 +105,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
 
       const dbData = docSnap.data();
 
-      // Comparison logic: Check inputs carefully against multiple potential formats (Bangle or English)
+      // Comparison logic: Check inputs carefully against multiple potential formats (Bangla or English)
       const nameMatch = clean(dbData.fullNameEnglish) === clean(fullName) || clean(dbData.fullNameBangla) === clean(fullName);
       const fatherMatch = clean(dbData.fatherNameEnglish) === clean(fatherName) || clean(dbData.fatherNameBangla) === clean(fatherName);
       const motherMatch = clean(dbData.motherNameEnglish) === clean(motherName) || clean(dbData.motherNameBangla) === clean(motherName);
@@ -226,9 +121,10 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
       if (nameMatch && fatherMatch && motherMatch && phoneMatch && gpaMatch) {
         // Success
         setVerifiedApplicant({ id: docSnap.id, ...dbData });
+        setSuccess("১ম ধাপ তথ্য ভেরিফিকেশন সফল হয়েছে। এবার নতুন পাসওয়ার্ড সেট করুন।");
+        setTimeout(() => setSuccess(null), 2500);
         setStep(2);
       } else {
-        // Find specific discrepancy for debugging feedback, but keep it secure
         setError("প্রদত্ত তথ্যের সাথে ক্যাডেট ডাটাবেসের তথ্যের মিল পাওয়া যায়নি। দয়া করে সঠিক তথ্য দিন।");
       }
     } catch (err: any) {
@@ -239,65 +135,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
     }
   };
 
-  // Step 2: Upload/save Photo
-  const handlePhotoUpload = async () => {
-    if (!capturedPhoto) {
-      setError("অনুগ্রহ করে আপনার লাইভ ছবি তুলুন!");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const resetId = `${verifiedApplicant.id}_${Date.now()}`;
-      
-      // Upload/Save Reset Event Log
-      await setDoc(doc(db, "password_resets", resetId), {
-        id: resetId,
-        applicantId: verifiedApplicant.id,
-        name: verifiedApplicant.fullNameEnglish || verifiedApplicant.fullNameBangla,
-        mobile: verifiedApplicant.studentPhone,
-        createdAt: Timestamp.now(),
-        photo: capturedPhoto,
-        latitude: location?.latitude || null,
-        longitude: location?.longitude || null,
-        ipAddress: ipAddress,
-        status: "pending"
-      });
-
-      // Instantly write to notifications collection for real-time dashboard notification
-      await addDoc(collection(db, "notifications"), {
-        title: "লাইভ সিকিউরিটি পাসওয়ার্ড রিসেট অ্যালার্ট",
-        message: `${verifiedApplicant.fullNameEnglish || verifiedApplicant.fullNameBangla} (${verifiedApplicant.id}) এর জন্য লাইভ ছবি তুলে পাসওয়ার্ড পরিবর্তনের চেষ্টা চলছে। মোবাইল: ${verifiedApplicant.studentPhone}।`,
-        type: "Alert",
-        isRead: false,
-        timestamp: Timestamp.now(),
-        photo: capturedPhoto,
-        applicantId: verifiedApplicant.id,
-        ipAddress: ipAddress,
-        latitude: location?.latitude || null,
-        longitude: location?.longitude || null,
-        metadata: {
-          location: location ? `${location.latitude}, ${location.longitude}` : "Denied/Unknown",
-          ip: ipAddress,
-          time: new Date().toLocaleTimeString()
-        }
-      });
-
-      setPhotoSaved(true);
-      setSuccess("লাইভ ছবি ও আইপি ভেরিফিকেশন সফল হয়েছে। এবার নতুন পাসওয়ার্ড সেট করুন।");
-      setTimeout(() => setSuccess(null), 3000);
-      setStep(3);
-    } catch (err: any) {
-      console.error("Save snapshot error:", err);
-      setError("ছবি ও নিরাপত্তা ডেটা আপলোড করতে ত্রুটি হয়েছে। পুনরায় চেষ্টা করুন।");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Step 3: Password Update
+  // Step 2: Password Update and Secure Logging
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -317,20 +155,54 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
 
     try {
       const hashed = await hashPassword(newPassword);
+      const resetId = `${verifiedApplicant.id}_${Date.now()}`;
       
-      // Update applicant profile with newly generated hashed password
+      // 1. Update applicant profile with newly generated hashed password
       await updateDoc(doc(db, "applicants", verifiedApplicant.id), {
         password: hashed,
         updatedAt: Timestamp.now()
       });
 
-      // Create system Activity log
+      // 2. Upload/Save Reset Event Log
+      await setDoc(doc(db, "password_resets", resetId), {
+        id: resetId,
+        applicantId: verifiedApplicant.id,
+        name: verifiedApplicant.fullNameEnglish || verifiedApplicant.fullNameBangla,
+        mobile: verifiedApplicant.studentPhone,
+        createdAt: Timestamp.now(),
+        photo: null,
+        latitude: location?.latitude || null,
+        longitude: location?.longitude || null,
+        ipAddress: ipAddress,
+        status: "resolved"
+      });
+
+      // 3. Instantly write to notifications collection for real-time dashboard notification
+      await addDoc(collection(db, "notifications"), {
+        title: "সিকিউরিটি পাসওয়ার্ড পরিবর্তন অ্যালার্ট",
+        message: `${verifiedApplicant.fullNameEnglish || verifiedApplicant.fullNameBangla} (${verifiedApplicant.id}) এর পাসওয়ার্ড পরিবর্তিত হয়েছে। মোবাইল: ${verifiedApplicant.studentPhone}।`,
+        type: "Alert",
+        isRead: false,
+        timestamp: Timestamp.now(),
+        photo: null,
+        applicantId: verifiedApplicant.id,
+        ipAddress: ipAddress,
+        latitude: location?.latitude || null,
+        longitude: location?.longitude || null,
+        metadata: {
+          location: location ? `${location.latitude}, ${location.longitude}` : "Denied/Unknown",
+          ip: ipAddress,
+          time: new Date().toLocaleTimeString()
+        }
+      });
+
+      // 4. Create system Activity log
       await addDoc(collection(db, "activity_logs"), {
         type: "PASSWORD_RESET_SELF",
         targetId: verifiedApplicant.id,
         actorId: verifiedApplicant.id,
         timestamp: Timestamp.now(),
-        details: `${verifiedApplicant.fullNameEnglish} (${verifiedApplicant.id}) has successfully updated their portal password via secure live-photo verification.`
+        details: `${verifiedApplicant.fullNameEnglish} (${verifiedApplicant.id}) has successfully updated their portal password via secure portal verification.`
       });
 
       setSuccess("অভিনন্দন! আপনার পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে।");
@@ -345,11 +217,9 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
         setMotherName("");
         setMobile("");
         setSscGpa("");
-        setCapturedPhoto(null);
         setNewPassword("");
         setConfirmPassword("");
         setVerifiedApplicant(null);
-        setPhotoSaved(false);
       }, 3000);
     } catch (err: any) {
       console.error("Save password error:", err);
@@ -368,10 +238,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => {
-              stopCamera();
-              onClose();
-            }}
+            onClick={onClose}
             className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm"
           />
 
@@ -393,14 +260,11 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-white uppercase tracking-tight">পাসওয়ার্ড রিসেট সিস্টেম</h3>
-                  <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">Step {step} of 3: Verification Flow</p>
+                  <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">Step {step} of 2: Verification Flow</p>
                 </div>
               </div>
               <button
-                onClick={() => {
-                  stopCamera();
-                  onClose();
-                }}
+                onClick={onClose}
                 className="p-2 text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
               >
                 <X size={18} />
@@ -409,7 +273,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
 
             {/* Step Progress Dots */}
             <div className="flex items-center gap-2 mb-6 justify-center">
-              {[1, 2, 3].map((num) => (
+              {[1, 2].map((num) => (
                 <div key={num} className="flex items-center">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black transition-all ${
                     step === num 
@@ -418,7 +282,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
                   }`}>
                     {step > num ? <CheckCircle className="w-4 h-4 text-emerald-950" /> : num}
                   </div>
-                  {num < 3 && <div className={`w-12 h-0.5 transition-all ${step > num ? "bg-emerald-500" : "bg-slate-800"}`} />}
+                  {num < 2 && <div className={`w-12 h-0.5 transition-all ${step > num ? "bg-emerald-500" : "bg-slate-800"}`} />}
                 </div>
               ))}
             </div>
@@ -543,80 +407,14 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
               )}
 
               {step === 2 && (
-                <div className="space-y-5">
+                <form onSubmit={handleResetPassword} className="space-y-4">
                   <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl">
-                    <p className="text-[11px] text-emerald-400 font-bold leading-normal">
-                      ✅ ১ম ধাপ যাচাই সফল! আইডি হোল্ডারের আসল পরিচিতি নিশ্চিত করতে ডিভাইস ক্যামেরা দিয়ে ছবি তুলুন।
+                    <p className="text-[11px] text-emerald-400 font-bold leading-relaxed">
+                      🔒 আপনার সিকিউরিটি ভ্যালিডেশন সফলভাবে সম্পন্ন হয়েছে। অনুগ্রহ করে আপনার নতুন পাসওয়ার্ড সেট করুন।
                     </p>
                   </div>
 
-                  {/* Camera Stage */}
-                  <div className="relative aspect-video bg-slate-950 rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center">
-                    {capturedPhoto ? (
-                      <img 
-                        src={capturedPhoto} 
-                        alt="Captured live verification snapshot" 
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <>
-                        <video
-                          ref={videoRef}
-                          playsInline
-                          muted
-                          autoPlay
-                          className={`w-full h-full object-cover scale-x-[-1] ${cameraActive ? "block" : "hidden"}`}
-                        />
-                        {!cameraActive && (
-                          <div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
-                            <Camera className="w-12 h-12 text-zinc-600 animate-pulse" />
-                            <p className="text-zinc-500 text-[11px] font-black uppercase tracking-widest">ক্যামেরা নিষ্ক্রিয়</p>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    <canvas ref={canvasRef} className="hidden" />
-
-                    {cameraActive && (
-                      <div className="absolute bottom-4 left-0 right-0 flex justify-center z-15">
-                        <button
-                          onClick={capturePhoto}
-                          className="px-6 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-black text-[10px] rounded-full uppercase tracking-widest transition-all cursor-pointer border border-white/10 shadow-xl shadow-rose-950/50"
-                        >
-                          ছবি তুলুন (Capture)
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Controls */}
-                  <div className="flex justify-center gap-3">
-                    {!cameraActive && !capturedPhoto && (
-                      <button
-                        onClick={startCamera}
-                        className="px-6 py-3 bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-black uppercase tracking-widest rounded-2xl flex items-center gap-2 hover:bg-rose-500/25 transition-all cursor-pointer"
-                      >
-                        <Camera size={16} />
-                        ক্যামেরা চালু করুন
-                      </button>
-                    )}
-
-                    {capturedPhoto && (
-                      <button
-                        onClick={() => {
-                          setCapturedPhoto(null);
-                          startCamera();
-                        }}
-                        className="px-5 py-3 bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-700 transition-all cursor-pointer"
-                      >
-                        আবার তুলুন
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Tracking Metadata Visualization */}
+                  {/* Tracking Metadata Visualization (IP & Geolocation Logged for Security audits) */}
                   <div className="bg-slate-950/40 p-4 border border-white/5 rounded-2xl grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center shrink-0 border border-cyan-500/20">
@@ -635,44 +433,19 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
                             ? "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse"
                             : "bg-zinc-800 border-zinc-700 text-zinc-500"
                       }`}>
-                        <MapPin className="w-4 h-4 animate-bounce" />
+                        <MapPin className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">GPS Tracking (Location)</p>
+                        <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">GPS Tracker</p>
                         <p className="text-xs text-zinc-300 font-bold">
                           {locatingState === "success" && location 
                             ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
                             : locatingState === "fetching" 
                               ? "Locating..."
-                              : "Blocked / Unavailable"}
+                              : "Blocked / Offline"}
                         </p>
                       </div>
                     </div>
-                  </div>
-
-                  <button
-                    onClick={handlePhotoUpload}
-                    disabled={loading || !capturedPhoto}
-                    className="w-full py-4 bg-gradient-to-r from-rose-600 to-rose-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all disabled:opacity-40 cursor-pointer"
-                  >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        নিরাপত্তা ছবি আপলোড ও যাচাই করুন
-                        <ArrowRight size={16} />
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {step === 3 && (
-                <form onSubmit={handleResetPassword} className="space-y-4">
-                  <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl">
-                    <p className="text-[11px] text-emerald-400 font-bold leading-relaxed">
-                      🔒 আপনার ছবি ও সিকিউরিটি ক্রেনডেনশিয়াল সফলভাবে যাচাই সম্পন্ন হয়েছে। অনুগ্রহ করে আপনার নতুন পাসওয়ার্ড সেট করুন।
-                    </p>
                   </div>
 
                   <div className="space-y-4">
