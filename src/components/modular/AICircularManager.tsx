@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { 
   FileText, Calendar, Sparkles, RefreshCw, Save, CheckCircle, 
   X, AlertCircle, Loader2, Download, Trash2, Edit2, ShieldAlert,
-  ShieldCheck, Eye, Copy, Power, Settings as SettingsIcon, Archive
+  ShieldCheck, Eye, Copy, Power, Settings as SettingsIcon, Archive, Upload
 } from "lucide-react";
 import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot } from "../../firebase";
 import { generateAICircular } from "../../services/geminiService";
@@ -30,7 +30,7 @@ interface AICircularManagerProps {
 }
 
 export function AICircularManager({ adminSession, onLogActivity }: AICircularManagerProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"generate" | "archive" | "settings">("generate");
+  const [activeSubTab, setActiveSubTab] = useState<"generate" | "upload-pdf" | "archive" | "settings">("generate");
   const [startDate, setStartDate] = useState("");
   const [deadlineDate, setDeadlineDate] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -40,6 +40,15 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   const [loadingArchive, setLoadingArchive] = useState(false);
   const [savingCircular, setSavingCircular] = useState(false);
   const [editingCircularId, setEditingCircularId] = useState<string | null>(null);
+  
+  // PDF Upload State
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfBase64, setPdfBase64] = useState<string>("");
+  const [pdfTitle, setPdfTitle] = useState("অফিসিয়াল ভর্তি সার্কুলার (Official Enrollment Circular)");
+  const [pdfStartDate, setPdfStartDate] = useState("");
+  const [pdfDeadlineDate, setPdfDeadlineDate] = useState("");
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   
   // Settings State
   const [publicAccessEnabled, setPublicAccessEnabled] = useState(true);
@@ -292,6 +301,75 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
     });
   };
 
+  const handlePdfFileChange = (file: File) => {
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      alert("শুধুমাত্র PDF (.pdf) ফাইল গ্রহণযোগ্য।");
+      return;
+    }
+    const maxSize = 1 * 1024 * 1024; // 1 MB
+    if (file.size > maxSize) {
+      alert("ফাইল সাইজ ১ MB-এর বেশি হওয়া যাবে না। অনুগ্রহ করে একটি সংকুচিত (Compressed) PDF আপলোড করুন।");
+      return;
+    }
+    
+    setPdfFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setPdfBase64(e.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadPdfCircular = async () => {
+    if (!pdfBase64) {
+      alert("অনুগ্রহ করে প্রথমে একটি PDF ফাইল নির্বাচন করুন।");
+      return;
+    }
+    setUploadingPdf(true);
+    try {
+      // Unpublish all other published circulars
+      const activePublished = circulars.filter(c => c.status === "published");
+      for (const active of activePublished) {
+        await updateDoc(doc(db, "circulars", active.id), {
+          status: "unpublished",
+          updatedAt: Timestamp.now()
+        });
+      }
+
+      const generatedRef = generateReferenceNumber(circulars.length);
+      const payload = {
+        title: pdfTitle || "অফিসিয়াল ভর্তি সার্কুলার (Official Enrollment Circular)",
+        fileType: "pdf",
+        pdfData: pdfBase64,
+        startDate: pdfStartDate || new Date().toISOString().split("T")[0],
+        deadlineDate: pdfDeadlineDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        status: "published",
+        referenceNumber: generatedRef,
+        publicationDate: new Date().toISOString(),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      await addDoc(collection(db, "circulars"), payload);
+      await onLogActivity("CIRCULAR_PDF_UPLOADED", `Super Admin uploaded and published PDF circular with Ref: ${generatedRef}`);
+      alert("PDF সার্কুলার সফলভাবে আপলোড ও পাবলিশ হয়েছে!");
+      
+      // Reset state
+      setPdfFile(null);
+      setPdfBase64("");
+      setPdfStartDate("");
+      setPdfDeadlineDate("");
+    } catch (e) {
+      console.error(e);
+      alert("PDF আপলোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+    } finally {
+      setUploadingPdf(false);
+    }
+  };
+
   const triggerDownloadPDF = async () => {
     if (!printRef.current) return;
     setIsPrinting(true);
@@ -346,6 +424,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
         
         {[
           { id: "generate", label: editingCircularId ? "Edit Circular" : "Generate & Edit", icon: Sparkles, badge: editingCircularId ? "Editing" : circularData ? "Draft" : undefined },
+          { id: "upload-pdf", label: "Upload PDF Circular", icon: FileText },
           { id: "archive", label: "Circular Archive", icon: Archive, badge: circulars.length > 0 ? `${circulars.length}` : undefined },
           { id: "settings", label: "Settings", icon: SettingsIcon }
         ].map((sub) => (
@@ -649,6 +728,220 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
           </div>
         )}
 
+        {/* TAB: UPLOAD PDF PANEL */}
+        {activeSubTab === "upload-pdf" && (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="glass-card p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6">
+              <div>
+                <h3 className="text-lg font-bold text-white uppercase tracking-tight">অফিসিয়াল সার্কুলার PDF ম্যানেজমেন্ট (Official PDF Management)</h3>
+                <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">
+                  Upload official PDF recruitment circulars. Once uploaded, it replaces the currently active circular and becomes visible for users to preview and download.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Upload Form Card */}
+                <div className="space-y-6 bg-slate-900/30 p-6 rounded-2xl border border-white/5">
+                  <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">নতুন PDF আপলোড করুন (Upload New PDF)</h4>
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">সার্কুলার শিরোনাম (Circular Title)</label>
+                    <input 
+                      type="text"
+                      value={pdfTitle}
+                      onChange={(e) => setPdfTitle(e.target.value)}
+                      placeholder="যেমন: কক্সবাজার সিটি কলেজ বিএনসিসি ভর্তি সার্কুলার ২০২৬"
+                      className="w-full bg-slate-950 border border-white/10 rounded-2xl px-4 py-4 text-sm text-slate-200 outline-none focus:border-primary transition-all"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">ঐচ্ছিক শুরুর তারিখ (Start Date)</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-primary w-5 h-5" />
+                        <input 
+                          type="date"
+                          value={pdfStartDate}
+                          onChange={(e) => setPdfStartDate(e.target.value)}
+                          className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 outline-none focus:border-primary transition-all cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">আবেদনের শেষ তারিখ (Deadline Date)</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-primary w-5 h-5" />
+                        <input 
+                          type="date"
+                          value={pdfDeadlineDate}
+                          onChange={(e) => setPdfDeadlineDate(e.target.value)}
+                          className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 outline-none focus:border-primary transition-all cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Drag and Drop Zone */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">PDF ফাইল নির্বাচন করুন (Select PDF)</label>
+                    <div 
+                      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+                      onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                      onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragActive(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handlePdfFileChange(e.dataTransfer.files[0]);
+                        }
+                      }}
+                      className={`relative border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center transition-all ${
+                        dragActive ? "border-primary bg-primary/10" : "border-white/15 bg-slate-950/50 hover:border-primary/50"
+                      }`}
+                    >
+                      <input 
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handlePdfFileChange(e.target.files[0]);
+                          }
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      
+                      {pdfFile ? (
+                        <div className="text-center space-y-3 z-10">
+                          <FileText className="w-12 h-12 text-primary mx-auto animate-pulse" />
+                          <div>
+                            <p className="text-xs font-black text-slate-200 truncate max-w-xs">{pdfFile.name}</p>
+                            <p className="text-[10px] text-slate-500 font-bold">{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPdfFile(null);
+                              setPdfBase64("");
+                            }}
+                            className="px-3 py-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 text-[9px] font-bold uppercase rounded-lg transition-all"
+                          >
+                            ফাইল মুছুন
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-3 pointer-events-none">
+                          <Upload className="w-12 h-12 text-slate-600 mx-auto" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-300">ড্র্যাগ ও ড্রপ করুন অথবা ফাইল সিলেক্ট করুন</p>
+                            <p className="text-[10px] text-slate-500 font-bold mt-1">শুধুমাত্র PDF ফাইল গ্রহণযোগ্য (সর্বোচ্চ ১ MB)</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleUploadPdfCircular}
+                    disabled={uploadingPdf || !pdfBase64}
+                    className="w-full py-4 bg-primary text-white font-black uppercase tracking-[0.25em] text-xs rounded-2xl flex items-center justify-center gap-3 hover:bg-primary/90 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploadingPdf ? (
+                      <>
+                        <Loader2 className="animate-spin w-4 h-4" />
+                        Uploading PDF Circular...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Upload & Publish PDF
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Active PDF Circular Card */}
+                <div className="space-y-6 bg-slate-900/30 p-6 rounded-2xl border border-white/5 flex flex-col h-full">
+                  <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">বর্তমান সক্রিয় PDF সার্কুলার (Active PDF Circular)</h4>
+                  
+                  {(() => {
+                    const activePdf = circulars.find(c => c.status === "published" && c.fileType === "pdf");
+                    if (!activePdf) {
+                      return (
+                        <div className="flex-grow flex flex-col items-center justify-center p-12 text-center text-slate-500">
+                          <FileText className="w-12 h-12 text-slate-700 mb-4" />
+                          <p className="text-xs font-bold">এই মুহূর্তে কোনো সক্রিয় PDF সার্কুলার নেই।</p>
+                          <p className="text-[10px] text-slate-600 mt-1 leading-normal">নতুন PDF সার্কুলার আপলোড করার সাথে সাথে তা এখানে প্রদর্শিত হবে এবং ওয়েবসাইটে প্রকাশিত হবে।</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4 flex flex-col flex-grow">
+                        <div className="p-4 bg-slate-950 rounded-xl space-y-2 border border-white/5">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black uppercase tracking-wider rounded">Published</span>
+                            <span className="text-[10px] font-mono text-slate-500 font-bold">{activePdf.referenceNumber}</span>
+                          </div>
+                          <h5 className="text-xs font-black text-white line-clamp-1">{activePdf.title}</h5>
+                          <p className="text-[10px] text-slate-500 font-bold">
+                            Duration: {activePdf.startDate} to {activePdf.deadlineDate}
+                          </p>
+                        </div>
+
+                        {/* PDF Preview Container */}
+                        <div className="flex-grow rounded-xl overflow-hidden border border-white/10 bg-white">
+                          <iframe 
+                            src={activePdf.pdfData} 
+                            className="w-full h-[280px]" 
+                            title="Active Circular PDF Preview"
+                          />
+                        </div>
+
+                        {/* Test Actions */}
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                          <button
+                            onClick={() => {
+                              const link = document.createElement("a");
+                              link.href = activePdf.pdfData;
+                              link.download = `BNCC_Circular_${activePdf.referenceNumber || "Official"}.pdf`;
+                              link.click();
+                            }}
+                            className="py-3 bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-750 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-white/5 transition-all"
+                          >
+                            <Download size={14} />
+                            Download Test
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm("আপনি কি নিশ্চিতভাবে এই PDF সার্কুলারটি বাতিল/ডিলিট করতে চান?")) {
+                                try {
+                                  await deleteDoc(doc(db, "circulars", activePdf.id));
+                                  await onLogActivity("CIRCULAR_PDF_DELETED", `Super Admin deleted active PDF circular ${activePdf.id}`);
+                                  alert("PDF সার্কুলারটি সফলভাবে মুছে ফেলা হয়েছে।");
+                                } catch (e) {
+                                  console.error(e);
+                                  alert("সার্কুলার ডিলিট করতে সমস্যা হয়েছে।");
+                                }
+                              }
+                            }}
+                            className="py-3 bg-red-500/10 text-red-500 hover:bg-red-500/20 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-red-500/10 transition-all"
+                          >
+                            <Trash2 size={14} />
+                            Delete PDF
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB 2: ARCHIVE GRID */}
         {activeSubTab === "archive" && (
           <div className="space-y-6 animate-in fade-in duration-300">
@@ -718,21 +1011,40 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                         </button>
                       )}
 
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
-                        title="Edit Circular"
-                      >
-                        <Edit2 size={16} />
-                      </button>
+                      {item.fileType !== "pdf" ? (
+                        <>
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                            title="Edit Circular"
+                          >
+                            <Edit2 size={16} />
+                          </button>
 
-                      <button
-                        onClick={() => handleDuplicate(item)}
-                        className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
-                        title="Duplicate & Edit"
-                      >
-                        <Copy size={16} />
-                      </button>
+                          <button
+                            onClick={() => handleDuplicate(item)}
+                            className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                            title="Duplicate & Edit"
+                          >
+                            <Copy size={16} />
+                          </button>
+                        </>
+                      ) : (
+                        item.pdfData && (
+                          <button
+                            onClick={() => {
+                              const link = document.createElement("a");
+                              link.href = item.pdfData;
+                              link.download = `BNCC_Circular_${item.referenceNumber || "Official"}.pdf`;
+                              link.click();
+                            }}
+                            className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                            title="Download PDF"
+                          >
+                            <Download size={16} />
+                          </button>
+                        )
+                      )}
 
                       <button
                         onClick={() => handleDelete(item.id)}

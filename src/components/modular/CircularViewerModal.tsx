@@ -77,6 +77,22 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
   }, [isOpen]);
 
   const handleDownloadPDF = async () => {
+    if (circular?.fileType === "pdf" && circular?.pdfData) {
+      setIsDownloading(true);
+      try {
+        const link = document.createElement("a");
+        link.href = circular.pdfData;
+        link.download = `BNCC_Circular_${circular.referenceNumber || "Official"}.pdf`;
+        link.click();
+      } catch (e) {
+        console.error(e);
+        alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
+      } finally {
+        setIsDownloading(false);
+      }
+      return;
+    }
+
     if (!printRef.current) return;
     setIsDownloading(true);
     try {
@@ -166,123 +182,132 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
               </button>
             </div>
           ) : circular ? (
-            
-            /* Sized Document view */
-            <div className="border border-slate-200 bg-white p-2 shadow-xl rounded-2xl h-fit">
-              <div 
-                ref={printRef}
-                className="relative bg-white text-black p-12 w-[790px] h-[1118px] flex flex-col justify-between overflow-hidden select-none"
-                style={{ letterSpacing: "-0.015em" }}
-              >
-                {/* WATERMARK */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] z-[1]">
-                  <img 
-                    src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
-                    alt="BNCC Logo Watermark" 
-                    className="w-[450px] h-[450px]"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-
-                {/* BODY CONTENT */}
-                <div className="relative z-10 flex-grow space-y-4">
-                  {/* LETTERHEAD HEAD */}
-                  <div className="flex items-center justify-between border-b-2 border-black pb-4">
-                    <img 
-                      src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" 
-                      alt="College Logo" 
-                      className="h-14 w-auto object-contain"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="text-center font-bold">
-                      <h1 className="text-base font-black text-slate-900 mt-0.5">কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন</h1>
-                      <p className="text-[10px] text-slate-700 mt-0.5 uppercase">১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট</p>
-                    </div>
+            circular.fileType === "pdf" && circular.pdfData ? (
+              <div className="w-full flex justify-center items-center bg-slate-100 p-2 rounded-2xl border border-slate-200">
+                <iframe
+                  src={circular.pdfData}
+                  className="w-full h-[72vh] rounded-xl shadow-lg border border-slate-300 bg-white"
+                  title="Official Circular PDF"
+                />
+              </div>
+            ) : (
+              /* Sized Document view */
+              <div className="border border-slate-200 bg-white p-2 shadow-xl rounded-2xl h-fit">
+                <div 
+                  ref={printRef}
+                  className="relative bg-white text-black p-12 w-[790px] h-[1118px] flex flex-col justify-between overflow-hidden select-none"
+                  style={{ letterSpacing: "-0.015em" }}
+                >
+                  {/* WATERMARK */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] z-[1]">
                     <img 
                       src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
-                      alt="BNCC Logo" 
-                      className="h-14 w-auto object-contain"
+                      alt="BNCC Logo Watermark" 
+                      className="w-[450px] h-[450px]"
                       referrerPolicy="no-referrer"
                     />
                   </div>
 
-                  {/* REFERENCE */}
-                  <div className="flex justify-between text-[11px] font-bold text-slate-800 border-b border-dashed border-slate-300 pb-2">
-                    <span>স্মারক নং: {circular.referenceNumber || "ENR-2026-0001"}</span>
-                    <span>তারিখ: {new Date().toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  {/* BODY CONTENT */}
+                  <div className="relative z-10 flex-grow space-y-4">
+                    {/* LETTERHEAD HEAD */}
+                    <div className="flex items-center justify-between border-b-2 border-black pb-4">
+                      <img 
+                        src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" 
+                        alt="College Logo" 
+                        className="h-14 w-auto object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="text-center font-bold">
+                        <h1 className="text-base font-black text-slate-900 mt-0.5">কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন</h1>
+                        <p className="text-[10px] text-slate-700 mt-0.5 uppercase">১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট</p>
+                      </div>
+                      <img 
+                        src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
+                        alt="BNCC Logo" 
+                        className="h-14 w-auto object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+
+                    {/* REFERENCE */}
+                    <div className="flex justify-between text-[11px] font-bold text-slate-800 border-b border-dashed border-slate-300 pb-2">
+                      <span>স্মারক নং: {circular.referenceNumber || "ENR-2026-0001"}</span>
+                      <span>তারিখ: {new Date().toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    </div>
+
+                    {/* DETAILS SHEET */}
+                    <div className="text-slate-900 space-y-4 text-[11px] leading-relaxed">
+                      <h3 className="text-sm font-black text-center text-black border-y border-black py-1 tracking-tight">
+                        {circular.title}
+                      </h3>
+
+                      {/* Intro */}
+                      <p className="text-justify indent-8 text-slate-800">
+                        {circular.introduction}
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-6 items-start">
+                        {/* Left Side */}
+                        <div className="space-y-3">
+                          <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
+                            <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">১. আমাদের উদ্দেশ্য (Purpose)</h4>
+                            <p className="text-[10px] text-slate-700">{circular.purpose}</p>
+                          </div>
+                          <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
+                            <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">২. আবেদনের যোগ্যতা (Eligibility)</h4>
+                            <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.eligibility}</p>
+                          </div>
+                        </div>
+
+                        {/* Right Side */}
+                        <div className="space-y-3">
+                          <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
+                            <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">৩. প্রয়োজনীয় কাগজপত্র (Documents)</h4>
+                            <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.requiredDocuments}</p>
+                          </div>
+                          <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
+                            <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">৪. অনলাইন আবেদন পদ্ধতি (Application Guideline)</h4>
+                            <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.applicationProcedure}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timeline */}
+                      <div className="border-t border-slate-200 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <h4 className="font-extrabold text-black uppercase tracking-tight ml-1 text-[11px] mb-1">৫. নির্বাচন প্রক্রিয়া (Selection Process)</h4>
+                          <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.verificationProcess}</p>
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-black uppercase tracking-tight ml-1 text-[11px] mb-1">৬. গুরুত্বপূর্ণ তথ্য ও শেষ তারিখ (Key Dates)</h4>
+                          <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.importantDates}</p>
+                        </div>
+                      </div>
+
+                      {/* Term Conditions */}
+                      <div className="border-t border-slate-200 pt-3">
+                        <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">৭. সাধারণ নিয়ামাবলী (Rules & Regulations)</h4>
+                        <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.rulesAndConditions}</p>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* DETAILS SHEET */}
-                  <div className="text-slate-900 space-y-4 text-[11px] leading-relaxed">
-                    <h3 className="text-sm font-black text-center text-black border-y border-black py-1 tracking-tight">
-                      {circular.title}
-                    </h3>
-
-                    {/* Intro */}
-                    <p className="text-justify indent-8 text-slate-800">
-                      {circular.introduction}
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-6 items-start">
-                      {/* Left Side */}
-                      <div className="space-y-3">
-                        <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
-                          <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">১. আমাদের উদ্দেশ্য (Purpose)</h4>
-                          <p className="text-[10px] text-slate-700">{circular.purpose}</p>
-                        </div>
-                        <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
-                          <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">২. আবেদনের যোগ্যতা (Eligibility)</h4>
-                          <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.eligibility}</p>
-                        </div>
-                      </div>
-
-                      {/* Right Side */}
-                      <div className="space-y-3">
-                        <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
-                          <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">৩. প্রয়োজনীয় কাগজপত্র (Documents)</h4>
-                          <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.requiredDocuments}</p>
-                        </div>
-                        <div className="border-l-2 border-primary bg-slate-50 p-2 rounded">
-                          <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">৪. অনলাইন আবেদন পদ্ধতি (Application Guideline)</h4>
-                          <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.applicationProcedure}</p>
-                        </div>
-                      </div>
+                  {/* LETTER SIGNATURE */}
+                  <div className="flex justify-between items-end border-t border-black pt-4 z-10 relative">
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Platoon Commander Signature</p>
+                      <p className="text-[10px] font-black">{circular.contactInfo}</p>
                     </div>
-
-                    {/* Timeline */}
-                    <div className="border-t border-slate-200 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-extrabold text-black uppercase tracking-tight ml-1 text-[11px] mb-1">৫. নির্বাচন প্রক্রিয়া (Selection Process)</h4>
-                        <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.verificationProcess}</p>
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-black uppercase tracking-tight ml-1 text-[11px] mb-1">৬. গুরুত্বপূর্ণ তথ্য ও শেষ তারিখ (Key Dates)</h4>
-                        <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.importantDates}</p>
-                      </div>
-                    </div>
-
-                    {/* Term Conditions */}
-                    <div className="border-t border-slate-200 pt-3">
-                      <h4 className="font-extrabold text-black uppercase tracking-tight text-[11px] mb-1">৭. সাধারণ নিয়ামাবলী (Rules & Regulations)</h4>
-                      <p className="text-[10px] text-slate-700 whitespace-pre-line">{circular.rulesAndConditions}</p>
+                    <div className="text-right">
+                      <p className="font-bold text-slate-800 text-[10px] whitespace-pre-line">{circular.footer}</p>
+                      <p className="text-[9px] text-slate-500 mt-1 uppercase font-mono">ENR OFFICIAL COPY</p>
                     </div>
                   </div>
+
                 </div>
-
-                {/* LETTER SIGNATURE */}
-                <div className="flex justify-between items-end border-t border-black pt-4 z-10 relative">
-                  <div>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Platoon Commander Signature</p>
-                    <p className="text-[10px] font-black">{circular.contactInfo}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-slate-800 text-[10px] whitespace-pre-line">{circular.footer}</p>
-                    <p className="text-[9px] text-slate-500 mt-1 uppercase font-mono">ENR OFFICIAL COPY</p>
-                  </div>
-                </div>
-
               </div>
-            </div>
+            )
           ) : null}
 
         </div>

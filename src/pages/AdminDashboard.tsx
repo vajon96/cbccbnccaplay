@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Users, CheckCircle, XCircle, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
-  X, Sparkles, BrainCircuit, Info,
+  X, Sparkles, BrainCircuit, Info, FileText,
   History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
   MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock, ArrowRight,
   TrendingUp, PieChart as PieChartIcon, BarChart as BarChartIcon, Bell, Megaphone, Activity, QrCode,
@@ -701,8 +701,8 @@ export function AdminDashboard() {
               }`}
             >
               <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-primary" />
-                AI Circular
+                <FileText size={18} className="text-primary" />
+                Manage Circular
               </div>
               {activeTab === "circular" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
             </button>
