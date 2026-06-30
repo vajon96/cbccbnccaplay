@@ -145,6 +145,29 @@ export function Home() {
                   </tbody>
                 </table>
               </div>
+
+              {/* নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর বিশেষ যোগ্যতা */}
+              <div className="p-5 rounded-2xl bg-primary/10 border border-primary/20 space-y-3">
+                <h4 className="text-sm font-bold text-primary uppercase tracking-wide">নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর প্রার্থীদের জন্য বিশেষ যোগ্যতা</h4>
+                <ul className="space-y-1.5 text-xs text-slate-300">
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span><strong>পুরুষ (সাধারণ প্রার্থী):</strong> ন্যূনতম উচ্চতা ৫ ফুট ৬ ইঞ্চি।</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span><strong>পুরুষ (নৃতাত্ত্বিক জনগোষ্ঠী):</strong> অনেক নিয়োগে ন্যূনতম উচ্চতা ৫ ফুট ৪ ইঞ্চি পর্যন্ত শিথিলযোগ্য।</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span><strong>নারী (সাধারণ প্রার্থী):</strong> ন্যূনতম উচ্চতা ৫ ফুট ২ ইঞ্চি।</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span><strong>নারী (নৃতাত্ত্বিক জনগোষ্ঠী):</strong> অনেক নিয়োগে ন্যূনতম উচ্চতা ৫ ফুট পর্যন্ত শিথিলযোগ্য।</span>
+                  </li>
+                </ul>
+              </div>
             </div>
             <div className="bg-white/5 p-12 flex items-center justify-center">
               <div className="space-y-6">
@@ -156,7 +179,8 @@ export function Home() {
                     "পাসপোর্ট সাইজ ছবি – ২ কপি",
                     "ব্লাড গ্রুপ রিপোর্টের ফটোকপি – ২ কপি",
                     "জাতীয় পরিচয়পত্র/জন্ম নিবন্ধনের ফটোকপি",
-                    "পিতামাতার জাতীয় পরিচয়পত্রের ফটোকপি"
+                    "পিতামাতার জাতীয় পরিচয়পত্রের ফটোকপি",
+                    "নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর প্রার্থী হলে সংশ্লিষ্ট কর্তৃপক্ষ কর্তৃক প্রদত্ত বৈধ নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর সনদপত্র জমা দিতে হবে।"
                   ].map((doc, i) => (
                     <li key={i} className="flex items-center gap-3 text-slate-400">
                       <CheckCircle className="w-5 h-5 text-primary shrink-0" />

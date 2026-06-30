@@ -374,6 +374,19 @@ export function AdmitCard() {
                     <span className="text-[9px] font-bold uppercase">Candidate Photo</span>
                   </div>
 
+                  {applicant.isEthnicMinority && (
+                    <div className="flex-grow mx-6 self-center p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-500/30 shadow-md text-center flex flex-col items-center justify-center relative overflow-hidden min-h-[1.2in]">
+                      <div className="absolute top-0 right-0 w-8 h-8 bg-emerald-500/10 rounded-full blur-sm -mr-3 -mt-3"></div>
+                      <div className="absolute bottom-0 left-0 w-8 h-8 bg-teal-500/10 rounded-full blur-sm -ml-3 -mb-3"></div>
+                      <span className="text-[10px] font-black text-emerald-800 uppercase tracking-[0.15em]">
+                        বিশেষ ক্যাটাগরি / Special Category
+                      </span>
+                      <span className="text-sm font-black text-emerald-900 mt-1.5 flex items-center gap-1.5">
+                        <span className="text-emerald-600">✔️</span> নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠী
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-[1.2in] h-[1.5in] border border-black p-2 flex flex-col items-center justify-center bg-white">
                       <QRCodeCanvas 
@@ -411,6 +424,7 @@ export function AdmitCard() {
                       { label: "Blood Group", value: applicant.bloodGroup },
                       { label: "Height", value: `${applicant.heightFeet}'${applicant.heightInches}" (${applicant.heightFeet} feet ${applicant.heightInches} inches)` },
                       { label: "Weight", value: `${applicant.weightKg} kg` },
+                      ...(applicant.isEthnicMinority ? [{ label: "Special Category", value: "Ethnic Minority (নৃতাত্ত্বিক ক্ষুদ্র জনগোষ্ঠী)" }] : []),
                     ].map((item, i) => (
                       <div key={i} className="flex items-baseline mb-0.5">
                         <span className="w-32 font-bold text-[10px] uppercase font-montserrat shrink-0 text-black/60 truncate">{item.label}</span>

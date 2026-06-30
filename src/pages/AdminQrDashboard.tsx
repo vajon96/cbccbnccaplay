@@ -1199,6 +1199,10 @@ export function AdminQrDashboard() {
                         <p className="text-white text-xs">{scannedCadet.religion || "N/A"} | {scannedCadet.gender || "N/A"}</p>
                       </div>
                       <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
+                        <p className="text-[9px] uppercase tracking-wider text-slate-500">নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠী</p>
+                        <p className="text-white text-xs">{scannedCadet.isEthnicMinority ? "হ্যাঁ" : "না"}</p>
+                      </div>
+                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
                         <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">প্রতিষ্ঠান (Institution)</p>
                         <p className="text-white font-normal">{scannedCadet.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)"}</p>
                       </div>

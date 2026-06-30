@@ -50,6 +50,7 @@ export function EnrollmentForm() {
     collegeName: "Cox's Bazar City College",
     photo: "",
     previousBNCC: false,
+    isEthnicMinority: false,
     previousInstitution: "",
     previousBattalionRegiment: "",
     previousRank: "Cadet",
@@ -384,6 +385,29 @@ export function EnrollmentForm() {
                   </select>
                 </div>
               ))}
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider ml-1">আপনি কি নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর সদস্য?</label>
+                <div className="flex gap-4">
+                  {[
+                    { label: "হ্যাঁ", value: true },
+                    { label: "না", value: false }
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, isEthnicMinority: opt.value })}
+                      className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-200 border-2 ${
+                        formData.isEthnicMinority === opt.value
+                          ? "bg-primary text-white border-primary shadow-md shadow-primary/10"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -982,6 +1006,7 @@ export function EnrollmentForm() {
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">মাতা</span> <span className="text-slate-800 font-bold">{formData.motherNameEnglish}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">জন্ম তারিখ</span> <span className="text-slate-800 font-bold">{formData.dob}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">লিঙ্গ</span> <span className="text-slate-800 font-bold">{formData.gender}</span></p>
+                    <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠী</span> <span className="text-slate-800 font-bold">{formData.isEthnicMinority ? "হ্যাঁ" : "না"}</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">উচ্চতা</span> <span className="text-slate-800 font-bold">{formData.heightFeet}'{formData.heightInches}" ({formData.heightFeet} feet {formData.heightInches} inches)</span></p>
                     <p className="flex flex-col"><span className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-0.5">ওজন</span> <span className="text-slate-800 font-bold">{formData.weightKg} Kg</span></p>
                   </div>

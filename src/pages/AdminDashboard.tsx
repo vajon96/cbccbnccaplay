@@ -532,7 +532,7 @@ export function AdminDashboard() {
     applicants.forEach((app) => {
       if (app.photo) {
         const base64Data = app.photo.split(",")[1];
-        zip.file(`${app.fullNameEnglish || app.fullNameBangla}_${app.id}.jpg`, base64Data, { base64: true });
+        zip.file(`${app.id}.jpg`, base64Data, { base64: true });
       }
     });
     const content = await zip.generateAsync({ type: "blob" });
