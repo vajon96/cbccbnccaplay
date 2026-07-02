@@ -8,7 +8,7 @@ import {
   History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
   MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock, ArrowRight,
   TrendingUp, PieChart as PieChartIcon, BarChart as BarChartIcon, Bell, Megaphone, Activity, QrCode,
-  Camera, Globe, MapPin
+  Camera, Globe, MapPin, Clock
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -23,6 +23,7 @@ import { AuditLogs } from "../components/modular/AuditLogs";
 import { BulkActions } from "../components/modular/BulkActions";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { AICircularManager } from "../components/modular/AICircularManager";
+import { AdmissionTimerManager } from "../components/modular/AdmissionTimerManager";
 import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
 
 export function AdminDashboard() {
@@ -36,7 +37,7 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "passwordResets">("applicants");
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "passwordResets" | "timer">("applicants");
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
@@ -637,14 +638,30 @@ export function AdminDashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-slate-400" },
-          { label: "পেন্ডিং", value: stats.pending, icon: CheckCircle, color: "text-amber-500" },
-          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-primary" },
+          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-slate-400", onClick: undefined, actionText: "" },
+          { label: "পেন্ডিং", value: stats.pending, icon: CheckCircle, color: "text-amber-500", onClick: undefined, actionText: "" },
+          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-primary", onClick: undefined, actionText: "" },
+          { 
+            label: "সেন্ট ব্রডকাস্ট", 
+            value: notifications.filter((n: any) => n.targetId === "ALL").length, 
+            icon: Megaphone, 
+            color: "text-accent", 
+            onClick: () => setActiveTab("broadcast"), 
+            actionText: "তৈরি করুন ↗" 
+          }
         ].map((stat, i) => (
-          <div key={i} className="glass-card p-6 rounded-2xl border border-white/5 shadow-2xl">
+          <div 
+            key={i} 
+            onClick={stat.onClick}
+            className={`glass-card p-6 rounded-2xl border border-white/5 shadow-2xl transition-all ${
+              stat.onClick ? "cursor-pointer hover:border-accent/40 hover:bg-white/[0.02] active:scale-95" : ""
+            }`}
+          >
             <div className="flex items-center justify-between mb-2">
               <stat.icon className={`w-5 h-5 ${stat.color}`} />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Stats</span>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                {stat.actionText || "Stats"}
+              </span>
             </div>
             <p className="text-2xl font-black text-white">{stat.value}</p>
             <p className="text-xs font-bold text-slate-400">{stat.label}</p>
@@ -665,6 +682,18 @@ export function AdminDashboard() {
             Applicants
           </div>
           {activeTab === "applicants" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
+        </button>
+        <button
+          onClick={() => setActiveTab("broadcast")}
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
+            activeTab === "broadcast" ? "text-primary" : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Megaphone size={18} />
+            Broadcast
+          </div>
+          {activeTab === "broadcast" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
         </button>
         <button
           onClick={() => setActiveTab("logs")}
@@ -706,6 +735,18 @@ export function AdminDashboard() {
               </div>
               {activeTab === "circular" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
             </button>
+            <button
+              onClick={() => setActiveTab("timer")}
+              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
+                activeTab === "timer" ? "text-primary" : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Clock size={18} className="text-primary" />
+                Application Schedule
+              </div>
+              {activeTab === "timer" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
+            </button>
           </>
         )}
         <button
@@ -719,18 +760,6 @@ export function AdminDashboard() {
             Analytics
           </div>
           {activeTab === "analytics" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-        </button>
-        <button
-          onClick={() => setActiveTab("broadcast")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-            activeTab === "broadcast" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Megaphone size={18} />
-            Broadcast
-          </div>
-          {activeTab === "broadcast" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
         </button>
         <button
           onClick={() => setActiveTab("passwordResets")}
@@ -1315,6 +1344,25 @@ export function AdminDashboard() {
                 console.error("Activity Log Save Incident:", e);
               }
             }} 
+          />
+        </div>
+      ) : activeTab === "timer" ? (
+        <div className="pb-12 h-full">
+          <AdmissionTimerManager 
+            adminSession={adminSession}
+            onLogActivity={async (type: string, details: string) => {
+              try {
+                await addDoc(collection(db, "activity_logs"), {
+                  type,
+                  details,
+                  actorId: adminSession?.username || "super_admin",
+                  targetId: "TIMER_SYSTEM",
+                  timestamp: Timestamp.now()
+                });
+              } catch (e) {
+                console.error("Activity Log Save Incident:", e);
+              }
+            }}
           />
         </div>
       ) : activeTab === "passwordResets" ? (

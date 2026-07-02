@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle, Users, Award, ShieldCheck, ArrowRight, Info, FileText, Activity, Phone, Sparkles, BrainCircuit, Send, Loader2 } from "lucide-react";
 import { getQuickFAQ } from "../services/geminiService";
 import { CircularViewerModal } from "../components/modular/CircularViewerModal";
+import { AdmissionTimerCard } from "../components/AdmissionTimerCard";
 
 export function Home() {
   const [faqQuestion, setFaqQuestion] = useState("");
@@ -79,6 +80,9 @@ export function Home() {
           </motion.div>
         </div>
       </section>
+
+      {/* Admission Timer Card */}
+      <AdmissionTimerCard />
 
       {/* Eligibility Section */}
       <section id="eligibility" className="max-w-7xl mx-auto px-4">
