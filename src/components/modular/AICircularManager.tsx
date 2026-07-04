@@ -8,6 +8,7 @@ import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, delete
 import { generateAICircular } from "../../services/geminiService";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { handleHtml2CanvasClone } from "../../lib/pdfUtils";
 
 interface CircularContent {
   title: string;
@@ -381,7 +382,8 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
         scale: 2, // High resolution crisp image render
         useCORS: true,
         backgroundColor: "#ffffff",
-        logging: false
+        logging: false,
+        onclone: handleHtml2CanvasClone
       });
 
       const imgData = canvas.toDataURL("image/png");

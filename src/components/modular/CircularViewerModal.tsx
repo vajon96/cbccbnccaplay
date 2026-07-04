@@ -3,6 +3,7 @@ import { X, Download, Loader2, Sparkles, AlertTriangle, FileText } from "lucide-
 import { db, collection, getDocs, query, where, limit, onSnapshot } from "../../firebase";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { handleHtml2CanvasClone } from "../../lib/pdfUtils";
 
 interface CircularViewerModalProps {
   isOpen: boolean;
@@ -101,7 +102,8 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
         scale: 2,
         useCORS: true,
         backgroundColor: "#ffffff",
-        logging: false
+        logging: false,
+        onclone: handleHtml2CanvasClone
       });
 
       const imgData = canvas.toDataURL("image/png");

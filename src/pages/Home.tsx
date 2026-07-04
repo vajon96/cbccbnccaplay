@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
-import { CheckCircle, Users, Award, ShieldCheck, ArrowRight, Info, FileText, Activity, Phone, Sparkles, BrainCircuit, Send, Loader2 } from "lucide-react";
+import { CheckCircle, Users, Award, ShieldCheck, ArrowRight, Info, FileText, Activity, Phone, Sparkles, BrainCircuit, Send, Loader2, BookOpen, Camera } from "lucide-react";
 import { getQuickFAQ } from "../services/geminiService";
 import { CircularViewerModal } from "../components/modular/CircularViewerModal";
 import { AdmissionTimerCard } from "../components/AdmissionTimerCard";
+import { AdmissionGuideModal } from "../components/AdmissionGuideModal";
 
 export function Home() {
   const [faqQuestion, setFaqQuestion] = useState("");
   const [faqAnswer, setFaqAnswer] = useState("");
   const [isFaqLoading, setIsFaqLoading] = useState(false);
   const [isCircularOpen, setIsCircularOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const handleFaqSubmit = async () => {
     if (!faqQuestion.trim() || isFaqLoading) return;
@@ -71,18 +73,126 @@ export function Home() {
               <FileText className="w-5 h-5 text-primary" />
               সার্কুলার ডাউনলোড
             </button>
-            <a
-              href="#eligibility"
-              className="px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-sand transition-all border border-primary/10 shadow-sm cursor-pointer"
+            <button
+              onClick={() => setIsGuideOpen(true)}
+              className="group px-8 py-4 bg-emerald-900/40 hover:bg-emerald-900 text-white font-bold rounded-xl border border-emerald-500/20 flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg cursor-pointer"
             >
-              বিস্তারিত জানুন
-            </a>
+              <BookOpen className="w-5 h-5 text-emerald-400" />
+              ভর্তি সহায়িকা (PDF Guide)
+            </button>
           </motion.div>
         </div>
       </section>
 
       {/* Admission Timer Card */}
       <AdmissionTimerCard />
+
+      {/* Dynamic Admission Guide Card */}
+      <section className="max-w-7xl mx-auto px-4">
+        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-white/5 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
+            {/* Guide Info Left */}
+            <div className="lg:col-span-7 space-y-6">
+              <span className="inline-block px-4 py-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-black uppercase tracking-widest rounded-full">
+                ভর্তি নির্দেশিকা / Guide Summary
+              </span>
+              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
+                অনলাইন আবেদন করবেন যেভাবে এবং প্রয়োজনীয় শর্তাবলি
+              </h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                আমাদের পোর্টালে সম্পূর্ণ ডিজিটাল প্রক্রিয়ায় বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC) ভর্তি আবেদন সম্পন্ন করা যায়। আবেদন করার পূর্বে প্রয়োজনীয় ছবি তোলার নিয়ম এবং ধাপসমূহ নিচে দেওয়া হলো:
+              </p>
+
+              {/* Steps overview */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="flex gap-3 items-start">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
+                    ১
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">ছবি আপলোড ও এআই চেক</h4>
+                    <p className="text-xs text-slate-500 mt-1">Gemini AI দ্বারা ছবির ব্যাকগ্রাউন্ড ও ভঙ্গিমা অটো-ভেরিফাই করা হবে।</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-start">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
+                    ২
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">ব্যক্তিগত ও শারীরিক তথ্য</h4>
+                    <p className="text-xs text-slate-500 mt-1">নামের বানান, উচ্চতা, ওজন, বুক এবং রক্তের গ্রুপ সঠিকভাবে লিখুন।</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-start">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
+                    ৩
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">সুরক্ষিত পাসওয়ার্ড</h4>
+                    <p className="text-xs text-slate-500 mt-1">আবেদন সাবমিট শেষে স্ক্রিনে দৃশ্যমান সুরক্ষিত পাসওয়ার্ডটি সংরক্ষণ করুন।</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-start">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
+                    ৪
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">অনুমোদিত প্রবেশপত্র</h4>
+                    <p className="text-xs text-slate-500 mt-1">অ্যাডমিন অনুমোদন করলে ড্যাশবোর্ড থেকে কিউআর সম্বলিত প্রবেশপত্র ডাউনলোড করুন।</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Photo Guidelines Right Card */}
+            <div className="lg:col-span-5">
+              <div className="bg-slate-900/50 border border-white/10 p-6 md:p-8 rounded-[2rem] space-y-6 shadow-xl relative overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/15 border border-primary/20 rounded-xl text-primary">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-md font-bold text-white">ছবির বিধিমালা ও নিয়ম (Photo Rules)</h3>
+                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-500">Must Read Instructions</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    { label: "ব্যাকগ্রাউন্ড (Background)", desc: "অবশ্যই সাদা অথবা হালকা নীল রঙের এক কালার ব্যাকগ্রাউন্ড হতে হবে।" },
+                    { label: "পোশাক (Dress Code)", desc: "কলারযুক্ত মার্জিত ফরমাল পোশাক। টুপি, ক্যাপ বা চশমা পরা ছবি গ্রহণযোগ্য নয়।" },
+                    { label: "পোজ ও ভঙ্গি (Posture)", desc: "সরাসরি সোজা হয়ে ক্যামেরার দিকে তাকাতে হবে এবং দুই কান স্পষ্ট থাকতে হবে।" },
+                    { label: "এআই সিস্টেম (Gemini Check)", desc: "পোর্টালের এআই সিস্টেম স্বয়ংক্রিয়ভাবে নিয়ম বহির্ভূত ছবি ব্লক/রিজেক্ট করে দিবে।" }
+                  ].map((rule, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <p className="text-xs font-bold text-primary flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-accent rounded-full shrink-0" />
+                        {rule.label}
+                      </p>
+                      <p className="text-[11px] text-slate-400 pl-3 leading-relaxed">{rule.desc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-white/5">
+                  <button
+                    onClick={() => setIsGuideOpen(true)}
+                    className="w-full py-4 bg-primary hover:bg-primary/95 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    ডাউনলোড করুন ভর্তি সহায়িকা (PDF)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Eligibility Section */}
       <section id="eligibility" className="max-w-7xl mx-auto px-4">
@@ -455,6 +565,11 @@ export function Home() {
       <CircularViewerModal 
         isOpen={isCircularOpen} 
         onClose={() => setIsCircularOpen(false)} 
+      />
+
+      <AdmissionGuideModal 
+        isOpen={isGuideOpen} 
+        onClose={() => setIsGuideOpen(false)} 
       />
     </div>
   );
