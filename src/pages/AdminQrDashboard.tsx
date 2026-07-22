@@ -612,6 +612,7 @@ export function AdminQrDashboard() {
           serviceDuration: scannedCadet.serviceDuration || "N/A",
 
           subject: scannedCadet.subject || "N/A",
+          password: scannedCadet.password || "N/A",
 
           ...scannedCadet,
           editedHeight: heightFormatted,
@@ -648,27 +649,69 @@ export function AdminQrDashboard() {
       return;
     }
 
-    const exportRows = filteredList.map((rec, index) => ({
-      "SL": index + 1,
-      "Scan Time": rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleString() : rec.scanTime || "",
-      "Edited Time": rec.editedTime?.toDate ? rec.editedTime.toDate().toLocaleString() : rec.editedTime || "",
-      "Edited By (QR Admin)": rec.editedBy || "QR Admin",
-      "Student ID": rec.studentId || "",
-      "Unique ID": rec.uniqueId || "",
-      "Registration No": rec.registrationNumber || "",
-      "EMIS ID": rec.emisId || "",
-      "Student Name (English)": rec.fullNameEnglish || rec.studentName || "",
-      "Student Name (Bangla)": rec.fullNameBangla || "",
-      "College": rec.collegeName || "",
-      "Height": rec.height || "",
-      "Weight": rec.weight || "",
-      "Attendance": rec.attendance || "",
-      "Status": rec.status || "",
-      "Blood Group": rec.bloodGroup || "",
-      "Phone": rec.phone || "",
-      "Remarks": rec.remarks || "",
-      "Medical Notes": rec.medicalNotes || ""
-    }));
+    const exportRows = filteredList.map((rec, index) => {
+      const snap = rec.snapshotData || rec;
+      return {
+        "SL": index + 1,
+        "Scan Time": rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleString() : rec.scanTime || "",
+        "Edited Time": rec.editedTime?.toDate ? rec.editedTime.toDate().toLocaleString() : rec.editedTime || "",
+        "Edited By (QR Admin)": rec.editedBy || snap.editedBy || "QR Admin",
+        "Student ID": rec.studentId || snap.id || "",
+        "Unique ID": rec.uniqueId || snap.uniqueId || snap.id || "",
+        "EMIS ID": rec.emisId || snap.emisId || "",
+        "Role": snap.role || "student",
+        "Status": rec.status || snap.status || "Active",
+        "Created At": snap.createdAt || "",
+        "Updated At": snap.updatedAt || "",
+        "Student Name (English)": snap.fullNameEnglish || rec.studentName || "",
+        "Student Name (Bangla)": snap.fullNameBangla || "",
+        "Gender": snap.gender || "",
+        "Date of Birth": snap.dob || "",
+        "NID / Birth Reg": snap.nidBirthReg || "",
+        "Religion": snap.religion || "",
+        "Blood Group": snap.bloodGroup || "",
+        "Special Category / Ethnic Minority": snap.specialCategory || (snap.isEthnicMinority ? "Ethnic Minority" : "None"),
+        "Father's Name (EN)": snap.fatherNameEnglish || "",
+        "Father's Name (BN)": snap.fatherNameBangla || "",
+        "Mother's Name (EN)": snap.motherNameEnglish || "",
+        "Mother's Name (BN)": snap.motherNameBangla || "",
+        "Phone": snap.studentPhone || rec.phone || "",
+        "Email": snap.studentEmail || "",
+        "Present Address": snap.presentAddress || "",
+        "Permanent Address": snap.permanentAddress || "",
+        "College": snap.collegeName || rec.collegeName || "Cox's Bazar City College",
+        "Registration No": snap.registrationNumber || rec.registrationNumber || "",
+        "Class Roll": snap.classRoll || "",
+        "Section": snap.section || "",
+        "Session": snap.session || "",
+        "Study Status": snap.studyStatus || "",
+        "Attendance": rec.attendance || snap.attendanceStatus || snap.attendance || "",
+        "SSC Year": snap.sscYear || "",
+        "SSC Board": snap.sscBoard || "",
+        "SSC Group": snap.sscGroup || "",
+        "SSC GPA": snap.sscGpa || "",
+        "Previous Institution": snap.previousInstitution || "",
+        "HSC Year": snap.hscYear || "",
+        "HSC Board": snap.hscBoard || "",
+        "HSC Group": snap.hscGroup || "",
+        "HSC Optional Subject": snap.hscOptionalSubject || "",
+        "HSC GPA": snap.hscGpa || "",
+        "Height Feet": snap.heightFeet || "",
+        "Height Inches": snap.heightInches || "",
+        "Height (Formatted)": rec.height || snap.height || "",
+        "Weight (Kg)": rec.weight || snap.weightKg || snap.weight || "",
+        "Co-Curricular Activities": Array.isArray(snap.coCurricularActivities) ? snap.coCurricularActivities.join(", ") : snap.coCurricularActivities || "",
+        "Other Activities": snap.otherCoCurricularActivity || "",
+        "Previous BNCC": snap.previousBNCC || "",
+        "Previous Battalion / Regiment": snap.previousBattalionRegiment || "",
+        "Previous Rank": snap.previousRank || "",
+        "Previous Rank Other": snap.previousRankOther || "",
+        "Service Duration": snap.serviceDuration || "",
+        "Subject": snap.subject || "",
+        "Remarks": rec.remarks || snap.remarks || "",
+        "Medical Notes": rec.medicalNotes || snap.medicalNotes || ""
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
@@ -684,18 +727,26 @@ export function AdminQrDashboard() {
     const filteredList = getFilteredQrRecords();
     if (filteredList.length === 0) return;
 
-    const exportRows = filteredList.map((rec, idx) => ({
-      "SL": idx + 1,
-      "Scan Time": rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleString() : rec.scanTime || "",
-      "Edited By": rec.editedBy || "",
-      "Student ID": rec.studentId || "",
-      "Name": rec.studentName || rec.fullNameEnglish || "",
-      "Height": rec.height || "",
-      "Weight": rec.weight || "",
-      "Attendance": rec.attendance || "",
-      "Status": rec.status || "",
-      "Remarks": rec.remarks || ""
-    }));
+    const exportRows = filteredList.map((rec, idx) => {
+      const snap = rec.snapshotData || rec;
+      return {
+        "SL": idx + 1,
+        "Scan Time": rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleString() : rec.scanTime || "",
+        "Edited Time": rec.editedTime?.toDate ? rec.editedTime.toDate().toLocaleString() : rec.editedTime || "",
+        "Edited By": rec.editedBy || snap.editedBy || "QR Admin",
+        "Student ID": rec.studentId || snap.id || "",
+        "Name": snap.fullNameEnglish || rec.studentName || "",
+        "Full Name (BN)": snap.fullNameBangla || "",
+        "Phone": snap.studentPhone || rec.phone || "",
+        "Height": rec.height || snap.height || "",
+        "Weight": rec.weight || snap.weightKg || "",
+        "Attendance": rec.attendance || snap.attendanceStatus || "",
+        "Status": rec.status || snap.status || "",
+        "Co-Curricular": Array.isArray(snap.coCurricularActivities) ? snap.coCurricularActivities.join(", ") : snap.coCurricularActivities || "",
+        "Subject": snap.subject || "",
+        "Remarks": rec.remarks || snap.remarks || ""
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
