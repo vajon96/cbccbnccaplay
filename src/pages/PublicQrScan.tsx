@@ -179,6 +179,21 @@ export function PublicQrScan() {
             cadetId = decodedText;
           }
 
+          cadetId = (cadetId || "").trim();
+          if (cadetId.startsWith("http://") || cadetId.startsWith("https://")) {
+            try {
+              const url = new URL(cadetId);
+              const pId = new URLSearchParams(url.search).get("id");
+              if (pId) cadetId = pId.trim();
+              else {
+                const segs = url.pathname.split("/").filter(Boolean);
+                if (segs.length > 0) cadetId = segs[segs.length - 1].trim();
+              }
+            } catch {
+              // ignore
+            }
+          }
+
           if (!cadetId) return;
 
           // Prevent scans of admin QR codes in public mode
@@ -192,6 +207,13 @@ export function PublicQrScan() {
           setError(null);
 
           try {
+            if (cadetId.includes("/") || cadetId.includes("\\")) {
+              setError("অবৈধ ID ফরম্যাট।");
+              setLoading(false);
+              setTimeout(() => setError(null), 4000);
+              return;
+            }
+
             const docRef = doc(db, "applicants", cadetId);
             const docSnap = await getDoc(docRef);
 
@@ -619,7 +641,28 @@ export function PublicQrScan() {
                       }
 
                       try {
-                        const docRef = doc(db, "applicants", inputId);
+                        let cleanInputId = inputId.trim();
+                        if (cleanInputId.startsWith("http://") || cleanInputId.startsWith("https://")) {
+                          try {
+                            const url = new URL(cleanInputId);
+                            const pId = new URLSearchParams(url.search).get("id");
+                            if (pId) cleanInputId = pId.trim();
+                            else {
+                              const segs = url.pathname.split("/").filter(Boolean);
+                              if (segs.length > 0) cleanInputId = segs[segs.length - 1].trim();
+                            }
+                          } catch {
+                            // ignore
+                          }
+                        }
+
+                        if (cleanInputId.includes("/") || cleanInputId.includes("\\")) {
+                          setError("অবৈধ ID ফরম্যাট।");
+                          setTimeout(() => setError(null), 4000);
+                          return;
+                        }
+
+                        const docRef = doc(db, "applicants", cleanInputId);
                         const docSnap = await getDoc(docRef);
                         if (docSnap.exists()) {
                           const rawData = docSnap.data();

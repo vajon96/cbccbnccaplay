@@ -8,7 +8,7 @@ import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, delete
 import { generateAICircular } from "../../services/geminiService";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { handleHtml2CanvasClone } from "../../lib/pdfUtils";
+import { handleHtml2CanvasClone, getSafePdfUrl } from "../../lib/pdfUtils";
 
 interface CircularContent {
   title: string;
@@ -143,20 +143,66 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
 
   const generateAI = async () => {
     if (!startDate || !deadlineDate) {
-      alert("Please provide both Start Date and Application Deadline.");
+      alert("অনুগ্রহ করে শুরুর তারিখ এবং আবেদনের শেষ তারিখ প্রদান করুন।");
       return;
     }
     setIsGenerating(true);
+    const draftRef = generateReferenceNumber(circulars.length);
+    setRefNumber(draftRef);
     try {
-      const draftRef = generateReferenceNumber(circulars.length);
-      setRefNumber(draftRef);
       const data = await generateAICircular(startDate, deadlineDate, draftRef);
       setCircularData(data);
       setEditingCircularId(null); // Reset since this is a newly generated AI circular
       await onLogActivity("CIRCULAR_AI_GENERATED", `Super Admin generated an AI Enrollment Circular with Ref: ${draftRef}`);
     } catch (e) {
-      console.error(e);
-      alert("AI Generation failed. Please check Gemini API configuration or retry.");
+      console.warn("AI Generation offline or failed, activating official local template builder:", e);
+      // Construct a highly polished local template
+      const fallbackData: CircularContent = {
+        title: "বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (বিএনসিসি) নতুন ক্যাডেট ভর্তি বিজ্ঞপ্তি - ২০২৬",
+        introduction: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনে (মিশ্র) ২০২৬-২০২৭ শিক্ষাবর্ষে নতুন ক্যাডেট ভর্তির জন্য আগ্রহী শিক্ষার্থীদের কাছ থেকে আবেদন আহ্বান করা যাচ্ছে। জ্ঞান, শৃঙ্খলা ও স্বেচ্ছাসেবা- এই মূলমন্ত্রকে বুকে ধারণ করে দেশসেবায় অবদান রাখার চমৎকার সুযোগ পেতে আজই অংশ নিন।",
+        purpose: "শিক্ষার্থীদের মাঝে আত্মরক্ষা, শৃঙ্খলাবোধ, দেশপ্রেম এবং সেবামূলক মনোভাব জাগ্রত করা এবং পরবর্তীতে বাংলাদেশ সশস্ত্র বাহিনীতে (সেনা, নৌ ও বিমান বাহিনী) অফিসার বা সৈনিক পদে যোগদানের জন্য উপযুক্ত প্রস্তুতি প্রদান করা।",
+        eligibility: `১. কক্সবাজার সিটি কলেজের একাদশ শ্রেণী অথবা অনার্স ১ম বর্ষের নিয়মিত ছাত্র/ছাত্রী।
+২. শিক্ষাগত যোগ্যতা: এসএসসি বা সমমানের পরীক্ষায় নূন্যতম জিপিএ ৩.০০।
+৩. শারীরিক যোগ্যতা:
+   - ছাত্র: উচ্চতা নূন্যতম ৫ ফুট ৬ ইঞ্চি, বুকের মাপ স্বাভাবিক ৩০ ইঞ্চি এবং প্রসারিত ৩২ ইঞ্চি।
+   - ছাত্রী: উচ্চতা নূন্যতম ৫ ফুট ২ ইঞ্চি।
+৪. বৈবাহিক অবস্থা: অবিবাহিত।
+৫. অন্যান্য: কঠোর পরিশ্রমী এবং সুস্বাস্থ্যের অধিকারী হতে হবে।`,
+        requiredDocuments: `১. এসএসসি পাশের মূল সনদপত্র/মার্কশীটের ফটোকপি (২ копи)।
+২. কলেজে ভর্তি বা বেতন রসিদের ফটোকপি (১ কপি)।
+৩. সদ্য তোলা পাসপোর্ট সাইজের রঙিন ছবি (২ কপি)।
+৪. রক্তের গ্রুপ পরীক্ষার রিপোর্টের ফটোকপি (১ কপি)।
+৫. পিতা/মাতার জাতীয় পরিচয়পত্রের (NID) ফটোকপি (১ কপি)।
+৬. আবেদনকারীর অনলাইন জন্ম নিবন্ধন বা জাতীয় পরিচয়পত্রের ফটোকপি।`,
+        applicationProcedure: `১. এই ওয়েবসাইটের "আবেদন করুন" মেনুতে গিয়ে অনলাইন রেজিস্ট্রেশন ফর্মটি নির্ভুলভাবে পূরণ করতে হবে।
+২. সদ্য তোলা পাসপোর্ট সাইজের একটি স্পষ্ট ও সাদা ব্যাকগ্রাউন্ডের ছবি আপলোড করতে হবে।
+৩. আবেদন সম্পন্ন হলে আপনার জন্য একটি ইউনিক 'ক্যাডেট ইউজার আইডি' এবং কিউআর কোডসম্বলিত প্রবেশপত্র (Admit Card) তৈরি হবে।
+৪. উক্ত প্রবেশপত্রটি ডাউনলোড করে রঙিন প্রিন্ট কপি করে নিজের কাছে সংরক্ষণ করতে হবে।`,
+        importantDates: `১. অনলাইন আবেদন শুরুর তারিখ: ${startDate}
+২. আবেদনের শেষ তারিখ: ${deadlineDate}
+৩. প্রাথমিক বাছাই ও পরীক্ষা: আবেদনের সময়সীমা শেষ হওয়ার পর এসএমএস-এর মাধ্যমে নির্দিষ্ট তারিখ ও সময় জানিয়ে দেয়া হবে।`,
+        verificationProcess: `১. প্রথম ধাপ: উচ্চতা, ওজন এবং শারীরিক যোগ্যতা যাচাই।
+২. দ্বিতীয় ধাপ: সাধারণ জ্ঞান এবং মৌলিক বিষয়ের উপর লিখিত পরীক্ষা।
+৩. তৃতীয় ধাপ: চূড়ান্ত মৌখিক পরীক্ষা ও ভাইভা।
+*উল্লেখ্য, পরীক্ষার দিন প্রিন্টকৃত প্রবেশপত্র (Admit Card) সাথে আনা বাধ্যতামূলক। প্রবেশপত্রের কিউআর কোড স্ক্যান করে উপস্থিতি নির্ধারণ করা হবে।*`,
+        rulesAndConditions: `১. ক্যাডেটদের প্রতি সপ্তাহের নির্ধারিত প্যারেড ও প্রশিক্ষণ ক্লাসে অংশগ্রহণ বাধ্যতামূলক।
+২. সুশৃঙ্খলভাবে প্লাটুনের সিনিয়র ক্যাডেট ও প্লাটুন কমান্ডারের আদেশ মেনে চলতে হবে।
+৩. কোনো প্রকার অসদাচরণ বা অনৈতিক কাজের প্রমাণ পাওয়া গেলে ক্যাডেটশিপ বাতিল বলে গণ্য হবে।`,
+        contactInfo: `উজ্জ্বল কান্তি দেব
+প্লাটুন কমান্ডার, কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন
+প্রফেসর আন্ডার অফিসার (PUO)
+মোবাইল নম্বর: +৮৮০ ১৮১২-৪৩০৪৫৪`,
+        footer: `আদেশক্রমে,
+উজ্জ্বল কান্তি দেব
+প্লাটুন কমান্ডার, কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন
+রেফারেন্স নম্বর: ${draftRef}`,
+        category: "Admission / Membership"
+      };
+
+      setCircularData(fallbackData);
+      setEditingCircularId(null);
+      await onLogActivity("CIRCULAR_FALLBACK_GENERATED", `Super Admin generated a high-quality Local Template Enrollment Circular with Ref: ${draftRef}`);
+      alert("AI সার্ভিসটি এই মুহূর্তে অফলাইনে থাকায় একটি প্রি-ডিজাইনড অফিসিয়াল সার্কুলার স্লট সফলভাবে তৈরি করা হয়েছে! আপনি এটিকে আপনার ইচ্ছেমতো এডিট করে পাবলিশ করতে পারবেন।");
     } finally {
       setIsGenerating(false);
     }
@@ -896,7 +942,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                         {/* PDF Preview Container */}
                         <div className="flex-grow rounded-xl overflow-hidden border border-white/10 bg-white">
                           <iframe 
-                            src={activePdf.pdfData} 
+                            src={getSafePdfUrl(activePdf.pdfData)} 
                             className="w-full h-[280px]" 
                             title="Active Circular PDF Preview"
                           />
@@ -906,8 +952,9 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                         <div className="grid grid-cols-2 gap-3 pt-2">
                           <button
                             onClick={() => {
+                              const safeUrl = getSafePdfUrl(activePdf.pdfData);
                               const link = document.createElement("a");
-                              link.href = activePdf.pdfData;
+                              link.href = safeUrl;
                               link.download = `BNCC_Circular_${activePdf.referenceNumber || "Official"}.pdf`;
                               link.click();
                             }}
@@ -1035,8 +1082,9 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                         item.pdfData && (
                           <button
                             onClick={() => {
+                              const safeUrl = getSafePdfUrl(item.pdfData);
                               const link = document.createElement("a");
-                              link.href = item.pdfData;
+                              link.href = safeUrl;
                               link.download = `BNCC_Circular_${item.referenceNumber || "Official"}.pdf`;
                               link.click();
                             }}

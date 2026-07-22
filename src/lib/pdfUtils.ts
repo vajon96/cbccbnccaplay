@@ -102,3 +102,28 @@ export function handleHtml2CanvasClone(clonedDoc: Document) {
     }
   }
 }
+
+/**
+ * Convert base64 data URI to a safe Blob URL.
+ * Works perfectly inside browser iframe previews and bypasses download restrictions.
+ */
+export function getSafePdfUrl(pdfData: string): string {
+  if (!pdfData || typeof pdfData !== "string") return "";
+  if (pdfData.startsWith("data:application/pdf;base64,")) {
+    try {
+      const base64Part = pdfData.split(",")[1];
+      const binaryString = atob(base64Part);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      console.error("Error creating Blob URL from PDF base64:", e);
+      return pdfData;
+    }
+  }
+  return pdfData;
+}

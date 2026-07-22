@@ -3,7 +3,7 @@ import { X, Download, Loader2, Sparkles, AlertTriangle, FileText } from "lucide-
 import { db, collection, getDocs, query, where, limit, onSnapshot } from "../../firebase";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { handleHtml2CanvasClone } from "../../lib/pdfUtils";
+import { handleHtml2CanvasClone, getSafePdfUrl } from "../../lib/pdfUtils";
 
 interface CircularViewerModalProps {
   isOpen: boolean;
@@ -39,33 +39,47 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
           setErrorMsg("দুঃখিত, অ্যাডমিন কর্তৃক সার্কুলার অ্যাক্সেস এই মুহূর্তে নিষ্ক্রিয় করা আছে।");
           setCircular(null);
           setLoading(false);
-          return;
-        }
-
-        // If public access is allowed, listen to the active published circular
-        if (!unsubscribeCirculars) {
-          const q = query(
-            collection(db, "circulars"), 
-            where("status", "==", "published"),
-            limit(1)
-          );
-          unsubscribeCirculars = onSnapshot(q, (circularSnap) => {
-            if (circularSnap.empty) {
-              setCircular(null);
-              setErrorMsg("দুঃখিত, এই মুহূর্তে কোনো সার্কুলার উপলব্ধ নেই। (No circular is currently available)");
-            } else {
-              setCircular(circularSnap.docs[0].data());
-              setErrorMsg(null);
-            }
-            setLoading(false);
-          }, (err) => {
-            console.error("Real-time circular fetch error:", err);
-            setErrorMsg("সার্কুলার তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
-            setLoading(false);
-          });
         }
       }, (err) => {
         console.error("Real-time settings fetch error:", err);
+      });
+
+      // 2. Listen to active published circulars (and sort on client to load newest one reliably)
+      const q = query(
+        collection(db, "circulars"), 
+        where("status", "==", "published")
+      );
+      unsubscribeCirculars = onSnapshot(q, (circularSnap) => {
+        if (circularSnap.empty) {
+          setCircular(null);
+          setPublicAccessAllowed(currentAllowed => {
+            if (currentAllowed) {
+              setErrorMsg("দুঃখিত, এই মুহূর্তে কোনো সার্কুলার উপলব্ধ নেই। (No circular is currently available)");
+            }
+            return currentAllowed;
+          });
+        } else {
+          // Sort by createdAt / publicationDate descending on the client-side
+          const sorted = circularSnap.docs.map(docDoc => ({
+            id: docDoc.id,
+            ...docDoc.data()
+          })).sort((a: any, b: any) => {
+            const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || a.publicationDate || 0).getTime());
+            const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || b.publicationDate || 0).getTime());
+            return bTime - aTime;
+          });
+
+          setCircular(sorted[0]);
+          setPublicAccessAllowed(currentAllowed => {
+            if (currentAllowed) {
+              setErrorMsg(null);
+            }
+            return currentAllowed;
+          });
+        }
+        setLoading(false);
+      }, (err) => {
+        console.error("Real-time circular fetch error:", err);
         setErrorMsg("সার্কুলার তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
         setLoading(false);
       });
@@ -81,8 +95,9 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
     if (circular?.fileType === "pdf" && circular?.pdfData) {
       setIsDownloading(true);
       try {
+        const safeUrl = getSafePdfUrl(circular.pdfData);
         const link = document.createElement("a");
-        link.href = circular.pdfData;
+        link.href = safeUrl;
         link.download = `BNCC_Circular_${circular.referenceNumber || "Official"}.pdf`;
         link.click();
       } catch (e) {
@@ -187,7 +202,7 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
             circular.fileType === "pdf" && circular.pdfData ? (
               <div className="w-full flex justify-center items-center bg-slate-100 p-2 rounded-2xl border border-slate-200">
                 <iframe
-                  src={circular.pdfData}
+                  src={getSafePdfUrl(circular.pdfData)}
                   className="w-full h-[72vh] rounded-xl shadow-lg border border-slate-300 bg-white"
                   title="Official Circular PDF"
                 />

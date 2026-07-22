@@ -222,6 +222,9 @@
     "/admins/{adminId}": {
       "schema": "admin",
       "description": "Administrative users"
+    },
+    "/qr_records/{qrRecordId}": {
+      "description": "Independent QR Admin snapshot records"
     }
   }
 }

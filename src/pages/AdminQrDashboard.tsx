@@ -2,42 +2,68 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Scan, LogOut, Shield, QrCode, Camera, CheckCircle, XCircle, 
-  User, Clock, Loader2, Award, Calendar, AlertCircle, Edit, Save, Plus, HelpCircle,
-  Zap, ZapOff, Volume2, VolumeX, RotateCw, Check, Sliders, Search
+  User, Clock, Loader2, Award, Calendar, AlertCircle, Edit, Save, Plus,
+  Zap, ZapOff, Volume2, VolumeX, RotateCw, Check, Sliders, Search, Download,
+  FileSpreadsheet, FileText, Printer, History, Settings, ChevronRight, Home,
+  Filter, Trash2, Eye, RefreshCw, Layers, Sparkles, MapPin, Phone, Mail, Droplets
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { motion, AnimatePresence } from "framer-motion";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { 
-  db, doc, updateDoc, getDoc, getDocs, setDoc, query, where, collection, Timestamp,
-  onSnapshot, handleFirestoreError, OperationType 
+  db, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, collection, Timestamp,
+  onSnapshot, handleFirestoreError, OperationType, orderBy 
 } from "../firebase";
 import { getSession, clearSession } from "../lib/auth";
 
 export function AdminQrDashboard() {
   const [adminSession, setAdminSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Active Module View Navigation
+  // Views: "dashboard" | "scan" | "search" | "profile" | "excel" | "history" | "settings"
+  const [activeTab, setActiveTab] = useState<"dashboard" | "scan" | "search" | "profile" | "excel" | "history" | "settings">("dashboard");
+
+  // Search & Scanned Data
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchingDatabase, setSearchingDatabase] = useState(false);
-  const [scannerActive, setScannerActive] = useState(true);
   const [scannedCadet, setScannedCadet] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   
-  // Daily attendance statistics state
-  const [cadets, setCadets] = useState<any[]>([]);
-  const [todayAttendance, setTodayAttendance] = useState<{[key: string]: any}>({});
-  const [batchFilter, setBatchFilter] = useState("All");
-  
-  // Physical editing fields
-  const [editingPhysical, setEditingPhysical] = useState(false);
-  const [height, setHeight] = useState("");
-  const [weight, setWeight] = useState("");
-  const [updatingPhysical, setUpdatingPhysical] = useState(false);
-  
-  // Cadet verification extra fields state
-  const [cadetHistory, setCadetHistory] = useState<any[]>([]);
+  // Independent Measurement & Snapshot Edit Form State
+  const [isEditing, setIsEditing] = useState(false);
+  const [heightFeet, setHeightFeet] = useState<string>("5");
+  const [heightInches, setHeightInches] = useState<string>("8");
+  const [weightKg, setWeightKg] = useState<string>("64");
+  const [attendance, setAttendance] = useState<"Present" | "Absent" | "Late">("Present");
+  const [statusTag, setStatusTag] = useState<string>("Active");
+  const [remarks, setRemarks] = useState<string>("");
+  const [medicalNotes, setMedicalNotes] = useState<string>("");
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
+
+  // Firestore Collections State
+  const [qrRecords, setQrRecords] = useState<any[]>([]);
+  const [recentScans, setRecentScans] = useState<any[]>([]);
+  const [cadetSnapshotHistory, setCadetSnapshotHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Advanced Camera experience states
+  // Excel Storage Filters
+  const [filterDate, setFilterDate] = useState("");
+  const [filterBattalion, setFilterBattalion] = useState("All");
+  const [filterAttendance, setFilterAttendance] = useState("All");
+  const [filterRank, setFilterRank] = useState("All");
+  const [filterSearch, setFilterSearch] = useState("");
+
+  // Snapshot Detail Modal
+  const [selectedSnapshotModal, setSelectedSnapshotModal] = useState<any>(null);
+
+  // Notifications
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Camera & Scanner Experience
   const qrCodeRef = useRef<Html5Qrcode | null>(null);
   const [cameras, setCameras] = useState<any[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
@@ -45,16 +71,15 @@ export function AdminQrDashboard() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [maxZoom, setMaxZoom] = useState(5);
   const [supportTorch, setSupportTorch] = useState(false);
-  const [supportZoom, setSupportZoom] = useState(false);
   const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<"initializing" | "ready" | "scanning" | "error">("initializing");
   const [scanSuccessTrigger, setScanSuccessTrigger] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
-  
-  const navigate = useNavigate();
-  const todayStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
-  // Verifying session on load
+  const navigate = useNavigate();
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  // Auth Verification
   useEffect(() => {
     const session = getSession();
     if (!session || (session.role !== "super_admin" && session.role !== "sub_admin" && session.role !== "attendance_officer" && session.role !== "qr_admin")) {
@@ -65,68 +90,46 @@ export function AdminQrDashboard() {
     setLoading(false);
   }, [navigate]);
 
-  // Load cadet attendance history on scan
-  useEffect(() => {
-    if (!scannedCadet) {
-      setCadetHistory([]);
-      return;
-    }
-
-    const fetchHistory = async () => {
-      setLoadingHistory(true);
-      try {
-        const historyList: any[] = [];
-        const subRef = collection(db, "applicants", scannedCadet.id, "attendance_history");
-        const snap = await getDocs(subRef);
-        snap.forEach(doc => {
-          historyList.push({ id: doc.id, ...doc.data() });
-        });
-        
-        historyList.sort((a, b) => {
-          const tA = a.timestamp?.seconds || 0;
-          const tB = b.timestamp?.seconds || 0;
-          return tB - tA;
-        });
-        setCadetHistory(historyList);
-      } catch (err) {
-        console.error("Fetch history query failure:", err);
-      } finally {
-        setLoadingHistory(false);
-      }
-    };
-
-    fetchHistory();
-  }, [scannedCadet]);
-
-  // Real-time listener for cadets (applicants) and daily attendance records
+  // Real-time listener for `qr_records` (Independent QR Snapshot Storage)
   useEffect(() => {
     if (loading || !adminSession) return;
 
-    // Listen to cadets
-    const cadetsRef = collection(db, "applicants");
-    const unsubCadets = onSnapshot(cadetsRef, (snap) => {
-      const cadetsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setCadets(cadetsList);
-    });
-
-    // Listen to today's attendance logs
-    // Path matches: attendance/{date}/records/{cadetId}
-    const attendanceRef = collection(db, "attendance", todayStr, "records");
-    const unsubAttendance = onSnapshot(attendanceRef, (snap) => {
-      const attMap: {[key: string]: any} = {};
-      snap.docs.forEach(doc => {
-        attMap[doc.id] = doc.data();
+    try {
+      const qrRef = collection(db, "qr_records");
+      const unsub = onSnapshot(qrRef, (snap) => {
+        const recordsList: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        recordsList.sort((a, b) => {
+          const tA = a.scanTime?.seconds || a.editedTime?.seconds || 0;
+          const tB = b.scanTime?.seconds || b.editedTime?.seconds || 0;
+          return tB - tA;
+        });
+        setQrRecords(recordsList);
+        setRecentScans(recordsList.slice(0, 10));
+      }, (err) => {
+        console.error("qr_records listener error:", err);
       });
-      setTodayAttendance(attMap);
-    });
 
-    return () => {
-      unsubCadets();
-      unsubAttendance();
-    };
-  }, [loading, adminSession, todayStr]);
+      return () => unsub();
+    } catch (err) {
+      console.error("Setup listener error:", err);
+    }
+  }, [loading, adminSession]);
 
+  // Fetch individual student snapshot history when cadet is selected
+  useEffect(() => {
+    if (!scannedCadet) {
+      setCadetSnapshotHistory([]);
+      return;
+    }
+
+    const studentId = scannedCadet.id;
+    const studentHistory = qrRecords.filter(r => r.studentId === studentId || r.uniqueId === studentId);
+    setCadetSnapshotHistory(studentHistory);
+  }, [scannedCadet, qrRecords]);
+
+  // Sound feedback on scan
   const playSuccessSound = () => {
+    if (!audioEnabled) return;
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) return;
@@ -142,10 +145,11 @@ export function AdminQrDashboard() {
       osc.start();
       osc.stop(ctx.currentTime + 0.25);
     } catch (err) {
-      console.warn("Sound synthesis error:", err);
+      console.warn("Audio synthesis error:", err);
     }
   };
 
+  // Camera Flashlight Control
   const handleToggleFlashlight = async () => {
     if (!qrCodeRef.current || !qrCodeRef.current.isScanning) return;
     try {
@@ -158,10 +162,11 @@ export function AdminQrDashboard() {
         setFlashlightActive(nextState);
       }
     } catch (err) {
-      console.warn("Torch constraint application failed:", err);
+      console.warn("Torch failed:", err);
     }
   };
 
+  // Camera Zoom Control
   const handleZoomChange = async (val: number) => {
     if (!qrCodeRef.current || !qrCodeRef.current.isScanning) return;
     try {
@@ -176,37 +181,23 @@ export function AdminQrDashboard() {
         setZoomLevel(nextZoom);
       }
     } catch (err) {
-      console.warn("Zoom constraint application failed:", err);
+      console.warn("Zoom failed:", err);
     }
   };
 
-  const toggleFrontBackCamera = async () => {
+  // Switch Front / Rear Camera
+  const toggleFrontBackCamera = () => {
     if (cameras.length < 2) return;
-    
     const currentCamera = cameras.find(c => c.id === selectedCameraId);
     if (!currentCamera) return;
 
     const lbl = currentCamera.label.toLowerCase();
-    const isCurrentBack = lbl.includes("back") || lbl.includes("rear") || 
-                          lbl.includes("environment") || lbl.includes("wide") || 
-                          lbl.includes("outward");
+    const isCurrentBack = lbl.includes("back") || lbl.includes("rear") || lbl.includes("environment") || lbl.includes("wide");
 
-    let nextCamera = null;
-    if (isCurrentBack) {
-      nextCamera = cameras.find(c => {
-        const l = c.label.toLowerCase();
-        return l.includes("front") || l.includes("user") || l.includes("forward");
-      });
-    } else {
-      nextCamera = cameras.find(c => {
-        const l = c.label.toLowerCase();
-        return l.includes("back") || l.includes("rear") || l.includes("environment") || l.includes("wide");
-      });
-    }
-
-    if (!nextCamera) {
-      nextCamera = cameras.find(c => c.id !== selectedCameraId);
-    }
+    let nextCamera = cameras.find(c => {
+      const l = c.label.toLowerCase();
+      return isCurrentBack ? (l.includes("front") || l.includes("user")) : (l.includes("back") || l.includes("rear") || l.includes("environment"));
+    }) || cameras.find(c => c.id !== selectedCameraId);
 
     if (nextCamera) {
       setSelectedCameraId(nextCamera.id);
@@ -215,31 +206,16 @@ export function AdminQrDashboard() {
     }
   };
 
-  const getCameraQualityLabel = () => {
-    if (!qrCodeRef.current || !qrCodeRef.current.isScanning) return "AUTO FOCUS";
-    try {
-      const settings = qrCodeRef.current.getRunningTrackSettings();
-      const w = settings.width || 0;
-      const h = settings.height || 0;
-      if (w >= 1920 || h >= 1080) return "1080p Full HD";
-      if (w >= 1280 || h >= 720) return "720p HD";
-      return "SD Quality";
-    } catch (err) {
-      return "Auto High-Speed";
-    }
-  };
-
-  // Initializing the camera scanner with Html5Qrcode Custom Experience
+  // Initialize Camera Scanner when tab is "scan"
   useEffect(() => {
-    if (loading || !scannerActive || scannedCadet) return;
+    if (loading || activeTab !== "scan" || scannedCadet) return;
 
     let html5QrCode: Html5Qrcode | null = null;
     let isActive = true;
 
     const startScanner = async (cameraId: string) => {
       if (!isActive) return;
-
-      const target = document.getElementById("reader-admin-dashboard");
+      const target = document.getElementById("reader-qr-admin");
       if (!target) {
         setTimeout(() => startScanner(cameraId), 100);
         return;
@@ -247,67 +223,35 @@ export function AdminQrDashboard() {
 
       try {
         setCameraStatus("initializing");
-        
         if (!html5QrCode) {
-          html5QrCode = new Html5Qrcode("reader-admin-dashboard");
+          html5QrCode = new Html5Qrcode("reader-qr-admin");
           qrCodeRef.current = html5QrCode;
         }
 
         const onScanSuccess = async (decodedText: string) => {
           if (!isActive) return;
-          
           setScanSuccessTrigger(true);
           setTimeout(() => setScanSuccessTrigger(false), 800);
-          
-          if (window.navigator && window.navigator.vibrate) {
+
+          if (window.navigator?.vibrate) {
             window.navigator.vibrate(150);
           }
+          playSuccessSound();
 
-          if (audioEnabled) {
-            playSuccessSound();
-          }
-
-          let cadetId = "";
+          let targetId = decodedText;
           try {
             const data = JSON.parse(decodedText);
-            cadetId = data.id || data.roll || decodedText;
+            targetId = data.id || data.uniqueId || data.roll || decodedText;
           } catch (e) {
-            cadetId = decodedText;
+            targetId = decodedText;
           }
 
-          if (!cadetId) return;
-
-          setSearchingDatabase(true);
-          setError(null);
-          try {
-            const docRef = doc(db, "applicants", cadetId);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-              const cadetData = docSnap.data();
-              setScannedCadet({ id: cadetId, ...cadetData });
-              
-              setHeight(cadetData.height || "");
-              setWeight(cadetData.weight || "");
-              
-              setSuccess("ক্যাডেট তথ্য সফলভাবে পাওয়া গেছে!");
-              setTimeout(() => setSuccess(null), 3000);
-            } else {
-              setError(`ক্যাডেট আইডি ${cadetId} পাওয়া যায়নি!`);
-              setTimeout(() => setError(null), 4000);
-            }
-          } catch (err) {
-            console.error("Scan profile lookup failed:", err);
-            setError("ডাটাবেজ থেকে ক্যাডেট রেকর্ড খুঁজতে ব্যর্থ হয়েছে।");
-            setTimeout(() => setError(null), 4000);
-            handleFirestoreError(err, OperationType.GET, `applicants/${cadetId}`);
-          } finally {
-            setSearchingDatabase(false);
-          }
+          if (!targetId) return;
+          await handleSearchById(targetId);
         };
 
         const config = {
-          fps: 24, // Boost frame rate for faster detection
+          fps: 24,
           qrbox: (w: number, h: number) => {
             const size = Math.min(w, h) * 0.72;
             return { width: size, height: size };
@@ -315,36 +259,29 @@ export function AdminQrDashboard() {
           aspectRatio: 1.333333
         };
 
-        const cameraSelector = (cameraId === "environment" || cameraId === "user")
-          ? { facingMode: cameraId }
-          : cameraId;
+        const cameraSelector = (cameraId === "environment" || cameraId === "user") ? { facingMode: cameraId } : cameraId;
 
-        await html5QrCode.start(
-          cameraSelector as any,
-          config,
-          onScanSuccess,
-          () => {} // Silent failures
-        );
-
+        await html5QrCode.start(cameraSelector as any, config, onScanSuccess, () => {});
         setCameraStatus("scanning");
         setCameraPermissionError(null);
 
-        // Fetch torch / zoom metadata
         try {
           const capabilities = html5QrCode.getRunningTrackCapabilities() as any;
           setSupportTorch(capabilities && "torch" in capabilities);
-          setSupportZoom(capabilities && "zoom" in capabilities);
-          if (capabilities && capabilities.zoom) {
+          if (capabilities?.zoom) {
             setMaxZoom(capabilities.zoom.max || 5);
           }
         } catch (capError) {
-          console.warn("Could not query device camera capabilities:", capError);
+          console.warn("Camera capabilities check warning:", capError);
         }
-
       } catch (err: any) {
-        console.error("Camera startup failed:", err);
+        console.error("Scanner startup failed:", err);
         setCameraStatus("error");
-        setCameraPermissionError("ক্যামেরা অন করতে ব্যর্থ হয়েছে। অনুগ্রহ করে সেটিংস থেকে ক্যামেরা পারমিশন চেক করুন।");
+        let msg = "ক্যামেরা চালুর অনুমতি পাওয়া যায়নি।";
+        if (err?.name === "NotAllowedError" || String(err).includes("NotAllowedError") || String(err).includes("Permission")) {
+          msg = "ব্রাউজার/আইফ্রেম বা প্রিভিউতে ক্যামেরা অ্যাক্সেস ব্লক করা আছে। দয়া করে নিচে 'QR ছবি আপলোড করুন' অথবা ম্যানুয়ালি ID টাইপ করে সার্চ করুন।";
+        }
+        setCameraPermissionError(msg);
       }
     };
 
@@ -355,263 +292,653 @@ export function AdminQrDashboard() {
         if (devices && devices.length > 0) {
           setCameras(devices);
           setCameraPermissionError(null);
-
-          const rearCameras = devices.filter((device) => {
-            const lbl = device.label.toLowerCase();
-            return (
-              lbl.includes("back") ||
-              lbl.includes("rear") ||
-              lbl.includes("environment") ||
-              lbl.includes("main") ||
-              lbl.includes("wide") ||
-              lbl.includes("outward") ||
-              lbl.includes("0")
-            );
-          });
-
-          // Priority order: Wide, Back, Rear, Index 0, All Devices fallback
-          let defaultCamera = rearCameras.find((device) => device.label.toLowerCase().includes("wide")) ||
-                             rearCameras.find((device) => device.label.toLowerCase().includes("back")) ||
-                             rearCameras[0] ||
-                             devices[0];
-
-          if (selectedCameraId) {
-            const hasPrev = devices.some(d => d.id === selectedCameraId);
-            if (hasPrev) {
-              startScanner(selectedCameraId);
-              return;
-            }
-          }
-
-          setSelectedCameraId(defaultCamera.id);
-          startScanner(defaultCamera.id);
+          let defaultCam = devices.find(d => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("rear")) || devices[0];
+          setSelectedCameraId(defaultCam.id);
+          startScanner(defaultCam.id);
         } else {
-          console.warn("No camera devices enumerated, falling back to direct environment stream");
-          const fallbackDevices = [
-            { id: "environment", label: "Rear Camera (Auto Fallback)" },
-            { id: "user", label: "Front Camera (Auto Fallback)" }
-          ];
-          setCameras(fallbackDevices);
+          const fallbacks = [{ id: "environment", label: "Rear Camera" }, { id: "user", label: "Front Camera" }];
+          setCameras(fallbacks);
           setSelectedCameraId("environment");
           startScanner("environment");
         }
       } catch (err: any) {
-        console.warn("Cataloging system cameras failed, retrying with direct device stream fallback:", err);
-        const fallbackDevices = [
-          { id: "environment", label: "Rear Camera (Auto Fallback)" },
-          { id: "user", label: "Front Camera (Auto Fallback)" }
-        ];
-        setCameras(fallbackDevices);
-        setSelectedCameraId("environment");
-        startScanner("environment");
+        console.warn("Camera init warning:", err);
+        setCameraStatus("error");
+        setCameraPermissionError("ক্যামেরা চালুর অনুমতি নেই বা ক্যামেরা ডিটেক্ট হয়নি। আপনি নিচে 'QR ছবি আপলোড করুন' বা ID টাইপ করে তথ্য দেখতে পারেন।");
       }
     };
 
-    const timer = setTimeout(initializeDevices, 100);
+    const timer = setTimeout(initializeDevices, 150);
 
     return () => {
       isActive = false;
       clearTimeout(timer);
-      if (html5QrCode) {
-        try {
-          if (html5QrCode.isScanning) {
-            html5QrCode.stop().catch(err => console.error("Scanner stop error on exit:", err));
-          }
-        } catch (e) {
-          console.error("Cleanup error in scanner effect:", e);
-        }
+      if (html5QrCode?.isScanning) {
+        html5QrCode.stop().catch(err => console.error("Scanner stop error:", err));
       }
     };
-  }, [loading, scannerActive, scannedCadet, selectedCameraId]);
+  }, [loading, activeTab, scannedCadet, selectedCameraId]);
 
-  const handleLogout = () => {
-    clearSession();
-    navigate("/login");
-  };
+  // QR Image File Scan Upload Handler
+  const handleQrImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handleMarkAttendance = async (status: "Present" | "Absent" | "Late") => {
-    if (!scannedCadet) return;
-    const path = `attendance/${todayStr}/records/${scannedCadet.id}`;
-    
     try {
-      // Save in attendance sub-collection for structured querying
-      const attDocRef = doc(db, "attendance", todayStr, "records", scannedCadet.id);
-      await setDoc(attDocRef, {
-        cadetName: scannedCadet.fullNameEnglish || scannedCadet.fullNameBangla,
-        status,
-        timestamp: Timestamp.now()
-      });
+      setSearchingDatabase(true);
+      const tempScanner = new Html5Qrcode("qr-file-reader-temp");
+      const decodedText = await tempScanner.scanFile(file, true);
+      playSuccessSound();
 
-      // Also update overall quick status inside cadet's main document as a fallback reference
-      const cadetRef = doc(db, "applicants", scannedCadet.id);
-      await updateDoc(cadetRef, {
-        attendanceStatus: status,
-        attendanceTime: Timestamp.now()
-      });
+      let targetId = decodedText;
+      try {
+        const data = JSON.parse(decodedText);
+        targetId = data.id || data.uniqueId || data.roll || decodedText;
+      } catch (err) {
+        targetId = decodedText;
+      }
 
-      // Save into student personal history collection
-      const histDocRef = doc(db, "applicants", scannedCadet.id, "attendance_history", todayStr);
-      await setDoc(histDocRef, {
-        date: todayStr,
-        status,
-        timestamp: Timestamp.now()
-      });
-
-      setSuccess(`ক্যাডেট ${scannedCadet.fullNameEnglish || scannedCadet.fullNameBangla} কে "${status}" হিসেবে চিহ্নিত করা হয়েছে।`);
-      setScannedCadet(null);
-      setEditingPhysical(false);
-      
-      setTimeout(() => setSuccess(null), 4000);
+      if (targetId) {
+        await handleSearchById(targetId);
+      } else {
+        setError("QR Code থেকে কোনো বৈধ ID পাওয়া যায়নি।");
+        setTimeout(() => setError(null), 3000);
+      }
     } catch (err) {
-      console.error("Mark attendance error:", err);
-      handleFirestoreError(err, OperationType.WRITE, path);
+      console.error("QR File scan error:", err);
+      setError("ছবি থেকে QR Code পড়া যায়নি। দয়া করে পরিষ্কার QR Code ছবি আপলোড করুন অথবা ID টাইপ করুন।");
+      setTimeout(() => setError(null), 4000);
+    } finally {
+      setSearchingDatabase(false);
+      e.target.value = "";
     }
   };
 
-  const handleUpdatePhysical = async () => {
-    if (!scannedCadet) return;
-    setUpdatingPhysical(true);
+  // Clean and extract valid query or ID from input (raw text, JSON, or URL)
+  const cleanSearchQuery = (input: string): string => {
+    let cleaned = (input || "").trim();
+    if (!cleaned) return "";
+
+    // 1. JSON
+    if ((cleaned.startsWith("{") && cleaned.endsWith("}")) || (cleaned.startsWith("[") && cleaned.endsWith("]"))) {
+      try {
+        const parsed = JSON.parse(cleaned);
+        const possible = parsed.id || parsed.uniqueId || parsed.cadetId || parsed.roll || parsed.emisId;
+        if (possible) return String(possible).trim();
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. URL
+    if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
+      try {
+        const url = new URL(cleaned);
+        const searchParams = new URLSearchParams(url.search);
+        const possibleId = searchParams.get("id") || searchParams.get("uniqueId") || searchParams.get("cadetId") || searchParams.get("emisId") || searchParams.get("roll");
+        if (possibleId) {
+          return possibleId.trim();
+        }
+        const pathSegments = url.pathname.split("/").filter(Boolean);
+        if (pathSegments.length > 0) {
+          const lastSeg = pathSegments[pathSegments.length - 1];
+          if (lastSeg && !lastSeg.includes(".") && lastSeg.length > 1) {
+            return lastSeg.trim();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return cleaned;
+  };
+
+  // Main Search Handler for Main Database (`applicants`) - READ ONLY
+  const handleSearchById = async (idOrQuery: string) => {
+    const queryTerm = cleanSearchQuery(idOrQuery);
+    if (!queryTerm) return;
+
+    setSearchingDatabase(true);
+    setError(null);
+    setSearchResults([]);
 
     try {
-      const cadetRef = doc(db, "applicants", scannedCadet.id);
-      await updateDoc(cadetRef, {
-        height: height.trim() || null,
-        weight: weight.trim() || null
+      // 1. Direct Doc Lookup by ID (ONLY if queryTerm does NOT contain slashes)
+      if (!queryTerm.includes("/") && !queryTerm.includes("\\")) {
+        const directDocRef = doc(db, "applicants", queryTerm);
+        const directSnap = await getDoc(directDocRef);
+
+        if (directSnap.exists()) {
+          const cadetData = { id: directSnap.id, ...directSnap.data() };
+          selectStudentForProfile(cadetData);
+          setSuccess("শিক্ষার্থী/ক্যাডেট প্রোফাইল সফলভাবে পাওয়া গেছে!");
+          setTimeout(() => setSuccess(null), 3000);
+          return;
+        }
+      }
+
+      // 2. Query Search across applicants by studentPhone, emisId, fullNameEnglish, uniqueId, etc.
+      const collRef = collection(db, "applicants");
+      const phoneQ = query(collRef, where("studentPhone", "==", queryTerm));
+      const emisQ = query(collRef, where("emisId", "==", queryTerm));
+      const uniqueQ = query(collRef, where("uniqueId", "==", queryTerm));
+      
+      const [phoneSnap, emisSnap, uniqueSnap] = await Promise.all([
+        getDocs(phoneQ),
+        getDocs(emisQ),
+        getDocs(uniqueQ)
+      ]);
+
+      let matches: any[] = [];
+      phoneSnap.forEach(d => matches.push({ id: d.id, ...d.data() }));
+      emisSnap.forEach(d => {
+        if (!matches.some(m => m.id === d.id)) matches.push({ id: d.id, ...d.data() });
+      });
+      uniqueSnap.forEach(d => {
+        if (!matches.some(m => m.id === d.id)) matches.push({ id: d.id, ...d.data() });
       });
 
-      // Update scanned cadet local state as well
-      setScannedCadet(prev => ({
-        ...prev,
-        height: height.trim() || null,
-        weight: weight.trim() || null
-      }));
+      // 3. Fallback: Search all local loaded records for text substring match
+      if (matches.length === 0) {
+        const allSnap = await getDocs(collRef);
+        const searchLower = queryTerm.toLowerCase();
+        allSnap.forEach(d => {
+          const data: any = d.data();
+          const searchHaystack = `${d.id} ${data.fullNameEnglish || ''} ${data.fullNameBangla || ''} ${data.studentPhone || ''} ${data.emisId || ''} ${data.nidBirthReg || ''} ${data.uniqueId || ''}`.toLowerCase();
+          if (searchHaystack.includes(searchLower)) {
+            matches.push({ id: d.id, ...data });
+          }
+        });
+      }
 
-      setSuccess("শারীরিক তথ্য সফলভাবে আপডেট করা হয়েছে!");
-      setEditingPhysical(false);
+      if (matches.length === 1) {
+        selectStudentForProfile(matches[0]);
+        setSuccess("শিক্ষার্থী রেকর্ড পাওয়া গেছে!");
+        setTimeout(() => setSuccess(null), 3000);
+      } else if (matches.length > 1) {
+        setSearchResults(matches);
+        setActiveTab("search");
+      } else {
+        setError(`"${queryTerm}" আইডি বা তথ্য ডাটাবেজে পাওয়া যায়নি!`);
+        setTimeout(() => setError(null), 4000);
+      }
+
+    } catch (err) {
+      console.error("Search failed:", err);
+      setError("ডাটাবেজ সার্চ করতে সমস্যা হয়েছে।");
+      setTimeout(() => setError(null), 4000);
+    } finally {
+      setSearchingDatabase(false);
+    }
+  };
+
+  // Populate selected student into form and open Medical Profile
+  const selectStudentForProfile = (student: any) => {
+    setScannedCadet(student);
+    
+    // Parse height (e.g. 5'8" or 172cm or heightFeet/heightInches)
+    if (student.heightFeet !== undefined) setHeightFeet(String(student.heightFeet));
+    else if (student.height?.includes("'")) setHeightFeet(student.height.split("'")[0] || "5");
+    else setHeightFeet("5");
+
+    if (student.heightInches !== undefined) setHeightInches(String(student.heightInches));
+    else if (student.height?.includes("'")) setHeightInches(student.height.split("'")[1]?.replace('"', '') || "8");
+    else setHeightInches("8");
+
+    setWeightKg(String(student.weightKg || student.weight || "64"));
+    setAttendance("Present");
+    setStatusTag(student.status || "Active");
+    setRemarks("");
+    setMedicalNotes("");
+
+    setActiveTab("profile");
+  };
+
+  // SAVE SNAPSHOT RECORD TO `qr_records` (Main database remains untouched!)
+  const handleSaveSnapshot = async () => {
+    if (!scannedCadet) return;
+    setSavingSnapshot(true);
+    setError(null);
+
+    try {
+      const recordId = `QR_${Date.now()}_${scannedCadet.id}`;
+      const recordRef = doc(db, "qr_records", recordId);
+
+      const heightFormatted = `${heightFeet}'${heightInches}" (${Math.round((parseInt(heightFeet || "0") * 30.48) + (parseInt(heightInches || "0") * 2.54))} cm)`;
+      const weightFormatted = `${weightKg} kg`;
+
+      const snapshotPayload = {
+        id: recordId,
+        studentId: scannedCadet.id,
+        uniqueId: scannedCadet.uniqueId || scannedCadet.id || scannedCadet.emisId || "N/A",
+        registrationNumber: scannedCadet.nidBirthReg || scannedCadet.registrationNumber || "N/A",
+        emisId: scannedCadet.emisId || "N/A",
+        studentName: scannedCadet.fullNameEnglish || scannedCadet.fullNameBangla || "N/A",
+        fullNameBangla: scannedCadet.fullNameBangla || "",
+        fullNameEnglish: scannedCadet.fullNameEnglish || "",
+        fatherName: scannedCadet.fatherNameEnglish || scannedCadet.fatherNameBangla || "N/A",
+        motherName: scannedCadet.motherNameEnglish || scannedCadet.motherNameBangla || "N/A",
+        scanTime: Timestamp.now(),
+        editedTime: Timestamp.now(),
+        editedBy: adminSession?.name || adminSession?.username || "QR Admin",
+        height: heightFormatted,
+        heightFeet: parseInt(heightFeet || "0"),
+        heightInches: parseInt(heightInches || "0"),
+        weight: weightFormatted,
+        weightKg: parseFloat(weightKg || "0"),
+        attendance: attendance,
+        status: statusTag,
+        remarks: remarks.trim() || "Normal Inspection",
+        medicalNotes: medicalNotes.trim() || "Fit",
+        profilePhoto: scannedCadet.photo || null,
+        collegeName: scannedCadet.collegeName || "Cox's Bazar City College",
+        battalion: scannedCadet.battalion || "BNCC Platoon",
+        rank: scannedCadet.rank || scannedCadet.previousRank || "Cadet",
+        bloodGroup: scannedCadet.bloodGroup || "N/A",
+        religion: scannedCadet.religion || "N/A",
+        gender: scannedCadet.gender || "N/A",
+        phone: scannedCadet.studentPhone || scannedCadet.phone || "N/A",
+        email: scannedCadet.studentEmail || scannedCadet.email || "N/A",
+        presentAddress: scannedCadet.presentAddress || "N/A",
+        permanentAddress: scannedCadet.permanentAddress || "N/A",
+        dob: scannedCadet.dob || "N/A",
+        session: scannedCadet.session || scannedCadet.academicYear || "N/A",
+        sscGpa: scannedCadet.sscGpa || "N/A",
+        hscGpa: scannedCadet.hscGpa || "N/A",
+        
+        // Full Original Snapshot Copy
+        snapshotData: {
+          profilePhoto: scannedCadet.photo || scannedCadet.profilePhoto || null,
+          id: scannedCadet.id || "N/A",
+          emisId: scannedCadet.emisId || "N/A",
+          role: scannedCadet.role || "student",
+          status: statusTag || scannedCadet.status || "Active",
+          createdAt: scannedCadet.createdAt || null,
+          updatedAt: scannedCadet.updatedAt || null,
+
+          fullNameEnglish: scannedCadet.fullNameEnglish || "N/A",
+          fullNameBangla: scannedCadet.fullNameBangla || "N/A",
+          gender: scannedCadet.gender || "N/A",
+          dob: scannedCadet.dob || "N/A",
+          nidBirthReg: scannedCadet.nidBirthReg || "N/A",
+          religion: scannedCadet.religion || "N/A",
+          bloodGroup: scannedCadet.bloodGroup || "N/A",
+          specialCategory: scannedCadet.specialCategory || scannedCadet.specialQuota || (scannedCadet.isEthnicMinority ? "Ethnic Minority (ক্ষুদ্র নৃ-গোষ্ঠী)" : "None"),
+          isEthnicMinority: scannedCadet.isEthnicMinority ? "Yes" : "No",
+
+          fatherNameEnglish: scannedCadet.fatherNameEnglish || "N/A",
+          fatherNameBangla: scannedCadet.fatherNameBangla || "N/A",
+          motherNameEnglish: scannedCadet.motherNameEnglish || "N/A",
+          motherNameBangla: scannedCadet.motherNameBangla || "N/A",
+
+          studentPhone: scannedCadet.studentPhone || scannedCadet.phone || "N/A",
+          studentEmail: scannedCadet.studentEmail || scannedCadet.email || "N/A",
+          presentAddress: scannedCadet.presentAddress || "N/A",
+          permanentAddress: scannedCadet.permanentAddress || "N/A",
+
+          collegeName: scannedCadet.collegeName || "Cox's Bazar City College",
+          registrationNumber: scannedCadet.registrationNumber || scannedCadet.nidBirthReg || "N/A",
+          classRoll: scannedCadet.classRoll || "N/A",
+          section: scannedCadet.section || "N/A",
+          session: scannedCadet.session || scannedCadet.academicYear || "N/A",
+          studyStatus: scannedCadet.studyStatus || "Regular",
+          attendanceStatus: attendance,
+
+          sscYear: scannedCadet.sscYear || "N/A",
+          sscBoard: scannedCadet.sscBoard || "N/A",
+          sscGroup: scannedCadet.sscGroup || "N/A",
+          sscGpa: scannedCadet.sscGpa || "N/A",
+          previousInstitution: scannedCadet.previousInstitution || "N/A",
+
+          hscYear: scannedCadet.hscYear || "N/A",
+          hscBoard: scannedCadet.hscBoard || "N/A",
+          hscGroup: scannedCadet.hscGroup || "N/A",
+          hscOptionalSubject: scannedCadet.hscOptionalSubject || "N/A",
+          hscGpa: scannedCadet.hscGpa || "N/A",
+
+          heightFeet: heightFeet,
+          heightInches: heightInches,
+          height: heightFormatted,
+          weightKg: weightKg,
+
+          coCurricularActivities: scannedCadet.coCurricularActivities || [],
+          otherCoCurricularActivity: scannedCadet.otherCoCurricularActivity || "N/A",
+
+          previousBNCC: scannedCadet.previousBNCC ? "Yes" : "No",
+          previousBattalionRegiment: scannedCadet.previousBattalionRegiment || scannedCadet.battalion || "N/A",
+          previousRank: scannedCadet.previousRank || scannedCadet.rank || "N/A",
+          previousRankOther: scannedCadet.previousRankOther || "N/A",
+          serviceDuration: scannedCadet.serviceDuration || "N/A",
+
+          subject: scannedCadet.subject || "N/A",
+
+          ...scannedCadet,
+          editedHeight: heightFormatted,
+          editedWeight: weightFormatted,
+          editedAttendance: attendance,
+          editedRemarks: remarks.trim(),
+          editedMedicalNotes: medicalNotes.trim(),
+          editedStatus: statusTag,
+          snapshotSavedAt: new Date().toISOString()
+        }
+      };
+
+      await setDoc(recordRef, snapshotPayload);
+
+      setSuccess(`Snapshot record stored successfully in QR Excel Storage! (${scannedCadet.fullNameEnglish || scannedCadet.id})`);
+      setIsEditing(false);
+      setTimeout(() => setSuccess(null), 4000);
+
+    } catch (err) {
+      console.error("Save snapshot error:", err);
+      setError("Snapshot ডাটাবেজে রেকর্ড সংরক্ষণ করতে সমস্যা হয়েছে।");
+      setTimeout(() => setError(null), 4000);
+    } finally {
+      setSavingSnapshot(false);
+    }
+  };
+
+  // Export Filtered Table to XLSX Spreadsheet
+  const handleExportExcel = () => {
+    const filteredList = getFilteredQrRecords();
+    if (filteredList.length === 0) {
+      setError("ডাউনলোড করার মত কোনো রেকর্ড পাওয়া যায়নি।");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const exportRows = filteredList.map((rec, index) => ({
+      "SL": index + 1,
+      "Scan Time": rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleString() : rec.scanTime || "",
+      "Edited Time": rec.editedTime?.toDate ? rec.editedTime.toDate().toLocaleString() : rec.editedTime || "",
+      "Edited By (QR Admin)": rec.editedBy || "QR Admin",
+      "Student ID": rec.studentId || "",
+      "Unique ID": rec.uniqueId || "",
+      "Registration No": rec.registrationNumber || "",
+      "EMIS ID": rec.emisId || "",
+      "Student Name (English)": rec.fullNameEnglish || rec.studentName || "",
+      "Student Name (Bangla)": rec.fullNameBangla || "",
+      "College": rec.collegeName || "",
+      "Height": rec.height || "",
+      "Weight": rec.weight || "",
+      "Attendance": rec.attendance || "",
+      "Status": rec.status || "",
+      "Blood Group": rec.bloodGroup || "",
+      "Phone": rec.phone || "",
+      "Remarks": rec.remarks || "",
+      "Medical Notes": rec.medicalNotes || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "QR_Excel_Storage");
+    XLSX.writeFile(workbook, `QR_Admin_Excel_Records_${new Date().toISOString().split("T")[0]}.xlsx`);
+
+    setSuccess("Excel Spreadsheet file generated and downloaded successfully!");
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  // Export Filtered Table to CSV
+  const handleExportCSV = () => {
+    const filteredList = getFilteredQrRecords();
+    if (filteredList.length === 0) return;
+
+    const exportRows = filteredList.map((rec, idx) => ({
+      "SL": idx + 1,
+      "Scan Time": rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleString() : rec.scanTime || "",
+      "Edited By": rec.editedBy || "",
+      "Student ID": rec.studentId || "",
+      "Name": rec.studentName || rec.fullNameEnglish || "",
+      "Height": rec.height || "",
+      "Weight": rec.weight || "",
+      "Attendance": rec.attendance || "",
+      "Status": rec.status || "",
+      "Remarks": rec.remarks || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
+    const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `QR_Records_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export Single Cadet PDF Medical Sheet
+  const handleExportPdf = (cadet: any) => {
+    if (!cadet) return;
+    const docPdf = new jsPDF();
+
+    docPdf.setFillColor(0, 33, 71); // Oxford Navy
+    docPdf.rect(0, 0, 210, 24, "F");
+
+    docPdf.setTextColor(255, 255, 255);
+    docPdf.setFontSize(14);
+    docPdf.text("COX'S BAZAR CITY COLLEGE BNCC PLATOON", 14, 12);
+    docPdf.setFontSize(10);
+    docPdf.text("QR ADMIN SNAPSHOT MEDICAL & PHYSICAL RECORD FILE", 14, 18);
+
+    docPdf.setTextColor(15, 23, 42);
+    docPdf.setFontSize(9);
+    docPdf.text(`Report Date: ${new Date().toLocaleString()} | QR Admin Inspector: ${adminSession?.name || "Officer"}`, 14, 30);
+
+    const tableRows = [
+      ["Student / Cadet ID", cadet.studentId || cadet.id || "N/A"],
+      ["Unique / EMIS ID", cadet.uniqueId || cadet.emisId || "N/A"],
+      ["Full Name (English)", cadet.fullNameEnglish || cadet.studentName || "N/A"],
+      ["Full Name (Bangla)", cadet.fullNameBangla || "N/A"],
+      ["Father's Name", cadet.fatherName || cadet.fatherNameEnglish || "N/A"],
+      ["Mother's Name", cadet.motherName || cadet.motherNameEnglish || "N/A"],
+      ["Phone Number", cadet.phone || cadet.studentPhone || "N/A"],
+      ["Email Address", cadet.email || cadet.studentEmail || "N/A"],
+      ["College / Platoon", cadet.collegeName || "Cox's Bazar City College"],
+      ["Rank / Position", cadet.rank || "Cadet"],
+      ["Blood Group", cadet.bloodGroup || "N/A"],
+      ["Gender / Religion", `${cadet.gender || "N/A"} / ${cadet.religion || "N/A"}`],
+      ["Height (Feet/Inches)", cadet.height || `${heightFeet}'${heightInches}"`],
+      ["Weight (Kg)", cadet.weight || `${weightKg} kg`],
+      ["Attendance Status", cadet.attendance || attendance],
+      ["Approval / Service Status", cadet.status || statusTag],
+      ["Remarks", cadet.remarks || remarks || "Normal"],
+      ["Medical Inspection Notes", cadet.medicalNotes || medicalNotes || "Fit"]
+    ];
+
+    autoTable(docPdf, {
+      startY: 35,
+      head: [["Specification Field", "Inspection Value"]],
+      body: tableRows,
+      theme: "striped",
+      headStyles: { fillColor: [0, 33, 71], textColor: [197, 160, 89] },
+      styles: { fontSize: 9 }
+    });
+
+    docPdf.save(`Medical_Snapshot_${cadet.studentId || cadet.id || "Record"}.pdf`);
+    setSuccess("PDF Medical File exported successfully!");
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  // Delete Snapshot from QR Records
+  const handleDeleteSnapshot = async (id: string) => {
+    if (!window.confirm("আপনি কি নিশ্চিত যে এই Snapshot রেকর্ডটি মুছে ফেলতে চান?")) return;
+    try {
+      await deleteDoc(doc(db, "qr_records", id));
+      setSuccess("Snapshot রেকর্ড সফলভাবে ডিলিট করা হয়েছে।");
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      console.error("Update physical measurements failed:", err);
-      setError("শারীরিক তথ্য আপডেট করতে সমস্যা হয়েছে।");
-    } finally {
-      setUpdatingPhysical(false);
+      console.error("Delete snapshot error:", err);
+      setError("ডিলিট করতে ব্যর্থ হয়েছে।");
     }
   };
 
-  // Compute stats based on the batch filter
-  const filteredCadets = cadets.filter(c => {
-    if (batchFilter === "All") return true;
-    return c.academicYear === batchFilter || c.studyStatus === batchFilter;
-  });
-
-  const totalCadetsCount = filteredCadets.length;
-  const presentTodayCount = filteredCadets.filter(c => todayAttendance[c.id]?.status === "Present" || todayAttendance[c.id]?.status === "Late").length;
-  const absentTodayCount = totalCadetsCount - presentTodayCount;
-
-  // Extract unique batches and groups for the batch-filter dropdown
-  const batches = Array.from(new Set(cadets.map(c => c.academicYear || c.studyStatus).filter(Boolean)));
+  // Filter Helper for Excel Storage
+  const getFilteredQrRecords = () => {
+    return qrRecords.filter(rec => {
+      if (filterDate) {
+        const recDate = rec.scanTime?.toDate ? rec.scanTime.toDate().toISOString().split("T")[0] : rec.scanDateStr || "";
+        if (recDate !== filterDate) return false;
+      }
+      if (filterBattalion !== "All" && rec.battalion !== filterBattalion) return false;
+      if (filterAttendance !== "All" && rec.attendance !== filterAttendance) return false;
+      if (filterRank !== "All" && rec.rank !== filterRank) return false;
+      if (filterSearch) {
+        const queryL = filterSearch.toLowerCase();
+        const searchStr = `${rec.studentId} ${rec.uniqueId} ${rec.studentName} ${rec.fullNameBangla} ${rec.phone} ${rec.remarks}`.toLowerCase();
+        if (!searchStr.includes(queryL)) return false;
+      }
+      return true;
+    });
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white space-y-4 flex-col">
-        <Loader2 className="w-10 h-10 text-rose-500 animate-spin" />
-        <p className="text-sm font-bold uppercase tracking-widest text-slate-400">লোডিং হচ্ছে...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#002147] text-white flex-col space-y-4">
+        <Loader2 className="w-12 h-12 text-[#C5A059] animate-spin" />
+        <p className="text-xs font-bold uppercase tracking-widest text-[#C5A059]">QR Admin Workspace Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white py-10 px-4 md:px-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col lg:flex-row font-sans">
+      
+      {/* Sidebar Navigation - Desktop */}
+      <aside className="w-full lg:w-72 bg-[#002147] text-white flex-shrink-0 flex flex-col justify-between shadow-2xl border-r border-[#C5A059]/20">
+        <div>
+          {/* Logo Branding */}
+          <div className="p-6 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-[#C5A059]/20 border border-[#C5A059] rounded-2xl flex items-center justify-center shadow-lg">
+                <QrCode className="w-6 h-6 text-[#C5A059]" />
+              </div>
+              <div>
+                <h1 className="text-lg font-black uppercase tracking-tight text-white">QR ADMIN</h1>
+                <p className="text-[9px] text-[#C5A059] font-bold uppercase tracking-widest">Independent Workspace</p>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 bg-[#C5A059] text-[#002147] text-[8px] font-black uppercase rounded-md tracking-wider">
+              PRO
+            </span>
+          </div>
+
+          {/* User Badge */}
+          <div className="p-4 bg-white/5 mx-4 my-4 rounded-2xl border border-white/5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#C5A059] text-[#002147] font-black text-sm flex items-center justify-center shadow-md">
+              {adminSession?.name?.[0]?.toUpperCase() || "Q"}
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-xs font-bold text-white truncate">{adminSession?.name || "QR Admin"}</p>
+              <p className="text-[9px] text-slate-400 uppercase tracking-widest font-mono truncate">{adminSession?.role || "Inspector"}</p>
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="px-4 space-y-1.5">
+            {[
+              { id: "dashboard", label: "Dashboard", icon: Home, badge: null },
+              { id: "scan", label: "Scan QR", icon: Scan, badge: "LIVE" },
+              { id: "search", label: "Search by ID", icon: Search, badge: null },
+              { id: "profile", label: "Medical Profile", icon: User, badge: scannedCadet ? "1" : null },
+              { id: "excel", label: "Excel Storage", icon: FileSpreadsheet, badge: qrRecords.length },
+              { id: "history", label: "Student History", icon: History, badge: null },
+              { id: "settings", label: "Settings", icon: Settings, badge: null }
+            ].map((nav) => {
+              const Icon = nav.icon;
+              const active = activeTab === nav.id;
+              return (
+                <button
+                  key={nav.id}
+                  onClick={() => setActiveTab(nav.id as any)}
+                  className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                    active 
+                      ? "bg-[#C5A059] text-[#002147] shadow-lg shadow-[#C5A059]/20 font-black" 
+                      : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className={`w-4 h-4 ${active ? "text-[#002147]" : "text-[#C5A059]"}`} />
+                    <span>{nav.label}</span>
+                  </div>
+                  {nav.badge && (
+                    <span className={`px-2 py-0.5 text-[9px] font-black rounded-full ${
+                      active ? "bg-[#002147] text-[#C5A059]" : "bg-[#C5A059]/20 text-[#C5A059]"
+                    }`}>
+                      {nav.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Footer Logout */}
+        <div className="p-4 border-t border-white/10">
+          <button
+            onClick={() => {
+              clearSession();
+              navigate("/login");
+            }}
+            className="w-full py-3 bg-red-500/15 border border-red-500/30 text-red-300 rounded-xl hover:bg-red-500 hover:text-white transition-all text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" /> Exit QR Workspace
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Workspace Body */}
+      <main className="flex-1 flex flex-col min-w-0 bg-[#F8FAFC]">
         
-        {/* Header Ribbon */}
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-6 bg-slate-900 border border-white/5 p-6 md:p-8 rounded-3xl shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2 h-full bg-rose-500" />
-          <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-            <div className="w-14 h-14 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-500/20 shadow-inner">
-              <Award className="w-8 h-8 text-rose-500 animate-bounce" />
+        {/* Top Header Bar */}
+        <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <div className="lg:hidden w-9 h-9 bg-[#002147] text-[#C5A059] rounded-xl flex items-center justify-center font-bold">
+              QR
             </div>
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight text-white flex items-center justify-center sm:justify-start gap-2">
-                QR অ্যাডমিন ড্যাশবোর্ড <span className="bg-rose-500 text-white text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">ACTIVE</span>
-              </h1>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
-                Cox's Bazar City College BNCC Platoon • Role: {adminSession?.role?.replace("_", " ")}
+              <h2 className="text-base font-black text-[#002147] uppercase tracking-tight flex items-center gap-2">
+                {activeTab === "dashboard" && "Workspace Dashboard"}
+                {activeTab === "scan" && "Scanner & Verification"}
+                {activeTab === "search" && "Student Record Lookup"}
+                {activeTab === "profile" && "Medical & Physical Profile File"}
+                {activeTab === "excel" && "Independent Excel Storage (qr_records)"}
+                {activeTab === "history" && "Snapshot History Timeline"}
+                {activeTab === "settings" && "QR Workspace Settings"}
+              </h2>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                Main Database: <span className="text-emerald-600 font-mono">Protected (Read-Only)</span> • QR Database: <span className="text-[#002147] font-mono">qr_records (Isolated)</span>
               </p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">ব্যবহারকারী</p>
-              <p className="text-sm font-bold text-white">{adminSession?.name || "QR Admin"}</p>
-            </div>
+
+          <div className="flex items-center gap-3">
             <button
-              onClick={handleLogout}
-              className="p-3 bg-red-500/10 text-red-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all border border-red-500/20 flex items-center gap-2 text-xs font-bold uppercase tracking-wider cursor-pointer shadow-lg"
-              title="লগআউট"
+              onClick={() => setActiveTab("scan")}
+              className="px-4 py-2 bg-[#002147] hover:bg-[#001530] text-[#C5A059] font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-md cursor-pointer"
             >
-              <LogOut className="w-4 h-4" /> লগআউট
+              <Camera className="w-4 h-4" /> <span className="hidden sm:inline">Scan QR Code</span>
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Real-time Statistics Counter Grid */}
-        <div className="bg-slate-900/60 p-6 rounded-3xl border border-white/5 space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h3 className="font-black uppercase tracking-widest text-xs text-slate-400 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-rose-500" /> আজকের এটেনডেন্স স্থিতি ({todayStr})
-            </h3>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs font-bold text-slate-400">ব্যাচ ফিল্টার:</span>
-              <select
-                value={batchFilter}
-                onChange={(e) => setBatchFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-800 text-slate-300 font-bold text-xs rounded-xl px-4 py-2 outline-none cursor-pointer focus:border-rose-500"
-              >
-                <option value="All">সকল ক্যাডেট</option>
-                {batches.map((batch) => (
-                  <option key={batch} value={batch}>{batch}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div className="p-5 bg-slate-950 rounded-2xl border border-white/5 relative overflow-hidden flex flex-col justify-center">
-              <div className="absolute right-4 top-4 text-slate-800 font-black text-6xl select-none pointer-events-none">T</div>
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">মোট ক্যাডেট</p>
-              <p className="text-3xl font-black text-white">{totalCadetsCount}</p>
-            </div>
-            <div className="p-5 bg-slate-950 rounded-2xl border border-emerald-500/10 relative overflow-hidden flex flex-col justify-center">
-              <div className="absolute right-4 top-4 text-emerald-950 font-black text-6xl select-none pointer-events-none">P</div>
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">আজ উপস্থিত</p>
-              <p className="text-3xl font-black text-emerald-400">{presentTodayCount}</p>
-            </div>
-            <div className="p-5 bg-slate-950 rounded-2xl border border-rose-500/10 relative overflow-hidden flex flex-col justify-center">
-              <div className="absolute right-4 top-4 text-rose-950 font-black text-6xl select-none pointer-events-none">A</div>
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">আজ অনুপস্থিত</p>
-              <p className="text-3xl font-black text-rose-400">{absentTodayCount}</p>
-            </div>
-            <div className="p-5 bg-slate-950 rounded-2xl border border-violet-500/10 relative overflow-hidden flex flex-col justify-center">
-              <div className="absolute right-4 top-4 text-violet-950 font-black text-6xl select-none pointer-events-none">%</div>
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">উপস্থিতির হার</p>
-              <p className="text-3xl font-black text-violet-400">
-                {totalCadetsCount > 0 ? Math.round((presentTodayCount / totalCadetsCount) * 100) : 0}%
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Toast Notification for scanning results */}
+        {/* Global Toast Alerts */}
         <AnimatePresence>
           {success && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-emerald-400 text-xs font-bold text-center flex items-center justify-center gap-2"
+              className="m-4 p-4 bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg flex items-center justify-between"
             >
-              <CheckCircle size={15} /> {success}
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>{success}</span>
+              </div>
+              <button onClick={() => setSuccess(null)} className="text-white hover:opacity-75">✕</button>
             </motion.div>
           )}
           {error && (
@@ -619,672 +946,1270 @@ export function AdminQrDashboard() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl text-center text-red-400 text-xs font-bold flex items-center justify-center gap-2"
+              className="m-4 p-4 bg-rose-600 text-white rounded-2xl text-xs font-bold shadow-lg flex items-center justify-between"
             >
-              <AlertCircle size={15} /> {error}
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+              <button onClick={() => setError(null)} className="text-white hover:opacity-75">✕</button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Live Camera Scanner & Quick View Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          {/* Scanner view */}
-          <div className="bg-slate-900 p-6 md:p-8 rounded-[2.5rem] border border-white/5 space-y-6 flex flex-col justify-between">
-            <style>{`
-              @keyframes scanLineAnimation {
-                0% { top: 10%; opacity: 0.4; }
-                50% { top: 90%; opacity: 1; }
-                100% { top: 10%; opacity: 0.4; }
-              }
-            `}</style>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-rose-500/20 rounded-2xl flex items-center justify-center border border-rose-500/30">
-                  <Camera className="w-5 h-5 text-rose-500 animate-pulse" />
+        {/* Dynamic Tab Content */}
+        <div className="p-4 md:p-8 flex-1 overflow-y-auto">
+
+          {/* TAB 1: DASHBOARD */}
+          {activeTab === "dashboard" && (
+            <div className="space-y-6">
+              
+              {/* Stat Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Snapshots Stored</p>
+                      <p className="text-3xl font-black text-[#002147] mt-1">{qrRecords.length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-[#002147]/5 text-[#002147] rounded-2xl flex items-center justify-center">
+                      <FileSpreadsheet className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-bold">
+                    Stored in Firestore <code className="text-[#002147]">qr_records</code>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-black uppercase tracking-tight text-white flex items-center gap-2">
-                    লাইভ স্ক্যানার
-                    <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 tracking-widest font-black uppercase inline-block animate-pulse">
-                      ● active
-                    </span>
-                  </h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Advanced Lens Controls & AF Optimization</p>
+
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Today's Scans & Edits</p>
+                      <p className="text-3xl font-black text-emerald-600 mt-1">
+                        {qrRecords.filter(r => (r.scanDateStr || r.scanTime?.toDate?.()?.toISOString().split("T")[0]) === todayStr).length}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+                      <Clock className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-bold">
+                    Active date: {todayStr}
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Present Today</p>
+                      <p className="text-3xl font-black text-blue-600 mt-1">
+                        {qrRecords.filter(r => r.attendance === "Present").length}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-bold">
+                    Verified physically by QR Admin
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Export Format</p>
+                      <p className="text-lg font-black text-[#C5A059] mt-1">XLSX / CSV / PDF</p>
+                    </div>
+                    <div className="w-12 h-12 bg-[#C5A059]/10 text-[#C5A059] rounded-2xl flex items-center justify-center">
+                      <Download className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-bold">
+                    Ready for Excel Spreadsheet
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="relative">
-              {!scannedCadet ? (
-                <div className="relative overflow-hidden rounded-3xl border-4 border-rose-500 bg-black shadow-2xl aspect-[4/3] w-full max-w-md mx-auto flex items-center justify-center">
-                  
-                  {/* The active video feed target */}
-                  <div id="reader-admin-dashboard" className="absolute inset-0 w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full" />
-                  
-                  {/* Scan Line Animation */}
-                  {cameraStatus === "scanning" && (
-                    <div 
-                      className="absolute left-[10%] right-[10%] h-[3px] bg-rose-500 shadow-[0_0_12px_#f43f5e] pointer-events-none z-10"
-                      style={{ animation: "scanLineAnimation 3.5s infinite ease-in-out" }}
-                    />
-                  )}
 
-                  {/* Corner Guides for Professional Look */}
-                  <div className="absolute inset-10 pointer-events-none z-10 select-none">
-                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-rose-500 rounded-tl-xl transition-all" />
-                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-rose-500 rounded-tr-xl transition-all" />
-                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-rose-500 rounded-bl-xl transition-all" />
-                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-rose-500 rounded-br-xl transition-all" />
+              {/* Quick Actions Bar */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 className="text-xs font-black text-[#002147] uppercase tracking-wider">Quick Action Buttons</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <button
+                    onClick={() => setActiveTab("scan")}
+                    className="p-4 bg-[#002147] text-white rounded-2xl flex items-center justify-between font-bold text-xs hover:bg-[#001530] transition-all cursor-pointer shadow-md"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Scan className="w-5 h-5 text-[#C5A059]" />
+                      <span>Start Camera QR Scan</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-[#C5A059]" />
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("search")}
+                    className="p-4 bg-slate-100 text-slate-800 rounded-2xl flex items-center justify-between font-bold text-xs hover:bg-slate-200 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Search className="w-5 h-5 text-[#002147]" />
+                      <span>Search Student by ID / Name</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("excel")}
+                    className="p-4 bg-emerald-50 text-emerald-800 rounded-2xl flex items-center justify-between font-bold text-xs hover:bg-emerald-100 transition-all cursor-pointer border border-emerald-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                      <span>Export Excel Storage</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-emerald-600" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Recent Scans Table */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black text-[#002147] uppercase tracking-wider flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-[#C5A059]" /> Recent Snapshot Records
+                  </h3>
+                  <button 
+                    onClick={() => setActiveTab("excel")}
+                    className="text-xs font-bold text-[#002147] hover:underline cursor-pointer"
+                  >
+                    View All in Excel Storage →
+                  </button>
+                </div>
+
+                {recentScans.length === 0 ? (
+                  <div className="py-10 text-center text-slate-400 text-xs font-bold">
+                    No snapshot records saved yet. Scan a QR code or search a student to save snapshots.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
+                        <tr>
+                          <th className="p-3">Time</th>
+                          <th className="p-3">Student Name</th>
+                          <th className="p-3">ID</th>
+                          <th className="p-3">Height</th>
+                          <th className="p-3">Weight</th>
+                          <th className="p-3">Attendance</th>
+                          <th className="p-3">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-bold">
+                        {recentScans.map((rec) => (
+                          <tr key={rec.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="p-3 text-slate-400 font-mono text-[11px]">
+                              {rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
+                            </td>
+                            <td className="p-3 font-bold text-[#002147]">{rec.studentName || rec.fullNameEnglish}</td>
+                            <td className="p-3 text-slate-600 font-mono">{rec.studentId || rec.uniqueId}</td>
+                            <td className="p-3 text-slate-700">{rec.height || "N/A"}</td>
+                            <td className="p-3 text-slate-700">{rec.weight || "N/A"}</td>
+                            <td className="p-3">
+                              <span className={`px-2.5 py-1 text-[10px] font-black rounded-full uppercase ${
+                                rec.attendance === "Present" ? "bg-emerald-100 text-emerald-800" :
+                                rec.attendance === "Late" ? "bg-amber-100 text-amber-800" :
+                                "bg-rose-100 text-rose-800"
+                              }`}>
+                                {rec.attendance}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <button
+                                onClick={() => setSelectedSnapshotModal(rec)}
+                                className="px-3 py-1 bg-slate-100 hover:bg-[#002147] hover:text-white text-[#002147] rounded-lg font-bold text-[10px] transition-all cursor-pointer"
+                              >
+                                View Snapshot
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 2: LIVE QR SCANNER */}
+          {activeTab === "scan" && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-[#002147] text-[#C5A059] rounded-2xl flex items-center justify-center">
+                      <Camera className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-[#002147] uppercase tracking-tight">Camera QR Scanner</h3>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Auto Focus & Instant ID Lookup</p>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase rounded-full animate-pulse">
+                    ● READY
+                  </span>
+                </div>
+
+                {/* Scanner Camera Box */}
+                <div className="relative overflow-hidden rounded-3xl border-4 border-[#002147] bg-black aspect-[4/3] w-full flex items-center justify-center shadow-2xl">
+                  <div id="reader-qr-admin" className="absolute inset-0 w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full" />
+
+                  {/* Corner Targets */}
+                  <div className="absolute inset-10 pointer-events-none z-10">
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#C5A059] rounded-tl-xl" />
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#C5A059] rounded-tr-xl" />
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#C5A059] rounded-bl-xl" />
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#C5A059] rounded-br-xl" />
                   </div>
 
-                  {/* Camera Status Overlay screens */}
                   {cameraStatus === "initializing" && (
-                    <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center space-y-3 z-20">
-                      <Loader2 className="w-8 h-8 text-rose-500 animate-spin" />
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">ক্যামেরা চালু হচ্ছে (Camera Booting)...</p>
+                    <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center space-y-3 z-20 text-white">
+                      <Loader2 className="w-8 h-8 text-[#C5A059] animate-spin" />
+                      <p className="text-xs font-bold uppercase tracking-widest">Starting Camera Lens...</p>
                     </div>
                   )}
 
                   {cameraPermissionError && (
-                    <div className="absolute inset-0 bg-slate-950/95 p-6 flex flex-col items-center justify-center text-center space-y-4 z-20">
-                      <XCircle className="w-12 h-12 text-rose-500" />
-                      <div className="space-y-1 max-w-xs">
-                        <h4 className="text-sm font-black text-white uppercase tracking-tight">ক্যামেরা অ্যাক্সেস ব্যর্থ (NotAllowedError)</h4>
-                        <p className="text-xs text-slate-400 leading-relaxed font-bold">
-                          {cameraPermissionError} <br />
-                          <span className="text-rose-400 mt-2 block leading-normal">
-                            আইফ্রেম (Preview IFrame) বা ব্রাউজার সিকিউরিটি ক্যামেরা অ্যাক্সেস ব্লক করে থাকতে পারে। সরাসরি নতুন ট্যাবে অ্যাপটি খুললে চমৎকারভাবে ক্যামেরা চালু হবে।
-                          </span>
-                        </p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2 w-full justify-center">
+                    <div className="absolute inset-0 bg-slate-950/95 p-6 flex flex-col items-center justify-center text-center space-y-4 z-20 text-white">
+                      <XCircle className="w-12 h-12 text-amber-500" />
+                      <p className="text-xs font-bold leading-relaxed">{cameraPermissionError}</p>
+                      <div className="flex flex-wrap items-center justify-center gap-3">
                         <button 
                           onClick={() => window.location.reload()}
-                          className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-black text-[10px] rounded-xl uppercase tracking-wider transition-all"
+                          className="px-4 py-2 bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold text-xs rounded-xl uppercase transition-all"
                         >
-                          আবার চেষ্টা করুন (Retry)
+                          Retry Camera
                         </button>
-                        <a 
-                          href={window.location.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[10px] rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-1 text-center"
-                        >
-                          নতুন ট্যাবে খুলুন (Open in New Tab)
-                        </a>
+                        <label className="px-4 py-2 bg-[#C5A059] text-[#002147] hover:bg-[#b08e4d] font-black text-xs rounded-xl uppercase transition-all cursor-pointer flex items-center gap-2">
+                          <Download className="w-4 h-4 rotate-180" /> QR Image Upload
+                          <input type="file" accept="image/*" onChange={handleQrImageUpload} className="hidden" />
+                        </label>
                       </div>
                     </div>
                   )}
-
-                  {cameraStatus === "scanning" && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-950/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 text-[10px] font-black text-rose-400 uppercase tracking-widest text-center whitespace-nowrap z-15 shadow-2xl flex items-center gap-1.5 animate-pulse">
-                      <Check className="w-3.5 h-3.5 text-rose-500 animate-bounce" />
-                      QR Code Ready for Scanning
-                    </div>
-                  )}
-
-                  {/* Success Detection Instant Overlay flash */}
-                  <AnimatePresence>
-                    {scanSuccessTrigger && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-emerald-500/25 flex items-center justify-center border-4 border-emerald-500 z-30"
-                      >
-                        <motion.div 
-                          initial={{ scale: 0.5, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          className="bg-emerald-500 text-white rounded-full p-4 shadow-2xl shadow-emerald-500/30"
-                        >
-                          <Check className="w-12 h-12 stroke-[3]" />
-                        </motion.div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="aspect-[4/3] w-full max-w-md mx-auto rounded-3xl border-2 border-slate-800 bg-slate-950 flex flex-col items-center justify-center space-y-4">
-                  <QrCode className="w-16 h-16 text-slate-600 animate-pulse" />
-                  <p className="text-xs text-slate-500 font-bold">স্ক্যান্ড ক্যাডেট বর্তমানে প্রসেস করা হচ্ছে</p>
-                  <button 
-                    onClick={() => {
-                      setScannedCadet(null);
-                      setEditingPhysical(false);
-                    }}
-                    className="px-6 py-2.5 bg-rose-500 text-white font-bold text-xs rounded-xl uppercase hover:bg-rose-600 transition-all shadow-lg cursor-pointer"
-                  >
-                    নতুন ক্যাডেট স্ক্যান করুন
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Camera Controls Panel */}
-            <div className="space-y-4 pt-2">
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Switch camera list select */}
-                <div className="flex-1 min-w-[150px] relative">
-                  <select
-                    value={selectedCameraId}
-                    onChange={(e) => {
-                      setSelectedCameraId(e.target.value);
-                      setFlashlightActive(false);
-                      setZoomLevel(1);
-                    }}
-                    className="w-full bg-white/5 border border-white/5 text-white rounded-2xl p-4 text-xs font-black uppercase tracking-widest outline-none cursor-pointer focus:border-rose-500 shadow-inner appearance-none pr-8"
-                  >
-                    {cameras.length === 0 ? (
-                      <option className="bg-slate-900 text-slate-400">Loading Lenses...</option>
-                    ) : (
-                      cameras.map((c, idx) => (
-                        <option key={c.id} value={c.id} className="bg-slate-900 text-white font-bold py-2">
-                          {c.label || `Camera Lens ${idx + 1}`}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                    ▼
-                  </div>
-                  <div className="absolute left-3 -top-2 bg-slate-900 px-2 text-[8px] font-black text-rose-400 uppercase tracking-widest">
-                    ACTIVE LENS
-                  </div>
                 </div>
 
-                {/* Torch Switch */}
-                <button
-                  type="button"
-                  onClick={handleToggleFlashlight}
-                  disabled={!supportTorch}
-                  className={`flex flex-col items-center gap-1.5 p-3.5 rounded-2xl transition-all border shrink-0 cursor-pointer ${
-                    flashlightActive 
-                      ? "bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-lg shadow-amber-500/5"
-                      : "bg-white/5 border-white/5 text-slate-400 hover:text-white"
-                  } disabled:opacity-20 disabled:pointer-events-none`}
-                  title={supportTorch ? "Toggle Flashlight" : "Flashlight Not Supported"}
-                >
-                  {flashlightActive ? <Zap className="w-4 h-4 fill-amber-400 text-amber-400" /> : <ZapOff className="w-4 h-4" />}
-                  <span className="text-[9px] font-black uppercase tracking-wider">Torch</span>
-                </button>
+                {/* Hidden Temp Container for File Scan */}
+                <div id="qr-file-reader-temp" className="hidden" />
 
-                {/* Instant Flip Camera Toggle */}
-                <button
-                  type="button"
-                  onClick={toggleFrontBackCamera}
-                  disabled={cameras.length < 2}
-                  className="flex flex-col items-center gap-1.5 p-3.5 rounded-2xl bg-white/5 border border-white/5 text-slate-400 hover:text-white disabled:opacity-20 shrink-0 cursor-pointer active:scale-95 transition-all"
-                  title="instant layout switch"
-                >
-                  <RotateCw className="w-4 h-4" />
-                  <span className="text-[9px] font-black uppercase tracking-wider">Flip</span>
-                </button>
-
-                {/* Sound Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setAudioEnabled(!audioEnabled)}
-                  className={`flex flex-col items-center gap-1.5 p-3.5 rounded-2xl transition-all border shrink-0 cursor-pointer ${
-                    audioEnabled 
-                      ? "bg-rose-500/10 border-rose-500/40 text-rose-400 shadow-lg"
-                      : "bg-white/5 border-white/5 text-slate-400 hover:text-white"
-                  }`}
-                  title="Toggle Success Audio Sound Beep"
-                >
-                  {audioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                  <span className="text-[9px] font-black uppercase tracking-wider">Audio</span>
-                </button>
-              </div>
-
-              {/* Zoom Controls segment with continuous sliders and preset shortcuts */}
-              <div className="bg-white/5 border border-white/5 p-4 rounded-3xl space-y-2.5">
-                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Zoom Multiplier</span>
-                  </div>
-                  <span className="font-mono text-rose-400 font-bold bg-rose-500/5 px-2 py-0.5 rounded border border-rose-500/10">
-                    {zoomLevel.toFixed(1)}x
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <button
-                    type="button"
-                    onClick={() => handleZoomChange(zoomLevel - 0.5)}
-                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 text-white font-black text-xs cursor-pointer flex items-center justify-center transition-all active:scale-90"
-                    title="Zoom Out"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="range"
-                    min="1"
-                    max={maxZoom}
-                    step="0.1"
-                    value={zoomLevel}
-                    onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                    className="flex-1 accent-rose-500 cursor-pointer"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleZoomChange(zoomLevel + 0.5)}
-                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 text-white font-black text-xs cursor-pointer flex items-center justify-center transition-all active:scale-90"
-                    title="Zoom In"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[1, 1.5, 2, 3].map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => handleZoomChange(v)}
-                      className={`px-3 py-1 font-mono text-[9px] font-bold rounded-lg transition-all ${
-                        Math.abs(zoomLevel - v) < 0.1
-                          ? "bg-rose-500 text-white font-black shadow-lg shadow-rose-500/15"
-                          : "bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10"
-                      } cursor-pointer`}
+                {/* Camera Controls & File Upload */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <div className="flex-1 min-w-[140px]">
+                    <select
+                      value={selectedCameraId}
+                      onChange={(e) => setSelectedCameraId(e.target.value)}
+                      className="w-full bg-slate-100 border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold outline-none cursor-pointer"
                     >
-                      {v}.0x
+                      {cameras.map((c, i) => (
+                        <option key={c.id} value={c.id}>{c.label || `Camera ${i + 1}`}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <label className="px-4 py-2.5 bg-[#C5A059] text-[#002147] hover:bg-[#b08e4d] rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm">
+                    <Download className="w-4 h-4 rotate-180" /> Upload QR Image
+                    <input type="file" accept="image/*" onChange={handleQrImageUpload} className="hidden" />
+                  </label>
+
+                  <button
+                    onClick={handleToggleFlashlight}
+                    disabled={!supportTorch}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      flashlightActive ? "bg-amber-500 text-white border-amber-600" : "bg-slate-100 border-slate-200 text-slate-700"
+                    } disabled:opacity-30`}
+                  >
+                    <Zap className="w-4 h-4" /> Torch
+                  </button>
+
+                  <button
+                    onClick={toggleFrontBackCamera}
+                    className="px-3 py-2.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:bg-slate-200"
+                  >
+                    <RotateCw className="w-4 h-4" /> Flip
+                  </button>
+
+                  <button
+                    onClick={() => setAudioEnabled(!audioEnabled)}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                      audioEnabled ? "bg-[#002147] text-[#C5A059] border-[#002147]" : "bg-slate-100 text-slate-400 border-slate-200"
+                    }`}
+                  >
+                    {audioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />} Audio
+                  </button>
+                </div>
+
+                {/* Direct Manual Search Input Box on Scan Page */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <p className="text-xs font-bold text-[#002147] uppercase tracking-wider flex items-center gap-2">
+                    <Search className="w-4 h-4 text-[#C5A059]" /> Quick Manual Student Search
+                  </p>
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSearchById(searchQuery);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Enter Student ID, EMIS, Phone, or Registration No..."
+                      className="flex-1 bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-[#002147]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={searchingDatabase || !searchQuery.trim()}
+                      className="px-5 py-2.5 bg-[#002147] text-[#C5A059] font-black text-xs uppercase tracking-wider rounded-xl hover:bg-[#001530] transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                    >
+                      {searchingDatabase ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
                     </button>
-                  ))}
+                  </form>
                 </div>
               </div>
 
-              {/* Status information footer tags */}
-              <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-slate-500 bg-slate-950/40 p-3 rounded-2xl border border-white/5">
-                <p className="flex items-center gap-1">
-                  <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
-                  <span>Continuous Auto Focus (AF)</span>
-                </p>
-                <p className="font-mono bg-white/5 px-2 py-0.5 rounded text-rose-400 font-black">
-                  {getCameraQualityLabel()}
-                </p>
-              </div>
+            </div>
+          )}
 
-              {/* Manual Input Search Fallback */}
-              <div className="bg-slate-950/60 p-4 rounded-3xl border border-white/5 space-y-3">
-                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                  অথবা ক্যাডেট আইডি দিয়ে ম্যানুয়ালি খুঁজুন (Manual Input Fallback)
-                </span>
-                <form onSubmit={async (e) => {
+          {/* TAB 3: SEARCH BY ID */}
+          {activeTab === "search" && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl space-y-4">
+                <h3 className="text-sm font-black text-[#002147] uppercase tracking-wider flex items-center gap-2">
+                  <Search className="w-4 h-4 text-[#C5A059]" /> Search Main Student Database
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Enter Unique ID, Registration Number, EMIS ID, Phone Number, or Full Name to inspect.
+                </p>
+
+                <form onSubmit={(e) => {
                   e.preventDefault();
-                  const targetField = e.currentTarget.elements.namedItem("manualCadetId") as HTMLInputElement;
-                  const inputId = targetField?.value?.trim() || "";
-                  if (!inputId) return;
-                  setSearchingDatabase(true);
-                  setError(null);
-
-                  // 1. Check if authorized role: only Super Admin and QR Admin are allowed to search manually.
-                  const isAuthorized = adminSession?.role === "super_admin" || adminSession?.role === "qr_admin";
-                  if (!isAuthorized) {
-                    setError("Access Restricted - Please Use QR Verification. আপনার বর্তমান রোল দ্বারা ম্যানুয়ালি সার্চ করা অনুমোদিত নয়।");
-                    setTimeout(() => setError(null), 5000);
-                    setSearchingDatabase(false);
-
-                    // Log event
-                    try {
-                      await setDoc(doc(collection(db, "security_logs")), {
-                        attemptType: "Manual Access Blocked",
-                        timestamp: Timestamp.now(),
-                        userRole: adminSession?.role || "unknown",
-                        userId: adminSession?.id || adminSession?.username || "unknown",
-                        reason: "Manual lookup attempted by unauthorized admin role",
-                        attemptedId: inputId
-                      });
-                    } catch (logErr) {
-                      console.error("Failed to write safety security_log:", logErr);
-                    }
-                    return;
-                  }
-
-                  try {
-                    const docRef = doc(db, "applicants", inputId);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                      const cadetDocData = docSnap.data();
-
-                      // 2. GENDER-BASED SECURITY RULE: Block female manual lookup completely (even for admins)
-                      if (cadetDocData.gender === "Female") {
-                        setError("Access Restricted - Female cadet profiles can only be verified via secure QR Scan. নিরাপত্তা নীতিমালায় নারী ক্যাডেটদের ম্যানুয়াল সার্চ সম্পূর্ণ নিষিদ্ধ।");
-                        setTimeout(() => setError(null), 6000);
-
-                        // Log event
-                        try {
-                          await setDoc(doc(collection(db, "security_logs")), {
-                            attemptType: "Manual Access Blocked",
-                            timestamp: Timestamp.now(),
-                            userRole: adminSession?.role || "unknown",
-                            userId: adminSession?.id || adminSession?.username || "unknown",
-                            reason: "Manual ID lookup of female cadet was completely blocked",
-                            attemptedId: inputId
-                          });
-                        } catch (logErr) {
-                          console.error("Failed to write female manual lookup security_log:", logErr);
-                        }
-                        return;
-                      }
-
-                      setScannedCadet({ id: inputId, ...cadetDocData });
-                      setHeight(cadetDocData.height || "");
-                      setWeight(cadetDocData.weight || "");
-                      setSuccess("ক্যাডেট তথ্য সফলভাবে পাওয়া গেছে!");
-                      setTimeout(() => setSuccess(null), 3000);
-                      targetField.value = ""; // clear after success
-                    } else {
-                      setError(`ক্যাডেট আইডি "${inputId}" ডাটাবেজে পাওয়া যায়নি!`);
-                      setTimeout(() => setError(null), 4000);
-                    }
-                  } catch (err) {
-                    console.error("Manual profile search failed:", err);
-                    setError("ডাটাবেজ অনুসন্ধান করতে ব্যর্থ হয়েছে।");
-                    setTimeout(() => setError(null), 4000);
-                  } finally {
-                    setSearchingDatabase(false);
-                  }
+                  handleSearchById(searchQuery);
                 }} className="flex gap-2">
                   <input
                     type="text"
-                    name="manualCadetId"
-                    placeholder="ক্যাডেট আইডি লিখুন (যেমন: Application ID)"
-                    className="flex-1 bg-white/5 border border-white/5 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-xs outline-none focus:border-rose-500 font-mono font-bold"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Enter ID, EMIS, Phone, or Name..."
+                    className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 rounded-2xl px-4 py-3.5 text-xs font-bold outline-none focus:border-[#002147]"
                   />
                   <button
                     type="submit"
                     disabled={searchingDatabase}
-                    className="px-4 py-3 bg-rose-500 hover:bg-rose-600 disabled:bg-rose-500/50 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-6 py-3.5 bg-[#002147] text-[#C5A059] font-black text-xs uppercase tracking-wider rounded-2xl hover:bg-[#001530] transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    {searchingDatabase ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                    খুঁজুন
+                    {searchingDatabase ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    Search
                   </button>
                 </form>
               </div>
 
+              {/* Multiple Search Results list */}
+              {searchResults.length > 0 && (
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl space-y-4">
+                  <h4 className="text-xs font-black text-[#002147] uppercase tracking-wider">Select Student from Results ({searchResults.length})</h4>
+                  <div className="divide-y divide-slate-100">
+                    {searchResults.map((st) => (
+                      <div key={st.id} className="py-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-[#002147]">{st.fullNameEnglish || st.fullNameBangla}</p>
+                          <p className="text-[10px] text-slate-500 font-mono">ID: {st.id} | Phone: {st.studentPhone || "N/A"}</p>
+                        </div>
+                        <button
+                          onClick={() => selectStudentForProfile(st)}
+                          className="px-4 py-2 bg-[#002147] text-[#C5A059] font-bold text-xs rounded-xl hover:bg-[#001530] cursor-pointer"
+                        >
+                          Select Profile
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
-          </div>
+          )}
 
-          {/* Quick profile info results & and physical configuration adjustments */}
-          <div className="flex flex-col justify-center">
-            <AnimatePresence mode="wait">
-              {!scannedCadet ? (
-                <motion.div
-                  key="empty-cadet"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="h-full flex flex-col items-center justify-center p-12 text-center bg-slate-900/40 rounded-[2.5rem] border border-white/5 border-dashed space-y-4 min-h-[350px]"
+          {/* TAB 4: MEDICAL PROFILE / INSPECTION FILE */}
+          {activeTab === "profile" && scannedCadet && (
+            <div className="max-w-4xl mx-auto space-y-6">
+              
+              {/* Back Bar */}
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setActiveTab("dashboard")}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
                 >
-                  <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center border border-white/5">
-                    <User className="w-10 h-10 text-slate-800" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-400 uppercase tracking-tight">অপেক্ষমাণ স্থিতি</h3>
-                    <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-1">প্রোফাইল ফেচ করতে দয়া করে কোড স্ক্যান করুন</p>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="active-cadet"
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  className="p-8 rounded-[2.5rem] bg-slate-900 border border-white/5 space-y-6 relative overflow-hidden"
-                >
-                  {/* Status Tag */}
-                  <div className="absolute top-6 right-6">
-                    <span className="px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-500 text-white shadow-lg shadow-rose-500/20">
-                      CADET
-                    </span>
-                  </div>
+                  ← Back to Dashboard
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleExportPdf(scannedCadet)}
+                    className="px-4 py-2 bg-[#002147] text-[#C5A059] font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" /> Export PDF
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" /> Print Sheet
+                  </button>
+                </div>
+              </div>
 
-                  {/* Profile Info Details */}
-                  <div className="flex flex-col sm:flex-row items-center gap-6">
-                    <div className="w-28 h-28 rounded-2xl overflow-hidden border-4 border-rose-500 shrink-0 shadow-xl bg-slate-950">
-                      {scannedCadet.photo ? (
-                        <img src={scannedCadet.photo} className="w-full h-full object-cover" alt="" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <User className="w-12 h-12 text-slate-700" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-center sm:text-left space-y-1">
-                      <h3 className="text-xl font-black text-white">{scannedCadet.fullNameEnglish || scannedCadet.fullNameBangla}</h3>
-                      <p className="text-xs font-bold text-slate-500">ক্যাডেট আইডি: <span className="font-mono text-rose-500">{scannedCadet.id}</span></p>
-                      <p className="text-xs font-bold text-slate-400">শ্রেণি রোল: {scannedCadet.classRoll || "N/A"}</p>
-                    </div>
-                  </div>
-
-                  {/* Academic info grid */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-slate-950 rounded-2xl border border-white/5 space-y-1">
-                      <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">গ্রুপ / বিভাগ</p>
-                      <p className="text-sm font-bold text-white">{scannedCadet.studyStatus || "N/A"}</p>
-                    </div>
-                    <div className="p-4 bg-slate-950 rounded-2xl border border-white/5 space-y-1">
-                      <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">শিক্ষাবর্ষ (Session)</p>
-                      <p className="text-sm font-bold text-white">{scannedCadet.academicYear || "N/A"}</p>
-                    </div>
-                  </div>
-
-                  {/* Optional Physical Fields */}
-                  <div className="p-5 bg-slate-950 rounded-3xl border border-white/5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-[10px] uppercase text-rose-500 font-black tracking-widest">শারীরিক পরিমাপ (Physical Measurements)</h4>
-                      {adminSession?.role !== "attendance_officer" && (
-                        <button
-                          onClick={() => setEditingPhysical(!editingPhysical)}
-                          className="flex items-center gap-1 text-[10px] uppercase font-black text-rose-400 hover:text-rose-300 transition-colors bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 cursor-pointer"
-                        >
-                          <Edit size={11} /> {editingPhysical ? "বাতিল" : "এডিট করুন"}
-                        </button>
-                      )}
-                    </div>
-
-                    {!editingPhysical ? (
-                      <div className="grid grid-cols-2 gap-4 text-center">
-                        <div className="bg-slate-900/60 p-3.5 rounded-xl border border-white/5">
-                          <p className="text-[9px] uppercase text-slate-500 font-bold">উচ্চতা / Height</p>
-                          <p className="text-base font-bold text-white mt-1">{scannedCadet.height ? `${scannedCadet.height} cm` : "N/A"}</p>
-                        </div>
-                        <div className="bg-slate-900/60 p-3.5 rounded-xl border border-white/5">
-                          <p className="text-[9px] uppercase text-slate-500 font-bold">ওজন / Weight</p>
-                          <p className="text-base font-bold text-white mt-1">{scannedCadet.weight ? `${scannedCadet.weight} kg` : "N/A"}</p>
-                        </div>
-                      </div>
+              {/* Main Medical File Card */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+                
+                {/* Header Banner */}
+                <div className="bg-[#002147] text-white p-6 flex flex-col sm:flex-row items-center gap-6 relative">
+                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-[#C5A059] overflow-hidden bg-slate-900 shadow-2xl shrink-0 flex items-center justify-center">
+                    {scannedCadet.photo ? (
+                      <img src={scannedCadet.photo} className="w-full h-full object-cover" alt="" />
                     ) : (
-                      <div className="grid grid-cols-2 gap-3 items-end">
-                        <div className="space-y-1.5 text-left">
-                          <label className="text-[9px] uppercase text-slate-500 font-bold ml-1">উচ্চতা (cm)</label>
-                          <input
-                            type="number"
-                            value={height}
-                            onChange={(e) => setHeight(e.target.value)}
-                            className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-bold text-white outline-none focus:border-rose-500"
-                            placeholder="যেমন: ১৭৫"
-                          />
-                        </div>
-                        <div className="space-y-1.5 text-left">
-                          <label className="text-[9px] uppercase text-slate-500 font-bold ml-1">ওজন (kg)</label>
-                          <input
-                            type="number"
-                            value={weight}
-                            onChange={(e) => setWeight(e.target.value)}
-                            className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-bold text-white outline-none focus:border-rose-500"
-                            placeholder="যেমন: ৬৫"
-                          />
-                        </div>
-                        <button
-                          onClick={handleUpdatePhysical}
-                          disabled={updatingPhysical}
-                          className="col-span-2 py-3 bg-rose-500 hover:bg-rose-600 border border-rose-500/10 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-500/10"
-                        >
-                          {updatingPhysical ? <Loader2 className="animate-spin w-4 h-4" /> : <Save className="w-4 h-4" />}
-                          পরিমাপ সংরক্ষণ করুন
-                        </button>
-                      </div>
+                      <User className="w-16 h-16 text-slate-600" />
                     )}
                   </div>
 
-                  {/* Attendance Controls */}
-                  <div className="space-y-3">
-                    <h4 className="text-[10px] uppercase text-slate-400 font-black tracking-widest ml-1">ক্যাডেট এটেনডেন্স নির্ধারণ</h4>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {[
-                        { label: "PRESENT (উপস্থিত)", status: "Present" as const, color: "bg-emerald-500 shadow-emerald-500/15" },
-                        { label: "LATE (বিলম্বিত)", status: "Late" as const, color: "bg-amber-500 shadow-amber-500/15" },
-                        { label: "ABSENT (অনুপস্থিত)", status: "Absent" as const, color: "bg-rose-500 shadow-rose-500/15" }
-                      ].map((btn) => (
-                        <button
-                          key={btn.status}
-                          onClick={() => handleMarkAttendance(btn.status)}
-                          className={`py-3.5 px-2 text-[10px] font-black uppercase tracking-wider rounded-xl text-white transition-all shadow-lg hover:brightness-110 active:scale-95 cursor-pointer ${btn.color}`}
-                        >
-                          {btn.label}
-                        </button>
-                      ))}
+                  <div className="text-center sm:text-left space-y-1">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                      <span className="px-3 py-1 bg-[#C5A059] text-[#002147] text-[9px] font-black uppercase tracking-widest rounded-full inline-block">
+                        {scannedCadet.status || "ACTIVE CADET"}
+                      </span>
+                      {(scannedCadet.isEthnicMinority || scannedCadet.specialCategory || scannedCadet.specialQuota) && (
+                        <span className="px-3 py-1 bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-widest rounded-full inline-flex items-center gap-1 shadow-sm">
+                          ⭐ Special Category: {scannedCadet.specialCategory || scannedCadet.specialQuota || "Ethnic Minority (ক্ষুদ্র নৃ-গোষ্ঠী)"}
+                        </span>
+                      )}
+                      {((Array.isArray(scannedCadet.coCurricularActivities) && scannedCadet.coCurricularActivities.length > 0) || scannedCadet.otherCoCurricularActivity) && (
+                        <span className="px-3 py-1 bg-teal-500 text-slate-950 text-[9px] font-black uppercase tracking-widest rounded-full inline-flex items-center gap-1 shadow-sm">
+                          🎯 Co-Curricular: {Array.isArray(scannedCadet.coCurricularActivities) ? scannedCadet.coCurricularActivities.join(", ") : scannedCadet.coCurricularActivities} {scannedCadet.otherCoCurricularActivity ? `(${scannedCadet.otherCoCurricularActivity})` : ""}
+                        </span>
+                      )}
                     </div>
+                    <h2 className="text-2xl font-black text-white">{scannedCadet.fullNameEnglish || scannedCadet.fullNameBangla}</h2>
+                    <p className="text-xs text-[#C5A059] font-bold font-mono">Unique ID / Cad No: {scannedCadet.id}</p>
+                    <p className="text-xs text-slate-300 font-bold">{scannedCadet.collegeName || "Cox's Bazar City College"}</p>
+                  </div>
+                </div>
+
+                {/* Edit & Save Snapshot Action Bar */}
+                <div className="p-6 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xs font-black text-[#002147] uppercase tracking-wider">Measurement & Physical Inspection</h3>
+                    <p className="text-[10px] text-slate-500">Edit fields below and click "Save Snapshot" to record into <code className="text-[#002147]">qr_records</code>.</p>
                   </div>
 
-                  {/* Detailed Cadet Verification Sheet */}
-                  <div className="p-5 bg-slate-950 rounded-3xl border border-white/5 space-y-4">
-                    <h4 className="text-[10px] uppercase text-rose-500 font-black tracking-widest">ক্যাডেট প্রোফাইল ও ভেরিফিকেশন ফাইল (Full Profile Sheet)</h4>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => setIsEditing(!isEditing)}
+                      className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Edit className="w-4 h-4" /> {isEditing ? "Close Edit" : "Edit Measurements"}
+                    </button>
+
+                    <button
+                      onClick={handleSaveSnapshot}
+                      disabled={savingSnapshot}
+                      className="flex-1 sm:flex-none px-6 py-2.5 bg-[#002147] hover:bg-[#001530] text-[#C5A059] font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingSnapshot ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Save Snapshot
+                    </button>
+                  </div>
+                </div>
+
+                {/* Measurement Fields Form */}
+                <div className="p-6 bg-amber-50/50 border-b border-amber-100 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold text-slate-300">
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">বাবার নাম (Father's Name)</p>
-                        <p className="text-white font-normal">{scannedCadet.fatherNameEnglish || scannedCadet.fatherNameBangla || "N/A"}</p>
+                    {/* Height Feet & Inches */}
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Height (Feet & Inches)</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={heightFeet}
+                          onChange={(e) => setHeightFeet(e.target.value)}
+                          className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                        >
+                          {["4", "5", "6", "7"].map(f => (
+                            <option key={f} value={f}>{f} Feet</option>
+                          ))}
+                        </select>
+                        <select
+                          value={heightInches}
+                          onChange={(e) => setHeightInches(e.target.value)}
+                          className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                        >
+                          {Array.from({ length: 12 }, (_, i) => String(i)).map(i => (
+                            <option key={i} value={i}>{i} Inches</option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">মায়ের নাম (Mother's Name)</p>
-                        <p className="text-white font-normal">{scannedCadet.motherNameEnglish || scannedCadet.motherNameBangla || "N/A"}</p>
+                    </div>
+
+                    {/* Weight Kg */}
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Weight (Kg)</label>
+                      <input
+                        type="number"
+                        value={weightKg}
+                        onChange={(e) => setWeightKg(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                        placeholder="e.g. 64"
+                      />
+                    </div>
+
+                    {/* Attendance */}
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Attendance Status</label>
+                      <select
+                        value={attendance}
+                        onChange={(e) => setAttendance(e.target.value as any)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                      >
+                        <option value="Present">Present</option>
+                        <option value="Late">Late</option>
+                        <option value="Absent">Absent</option>
+                      </select>
+                    </div>
+
+                    {/* Service Status */}
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Cadet Status</label>
+                      <select
+                        value={statusTag}
+                        onChange={(e) => setStatusTag(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                      >
+                        <option value="Active">Active 🟢</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Rejected">Rejected</option>
+                      </select>
+                    </div>
+
+                  </div>
+
+                  {/* Remarks & Medical Notes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Remarks</label>
+                      <input
+                        type="text"
+                        value={remarks}
+                        onChange={(e) => setRemarks(e.target.value)}
+                        placeholder="Enter inspection remarks..."
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Medical Notes</label>
+                      <input
+                        type="text"
+                        value={medicalNotes}
+                        onChange={(e) => setMedicalNotes(e.target.value)}
+                        placeholder="Enter medical / physical notes..."
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detailed Information Grid */}
+                <div className="p-6 space-y-6">
+                  <h3 className="text-xs font-black text-[#002147] uppercase tracking-wider flex items-center gap-2">
+                    <User className="w-4 h-4 text-[#C5A059]" /> Complete Student Profile Sheet
+                  </h3>
+
+                  {/* Category 1: Personal & Identification */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-[#002147] uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                      1. Personal & Identification
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-bold text-slate-700">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Full Name (English)</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.fullNameEnglish || "N/A"}</p>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">মোবাইল নম্বর (Student Phone)</p>
-                        <p className="text-rose-500 font-mono font-medium">{scannedCadet.studentPhone || "N/A"}</p>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Full Name (Bangla)</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.fullNameBangla || "N/A"}</p>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">ইমেইল (Student Email)</p>
-                        <p className="text-white select-all font-mono font-medium">{scannedCadet.studentEmail || "N/A"}</p>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Unique Cadet ID</span>
+                        <p className="text-slate-900 font-mono mt-1">{scannedCadet.id || scannedCadet.uniqueId || "N/A"}</p>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">রক্তের গ্রুপ (Blood Group)</p>
-                        <p className="text-rose-500 font-black uppercase text-sm">{scannedCadet.bloodGroup || "N/A"}</p>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">EMIS ID</span>
+                        <p className="text-slate-900 font-mono mt-1">{scannedCadet.emisId || "N/A"}</p>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">জন্ম তারিখ (Date of Birth)</p>
-                        <p className="text-white font-mono font-medium">{scannedCadet.dob || "N/A"}</p>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Registration / NID No</span>
+                        <p className="text-slate-900 font-mono mt-1">{scannedCadet.nidBirthReg || scannedCadet.registrationNumber || "N/A"}</p>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">বর্তমান ঠিকানা (Present Address)</p>
-                        <p className="text-white leading-relaxed text-[11px] font-normal">{scannedCadet.presentAddress || "N/A"}</p>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Date of Birth</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.dob || "N/A"}</p>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">স্থায়ী ঠিকানা (Permanent Address)</p>
-                        <p className="text-white leading-relaxed text-[11px] font-normal">{scannedCadet.permanentAddress || "N/A"}</p>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Gender / Religion</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.gender || "N/A"} | {scannedCadet.religion || "N/A"}</p>
                       </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">আবেদনের স্থিতি (Status)</p>
-                        <p className="text-white font-black uppercase">
-                          <span className={`px-2.5 py-1 text-[9px] rounded-full text-white ${scannedCadet.approvalStatus === "Approved" || scannedCadet.status === "Approved" ? "bg-emerald-500 animate-pulse" : "bg-amber-600"}`}>
-                            {scannedCadet.approvalStatus || scannedCadet.status || "Pending"}
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Blood Group</span>
+                        <p className="text-rose-600 font-black mt-1">{scannedCadet.bloodGroup || "N/A"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Ethnic Minority</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.isEthnicMinority ? "Yes (হ্যাঁ)" : "No (না)"}</p>
+                      </div>
+                      {(scannedCadet.isEthnicMinority || scannedCadet.specialCategory || scannedCadet.specialQuota) && (
+                        <div className="p-3 bg-amber-50 rounded-xl border border-amber-300">
+                          <span className="text-[10px] text-amber-800 uppercase font-black block flex items-center gap-1">
+                            ⭐ Special Category
                           </span>
-                        </p>
-                      </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">ধর্ম ও লিঙ্গ</p>
-                        <p className="text-white text-xs">{scannedCadet.religion || "N/A"} | {scannedCadet.gender || "N/A"}</p>
-                      </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠী</p>
-                        <p className="text-white text-xs">{scannedCadet.isEthnicMinority ? "হ্যাঁ" : "না"}</p>
-                      </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">প্রতিষ্ঠান (Institution)</p>
-                        <p className="text-white font-normal">{scannedCadet.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)"}</p>
-                      </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">এসএসসি জিপিএ ও ফলাফল (SSC Result)</p>
-                        <p className="text-white font-normal">
-                          {scannedCadet.sscGpa ? `জিপিএ: ${scannedCadet.sscGpa} (${scannedCadet.sscGroup || "N/A"}), বোর্ড: ${scannedCadet.sscBoard || "Chattogram"}, সন: ${scannedCadet.sscYear || "N/A"}` : "N/A"}
-                        </p>
-                      </div>
-                      <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5 md:col-span-2">
-                        <p className="text-[9px] uppercase tracking-wider text-rose-400 font-bold">পূর্ববর্তী বিএনসিসি অভিজ্ঞতা</p>
-                        <p className="text-white text-xs">
-                          {scannedCadet.previousBNCC ? `হ্যাঁ (পদবি: ${scannedCadet.previousRank === "Other" ? scannedCadet.previousRankOther : scannedCadet.previousRank}, প্রতিষ্ঠান: ${scannedCadet.previousInstitution}, সেবাকাল: ${scannedCadet.serviceDuration})` : "নেই (No)"}
-                        </p>
-                      </div>
-                      {scannedCadet.coCurricularActivities && scannedCadet.coCurricularActivities.length > 0 && (
-                        <div className="space-y-2 p-3 bg-slate-900 rounded-xl border border-white/5 md:col-span-2">
-                          <p className="text-[9px] uppercase tracking-wider text-orange-400 font-bold">সহ-শিক্ষা কার্যক্রম (Co-Curricular)</p>
-                          <p className="text-white text-xs leading-normal">
-                            {scannedCadet.coCurricularActivities.join(", ")}
-                            {scannedCadet.otherCoCurricularActivity ? ` (${scannedCadet.otherCoCurricularActivity})` : ""}
+                          <p className="text-amber-950 font-black mt-1">
+                            {scannedCadet.specialCategory || scannedCadet.specialQuota || "Ethnic Minority (ক্ষুদ্র নৃ-গোষ্ঠী)"}
                           </p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Attendance History Section */}
-                  <div className="p-5 bg-slate-950 rounded-3xl border border-white/5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-[10px] uppercase text-rose-500 font-black tracking-widest">এটেনডেন্স ইতিহাস ও পরিসংখ্যান (Attendance Ledger)</h4>
-                      <span className="px-2.5 py-1 text-[9px] font-black text-rose-400 bg-rose-500/10 rounded-full border border-rose-500/10">
-                        মোট উপস্থিত: {cadetHistory.filter(h => h.status === "Present" || h.status === "Late").length} দিন
-                      </span>
+                  {/* Category 2: Family Information */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-[#002147] uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                      2. Family Information
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-bold text-slate-700">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Father's Name (EN / BN)</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.fatherNameEnglish || "N/A"} {scannedCadet.fatherNameBangla ? `(${scannedCadet.fatherNameBangla})` : ""}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Mother's Name (EN / BN)</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.motherNameEnglish || "N/A"} {scannedCadet.motherNameBangla ? `(${scannedCadet.motherNameBangla})` : ""}</p>
+                      </div>
                     </div>
-
-                    {loadingHistory ? (
-                      <div className="flex items-center justify-center py-6">
-                        <Loader2 className="animate-spin text-rose-500 w-6 h-6" />
-                      </div>
-                    ) : cadetHistory.length === 0 ? (
-                      <p className="text-center text-[11px] font-bold text-slate-600 py-4">কোন এটেনডেন্স রেকর্ড পাওয়া যায়নি।</p>
-                    ) : (
-                      <div className="max-h-40 overflow-y-auto divide-y divide-white/5 pr-1.5 no-scrollbar space-y-1">
-                        {cadetHistory.map((hist) => (
-                          <div key={hist.id || hist.date} className="flex items-center justify-between py-2 text-xs">
-                            <div className="flex items-center gap-2">
-                              <Calendar size={13} className="text-slate-600" />
-                              <span className="font-bold font-mono text-slate-400">{hist.date}</span>
-                            </div>
-                            <span className={`px-2.5 py-0.5 text-[9px] rounded-full font-black uppercase ${
-                              hist.status === "Present" ? "bg-emerald-500/25 text-emerald-400" :
-                              hist.status === "Late" ? "bg-amber-500/25 text-amber-400" :
-                              "bg-rose-500/25 text-rose-400"
-                            }`}>
-                              {hist.status}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
-                  {/* Skip Button */}
+                  {/* Category 3: Contact Details */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-[#002147] uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                      3. Contact Information
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-bold text-slate-700">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Student Phone</span>
+                        <p className="text-[#002147] font-mono mt-1">{scannedCadet.studentPhone || scannedCadet.phone || "N/A"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Student Email</span>
+                        <p className="text-slate-900 font-mono mt-1">{scannedCadet.studentEmail || scannedCadet.email || "N/A"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Present Address</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.presentAddress || "N/A"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Permanent Address</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.permanentAddress || "N/A"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 4: Academic Information */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-[#002147] uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                      4. Academic Information
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs font-bold text-slate-700">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 md:col-span-2">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">College Name</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.collegeName || "Cox's Bazar City College"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Class Roll / Section</span>
+                        <p className="text-slate-900 mt-1">Roll: {scannedCadet.classRoll || "N/A"} | Sec: {scannedCadet.section || "N/A"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Session / Study Status</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.session || scannedCadet.academicYear || "N/A"} ({scannedCadet.studyStatus || "Regular"})</p>
+                      </div>
+                      {scannedCadet.subject && (
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 md:col-span-2">
+                          <span className="text-[10px] text-slate-400 uppercase font-black block">Subject (বিষয়)</span>
+                          <p className="text-[#002147] font-black mt-1">{scannedCadet.subject}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category 5: SSC & HSC Record */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-[#002147] uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                      5. Educational History (SSC & HSC)
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-bold text-slate-700">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <span className="text-[10px] text-[#002147] uppercase font-black block border-b pb-1">SSC Record</span>
+                        <p>Year: {scannedCadet.sscYear || "N/A"} | Board: {scannedCadet.sscBoard || "N/A"}</p>
+                        <p>Group: {scannedCadet.sscGroup || "N/A"} | GPA: <span className="text-emerald-700 font-black">{scannedCadet.sscGpa || "N/A"}</span></p>
+                        <p className="text-[10px] text-slate-500">Prev Inst: {scannedCadet.previousInstitution || "N/A"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                        <span className="text-[10px] text-[#002147] uppercase font-black block border-b pb-1">HSC Record</span>
+                        <p>Year: {scannedCadet.hscYear || "N/A"} | Board: {scannedCadet.hscBoard || "N/A"}</p>
+                        <p>Group: {scannedCadet.hscGroup || "N/A"} | Optional: {scannedCadet.hscOptionalSubject || "N/A"}</p>
+                        <p>GPA: <span className="text-emerald-700 font-black">{scannedCadet.hscGpa || "N/A"}</span></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 6: BNCC & Military Service */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-[#002147] uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                      6. BNCC & Military History
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-bold text-slate-700">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Previous BNCC Experience</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.previousBNCC ? "Yes" : "No"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Battalion / Regiment</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.previousBattalionRegiment || scannedCadet.battalion || "N/A"}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 uppercase font-black block">Rank & Duration</span>
+                        <p className="text-slate-900 mt-1">{scannedCadet.previousRank || scannedCadet.rank || "Cadet"} ({scannedCadet.serviceDuration || "N/A"})</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 7: Co-Curricular Activities */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-[#002147] uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                      7. Co-Curricular Activities (সহ-শিক্ষা কার্যক্রম)
+                    </p>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+                      {((Array.isArray(scannedCadet.coCurricularActivities) && scannedCadet.coCurricularActivities.length > 0) || (typeof scannedCadet.coCurricularActivities === "string" && scannedCadet.coCurricularActivities.trim()) || scannedCadet.otherCoCurricularActivity) ? (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-1.5">
+                            {Array.isArray(scannedCadet.coCurricularActivities) ? (
+                              scannedCadet.coCurricularActivities.map((act: string, idx: number) => (
+                                <span key={idx} className="px-2.5 py-1 bg-teal-100 text-teal-900 border border-teal-200 rounded-lg text-[11px] font-black inline-flex items-center gap-1">
+                                  🎯 {act}
+                                </span>
+                              ))
+                            ) : typeof scannedCadet.coCurricularActivities === "string" && scannedCadet.coCurricularActivities.trim() ? (
+                              scannedCadet.coCurricularActivities.split(",").map((act: string, idx: number) => (
+                                <span key={idx} className="px-2.5 py-1 bg-teal-100 text-teal-900 border border-teal-200 rounded-lg text-[11px] font-black inline-flex items-center gap-1">
+                                  🎯 {act.trim()}
+                                </span>
+                              ))
+                            ) : null}
+                          </div>
+                          {scannedCadet.otherCoCurricularActivity && (
+                            <p className="text-slate-600 font-semibold text-[11px] mt-1">
+                              <span className="font-bold text-slate-800">Other Activities:</span> {scannedCadet.otherCoCurricularActivity}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 italic">No co-curricular activities recorded (প্রযোজ্য নয়)</p>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* History Section for this Student */}
+                <div className="p-6 bg-slate-50 border-t border-slate-200 space-y-3">
+                  <h3 className="text-xs font-black text-[#002147] uppercase tracking-wider flex items-center gap-2">
+                    <History className="w-4 h-4 text-[#C5A059]" /> Saved Snapshot History for this Student ({cadetSnapshotHistory.length})
+                  </h3>
+
+                  {cadetSnapshotHistory.length === 0 ? (
+                    <p className="text-xs text-slate-400 font-bold italic">No snapshots saved yet for this student.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {cadetSnapshotHistory.map((h) => (
+                        <div key={h.id} className="p-3 bg-white rounded-xl border border-slate-200 text-xs flex items-center justify-between font-bold">
+                          <div>
+                            <span className="text-[#002147] font-mono">{h.scanTime?.toDate ? h.scanTime.toDate().toLocaleString() : h.id}</span>
+                            <p className="text-[10px] text-slate-500">Height: {h.height} | Weight: {h.weight} | Attendance: {h.attendance}</p>
+                          </div>
+                          <button
+                            onClick={() => setSelectedSnapshotModal(h)}
+                            className="px-3 py-1 bg-slate-100 hover:bg-[#002147] hover:text-white rounded-lg text-[10px] text-[#002147]"
+                          >
+                            View
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 5: EXCEL STORAGE PAGE (`qr_records`) */}
+          {activeTab === "excel" && (
+            <div className="space-y-6">
+              
+              {/* Header & Export Bar */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-black text-[#002147] uppercase tracking-tight flex items-center gap-2">
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-600" /> Independent QR Excel Database
+                  </h3>
+                  <p className="text-xs text-slate-500 font-bold">
+                    All snapshot records saved from scans or manual edits. Exportable to Excel (.xlsx).
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                   <button
-                    onClick={() => {
-                      setScannedCadet(null);
-                      setEditingPhysical(false);
-                    }}
-                    className="w-full py-3.5 bg-slate-950 border border-white/5 text-slate-500 font-bold uppercase text-[10px] tracking-widest rounded-xl hover:bg-slate-900 transition-all cursor-pointer"
+                    onClick={handleExportExcel}
+                    className="flex-1 md:flex-none px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
                   >
-                    স্ক্যান বাতিল করূন / পরবর্তী ক্যাডেট
+                    <Download className="w-4 h-4" /> Export Excel (.xlsx)
                   </button>
 
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                  <button
+                    onClick={handleExportCSV}
+                    className="flex-1 md:flex-none px-4 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs uppercase rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-[#C5A059]" /> CSV
+                  </button>
+
+                  <button
+                    onClick={() => window.print()}
+                    className="flex-1 md:flex-none px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs uppercase rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" /> Print
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter Controls Bar */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 text-xs font-black text-[#002147] uppercase tracking-wider">
+                  <Filter className="w-4 h-4 text-[#C5A059]" /> Filter Records
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Search Keyword</label>
+                    <input
+                      type="text"
+                      value={filterSearch}
+                      onChange={(e) => setFilterSearch(e.target.value)}
+                      placeholder="Name, ID, Phone..."
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Attendance</label>
+                    <select
+                      value={filterAttendance}
+                      onChange={(e) => setFilterAttendance(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none"
+                    >
+                      <option value="All">All Attendance</option>
+                      <option value="Present">Present</option>
+                      <option value="Late">Late</option>
+                      <option value="Absent">Absent</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status</label>
+                    <select
+                      value={filterRank}
+                      onChange={(e) => setFilterRank(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Active">Active</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => {
+                        setFilterSearch("");
+                        setFilterDate("");
+                        setFilterAttendance("All");
+                        setFilterRank("All");
+                      }}
+                      className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                    >
+                      Reset Filters
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Table */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-bold text-slate-600">
+                  <span>Showing {getFilteredQrRecords().length} Snapshot Records</span>
+                  <span className="font-mono text-[#002147]">Table: qr_records</span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-600 font-black uppercase tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Scan Time</th>
+                        <th className="p-3">Edited By</th>
+                        <th className="p-3">Student ID</th>
+                        <th className="p-3">Student Name</th>
+                        <th className="p-3">Height</th>
+                        <th className="p-3">Weight</th>
+                        <th className="p-3">Attendance</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Remarks</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-bold text-slate-800">
+                      {getFilteredQrRecords().length === 0 ? (
+                        <tr>
+                          <td colSpan={10} className="p-8 text-center text-slate-400 font-bold">
+                            No snapshot records found matching your filter criteria.
+                          </td>
+                        </tr>
+                      ) : (
+                        getFilteredQrRecords().map((rec) => (
+                          <tr key={rec.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                              {rec.scanTime?.toDate ? rec.scanTime.toDate().toLocaleString() : rec.id}
+                            </td>
+                            <td className="p-3 font-bold text-[#002147]">{rec.editedBy || "QR Admin"}</td>
+                            <td className="p-3 font-mono text-slate-600">{rec.studentId || rec.uniqueId}</td>
+                            <td className="p-3 font-bold">{rec.studentName || rec.fullNameEnglish}</td>
+                            <td className="p-3 text-slate-700">{rec.height || "N/A"}</td>
+                            <td className="p-3 text-slate-700">{rec.weight || "N/A"}</td>
+                            <td className="p-3">
+                              <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-full uppercase ${
+                                rec.attendance === "Present" ? "bg-emerald-100 text-emerald-800" :
+                                rec.attendance === "Late" ? "bg-amber-100 text-amber-800" :
+                                "bg-rose-100 text-rose-800"
+                              }`}>
+                                {rec.attendance}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px]">
+                                {rec.status || "Active"}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-500 truncate max-w-[150px]">{rec.remarks || "-"}</td>
+                            <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                              <button
+                                onClick={() => setSelectedSnapshotModal(rec)}
+                                className="px-2.5 py-1 bg-[#002147] text-[#C5A059] rounded-lg text-[10px] font-bold hover:bg-[#001530] cursor-pointer"
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSnapshot(rec.id)}
+                                className="px-2.5 py-1 bg-red-100 text-red-600 hover:bg-red-600 hover:text-white rounded-lg text-[10px] font-bold cursor-pointer transition-all"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 6: STUDENT SNAPSHOT HISTORY */}
+          {activeTab === "history" && (
+            <div className="max-w-3xl mx-auto space-y-6">
+              
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl space-y-4">
+                <h3 className="text-sm font-black text-[#002147] uppercase tracking-wider flex items-center gap-2">
+                  <History className="w-4 h-4 text-[#C5A059]" /> Student Snapshot Timeline History
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Select or search a student to view all saved historical physical snapshots over time.
+                </p>
+
+                {scannedCadet ? (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-[#002147]">{scannedCadet.fullNameEnglish || scannedCadet.fullNameBangla}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">ID: {scannedCadet.id}</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab("search")}
+                      className="px-3 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg cursor-pointer"
+                    >
+                      Change Student
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setActiveTab("search")}
+                    className="w-full py-4 bg-[#002147] text-[#C5A059] font-bold text-xs uppercase tracking-wider rounded-2xl cursor-pointer"
+                  >
+                    Click Here to Search & Select Student
+                  </button>
+                )}
+
+                {/* Timeline list */}
+                {cadetSnapshotHistory.length > 0 && (
+                  <div className="space-y-4 pt-4">
+                    {cadetSnapshotHistory.map((snap, idx) => (
+                      <div key={snap.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-2 relative">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-[#002147] font-mono">
+                            {snap.scanTime?.toDate ? snap.scanTime.toDate().toLocaleString() : snap.id}
+                          </span>
+                          <span className="px-2 py-0.5 bg-[#C5A059]/20 text-[#002147] font-black text-[10px] rounded-full">
+                            Snapshot #{cadetSnapshotHistory.length - idx}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-center py-2 bg-slate-50 rounded-xl">
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-bold block">Height</span>
+                            <span className="text-xs font-bold text-slate-800">{snap.height}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-bold block">Weight</span>
+                            <span className="text-xs font-bold text-slate-800">{snap.weight}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-bold block">Attendance</span>
+                            <span className="text-xs font-bold text-emerald-600">{snap.attendance}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-[10px] text-slate-500 flex justify-between">
+                          <span>Inspector: {snap.editedBy || "QR Admin"}</span>
+                          <span>Remarks: {snap.remarks || "None"}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 7: SETTINGS */}
+          {activeTab === "settings" && (
+            <div className="max-w-xl mx-auto space-y-6">
+              
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl space-y-6">
+                <h3 className="text-sm font-black text-[#002147] uppercase tracking-wider flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-[#C5A059]" /> QR Workspace Preferences
+                </h3>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div>
+                      <p className="text-xs font-bold text-[#002147]">Audio Feedback Beep</p>
+                      <p className="text-[10px] text-slate-500">Play sound chime when QR code is scanned successfully</p>
+                    </div>
+                    <button
+                      onClick={() => setAudioEnabled(!audioEnabled)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer ${
+                        audioEnabled ? "bg-[#002147] text-[#C5A059]" : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {audioEnabled ? "ENABLED" : "DISABLED"}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div>
+                      <p className="text-xs font-bold text-[#002147]">Target Collection</p>
+                      <p className="text-[10px] text-slate-500">Snapshots saved to independent Firestore storage</p>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
+                      qr_records
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div>
+                      <p className="text-xs font-bold text-[#002147]">Main Database Protection</p>
+                      <p className="text-[10px] text-slate-500">Original student data is protected from modification</p>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+                      READ ONLY
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
 
         </div>
 
-      </div>
+        {/* Mobile Bottom Navigation Bar */}
+        <nav className="lg:hidden bg-[#002147] text-white border-t border-[#C5A059]/30 fixed bottom-0 left-0 right-0 z-40 px-2 py-2 flex items-center justify-around shadow-2xl">
+          {[
+            { id: "dashboard", label: "Home", icon: Home },
+            { id: "scan", label: "Scan", icon: Camera },
+            { id: "excel", label: "Excel", icon: FileSpreadsheet },
+            { id: "profile", label: "Profile", icon: User }
+          ].map((nav) => {
+            const Icon = nav.icon;
+            const active = activeTab === nav.id;
+            return (
+              <button
+                key={nav.id}
+                onClick={() => setActiveTab(nav.id as any)}
+                className={`flex flex-col items-center gap-1 p-2 rounded-xl text-[10px] font-bold cursor-pointer transition-all ${
+                  active ? "text-[#C5A059] bg-white/10 font-black" : "text-slate-300"
+                }`}
+              >
+                <Icon className={`w-5 h-5 ${active ? "text-[#C5A059]" : "text-slate-300"}`} />
+                <span>{nav.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+      </main>
+
+      {/* Snapshot Detail Modal View */}
+      <AnimatePresence>
+        {selectedSnapshotModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl border border-slate-200"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#002147] text-[#C5A059] rounded-2xl flex items-center justify-center font-bold">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-[#002147] uppercase">Snapshot Record Details</h3>
+                    <p className="text-[10px] text-slate-400 font-mono">ID: {selectedSnapshotModal.id}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedSnapshotModal(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black flex items-center justify-center cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs font-bold">
+                <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Student Name</span>
+                    <span className="text-[#002147] font-bold text-sm">{selectedSnapshotModal.studentName || selectedSnapshotModal.fullNameEnglish}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Student / Cad ID</span>
+                    <span className="text-slate-800 font-mono">{selectedSnapshotModal.studentId || selectedSnapshotModal.uniqueId}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Height</span>
+                    <span className="text-slate-800">{selectedSnapshotModal.height || "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Weight</span>
+                    <span className="text-slate-800">{selectedSnapshotModal.weight || "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Attendance</span>
+                    <span className="text-emerald-600">{selectedSnapshotModal.attendance || "Present"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Saved By (Admin)</span>
+                    <span className="text-[#002147]">{selectedSnapshotModal.editedBy || "QR Admin"}</span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-2xl space-y-2">
+                  <span className="text-[9px] text-slate-400 uppercase font-black block">Remarks / Notes</span>
+                  <p className="text-slate-700 font-normal">{selectedSnapshotModal.remarks || "No remarks noted."}</p>
+                </div>
+
+                {/* Raw JSON Snapshot Preview */}
+                <div className="p-4 bg-slate-900 text-slate-300 rounded-2xl space-y-2 font-mono text-[10px]">
+                  <span className="text-[#C5A059] font-bold uppercase block">Raw JSON Snapshot Copy</span>
+                  <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap">
+                    {JSON.stringify(selectedSnapshotModal.snapshotData || selectedSnapshotModal, null, 2)}
+                  </pre>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => handleExportPdf(selectedSnapshotModal)}
+                  className="flex-1 py-3 bg-[#002147] text-[#C5A059] font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer"
+                >
+                  Export PDF
+                </button>
+                <button
+                  onClick={() => setSelectedSnapshotModal(null)}
+                  className="flex-1 py-3 bg-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

@@ -23,7 +23,6 @@ import { AuditLogs } from "../components/modular/AuditLogs";
 import { BulkActions } from "../components/modular/BulkActions";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { AICircularManager } from "../components/modular/AICircularManager";
-import { AdmissionTimerManager } from "../components/modular/AdmissionTimerManager";
 import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
 
 export function AdminDashboard() {
@@ -37,7 +36,7 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "passwordResets" | "timer">("applicants");
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "passwordResets">("applicants");
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
@@ -735,18 +734,6 @@ export function AdminDashboard() {
               </div>
               {activeTab === "circular" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
             </button>
-            <button
-              onClick={() => setActiveTab("timer")}
-              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-                activeTab === "timer" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Clock size={18} className="text-primary" />
-                Application Schedule
-              </div>
-              {activeTab === "timer" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-            </button>
           </>
         )}
         <button
@@ -1344,25 +1331,6 @@ export function AdminDashboard() {
                 console.error("Activity Log Save Incident:", e);
               }
             }} 
-          />
-        </div>
-      ) : activeTab === "timer" ? (
-        <div className="pb-12 h-full">
-          <AdmissionTimerManager 
-            adminSession={adminSession}
-            onLogActivity={async (type: string, details: string) => {
-              try {
-                await addDoc(collection(db, "activity_logs"), {
-                  type,
-                  details,
-                  actorId: adminSession?.username || "super_admin",
-                  targetId: "TIMER_SYSTEM",
-                  timestamp: Timestamp.now()
-                });
-              } catch (e) {
-                console.error("Activity Log Save Incident:", e);
-              }
-            }}
           />
         </div>
       ) : activeTab === "passwordResets" ? (

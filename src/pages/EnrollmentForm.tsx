@@ -13,26 +13,6 @@ export function EnrollmentForm() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [timerConfig, setTimerConfig] = useState<any>(null);
-  const [timerLoading, setTimerLoading] = useState(true);
-
-  useEffect(() => {
-    async function checkSchedule() {
-      try {
-        const docRef = doc(db, "admin_config", "admission_timer");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setTimerConfig(docSnap.data());
-        }
-      } catch (err) {
-        console.error("Error loading timer config for EnrollmentForm:", err);
-      } finally {
-        setTimerLoading(false);
-      }
-    }
-    checkSchedule();
-  }, []);
-
   const [formData, setFormData] = useState({
     fullNameBangla: "",
     fullNameEnglish: "",
@@ -292,81 +272,6 @@ export function EnrollmentForm() {
       setLoading(false);
     }
   };
-
-  if (timerLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh] text-black">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
-          <p className="text-sm font-bold uppercase tracking-widest text-slate-500">Checking enrollment eligibility schedule...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const isEnrollmentOpen = () => {
-    if (!timerConfig) return true; // Default to true if not configured yet
-    if (!timerConfig.isEnabled) return true; // Default to open if timer config is not fully created/enabled
-    if (timerConfig.isCancelled) return false;
-
-    const startStr = `${timerConfig.startDate}T${timerConfig.startTime}:00+06:00`;
-    const endStr = `${timerConfig.endDate}T${timerConfig.endTime}:00+06:00`;
-
-    const startMs = new Date(startStr).getTime();
-    const endMs = new Date(endStr).getTime();
-    const currentMs = Date.now();
-
-    return currentMs >= startMs && currentMs < endMs;
-  };
-
-  if (!isEnrollmentOpen()) {
-    return (
-      <div className="max-w-xl mx-auto px-4 py-16 text-center animate-in fade-in duration-300">
-        <div className="glass-card p-8 md:p-10 rounded-[3rem] border border-white/5 shadow-2xl space-y-6 bg-slate-950 text-white">
-          <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto shadow-xl">
-            <AlertCircle className="w-8 h-8 text-red-400 animate-pulse" />
-          </div>
-          
-          <div className="space-y-4">
-            <span className="px-4 py-1.5 bg-red-500/15 border border-red-500/20 text-red-400 text-xs font-black uppercase tracking-widest rounded-full">
-              আবেদন ফর্ম বন্ধ / Enrollment Guard
-            </span>
-            
-            {timerConfig?.isCancelled ? (
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold font-sans">
-                  এই নিয়োগ/ভর্তি কার্যক্রম authority দ্বারা বাতিল করা হয়েছে। পরবর্তী বিজ্ঞপ্তির জন্য অপেক্ষা করুন।
-                </h3>
-                <div className="w-12 h-0.5 bg-red-500/20 mx-auto" />
-                <p className="text-sm text-slate-400 leading-relaxed font-sans">
-                  This recruitment/admission process has been cancelled by the authority. Please wait for the next official circular.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold font-sans">
-                  অনলাইন ভর্তি আবেদনের সময়সীমা এই মুহূর্তে উন্মুক্ত নয়।
-                </h3>
-                <div className="w-12 h-0.5 bg-white/10 mx-auto" />
-                <p className="text-sm text-slate-400 leading-relaxed font-sans">
-                  Online application is currently not open or has ended. Please review the admission timer and schedule on our home page.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="pt-4">
-            <button
-              onClick={() => navigate("/")}
-              className="px-8 py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg text-xs uppercase tracking-widest cursor-pointer"
-            >
-              Back to Home / হোমপেজে ফিরে যান
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const steps = [
     { id: 1, title: "ব্যক্তিগত তথ্য", icon: User },

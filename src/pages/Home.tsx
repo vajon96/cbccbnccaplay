@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { CheckCircle, Users, Award, ShieldCheck, ArrowRight, Info, FileText, Activity, Phone, Sparkles, BrainCircuit, Send, Loader2, BookOpen, Camera } from "lucide-react";
 import { getQuickFAQ } from "../services/geminiService";
 import { CircularViewerModal } from "../components/modular/CircularViewerModal";
-import { AdmissionTimerCard } from "../components/AdmissionTimerCard";
 import { AdmissionGuideModal } from "../components/AdmissionGuideModal";
 
 export function Home() {
@@ -23,7 +22,7 @@ export function Home() {
   };
 
   return (
-    <div className="space-y-24 pb-24">
+    <div className="space-y-24 pb-24 bg-[#d1a2a2]">
       {/* Hero Section */}
       <section className="relative h-[90vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
@@ -84,9 +83,6 @@ export function Home() {
         </div>
       </section>
 
-      {/* Admission Timer Card */}
-      <AdmissionTimerCard />
-
       {/* Dynamic Admission Guide Card */}
       <section className="max-w-7xl mx-auto px-4">
         <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-white/5 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden">
@@ -98,7 +94,7 @@ export function Home() {
               <span className="inline-block px-4 py-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-black uppercase tracking-widest rounded-full">
                 ভর্তি নির্দেশিকা / Guide Summary
               </span>
-              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
+              <h2 className="text-3xl md:text-4xl font-black text-[#406dc5] leading-tight">
                 অনলাইন আবেদন করবেন যেভাবে এবং প্রয়োজনীয় শর্তাবলি
               </h2>
               <p className="text-slate-400 text-sm leading-relaxed">
@@ -226,7 +222,7 @@ export function Home() {
       <section className="max-w-7xl mx-auto px-4">
         <div className="bg-slate-900/50 backdrop-blur-sm rounded-[2rem] overflow-hidden shadow-2xl border border-white/5">
           <div className="grid grid-cols-1 lg:grid-cols-2">
-            <div className="p-12 space-y-8">
+            <div className="p-12 space-y-8 bg-[#2a3646]">
               <div className="flex items-center gap-3">
                 <Activity className="w-8 h-8 text-primary" />
                 <h2 className="text-3xl font-bold text-white">শারীরিক মানদণ্ড</h2>
@@ -283,7 +279,7 @@ export function Home() {
                 </ul>
               </div>
             </div>
-            <div className="bg-white/5 p-12 flex items-center justify-center">
+            <div className="bg-[#823b3b] p-12 flex items-center justify-center">
               <div className="space-y-6">
                 <h3 className="text-2xl font-bold text-white">প্রয়োজনীয় কাগজপত্র</h3>
                 <ul className="space-y-4">
@@ -335,7 +331,7 @@ export function Home() {
 
       {/* Benefits */}
       <section className="max-w-7xl mx-auto px-4">
-        <div className="bg-slate-900/50 backdrop-blur-sm p-12 rounded-[2rem] shadow-2xl border border-white/5 bg-gradient-to-br from-primary/10 to-transparent">
+        <div className="bg-[#4e7ad8] backdrop-blur-sm p-12 rounded-[2rem] shadow-2xl border border-white/5">
           <div className="max-w-3xl">
             <h2 className="text-3xl font-bold text-white mb-8">বিএনসিসি ক্যাডেট হওয়ার সুবিধাসমূহ</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -377,7 +373,7 @@ export function Home() {
             <h3 className="text-3xl font-bold text-white leading-tight">
               শৃঙ্খলা, দেশপ্রেম এবং নেতৃত্বের গুণাবলি বিকাশে আমাদের অঙ্গীকার
             </h3>
-            <p className="text-slate-400 leading-relaxed">
+            <p className="text-[#0071ff] leading-relaxed">
               কক্সবাজার সিটি কলেজ BNCC মিশ্র প্লাটুন বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC)-এর একটি গুরুত্বপূর্ণ শাখা। এটি শিক্ষার্থীদের শৃঙ্খলা, নেতৃত্বের দক্ষতা, শারীরিক সক্ষমতা এবং দেশপ্রেমে উদ্বুদ্ধ করতে প্রশিক্ষণ প্রদান করে। ৩ সেপ্টেম্বর ২০২০ তারিখে প্লাটুনটি প্রতিষ্ঠার অনুমোদন পায় এবং ১৮ নভেম্বর ২০২০ তারিখে উজ্জ্বল কান্তি দেব-এর নেতৃত্বে কার্যক্রম শুরু করে।
             </p>
             
