@@ -683,7 +683,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                             referrerPolicy="no-referrer"
                           />
                           <div className="text-center font-bold">
-                            <h1 className="text-base font-black text-slate-900 mt-0.5">কক্সবাজার সিটি কলেজ বিএনপি মিশ্র প্লাটুন</h1>
+                            <h1 className="text-base font-black text-slate-900 mt-0.5">কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন</h1>
                             <p className="text-[10px] text-slate-700 mt-0.5 uppercase">১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট</p>
                           </div>
                           <img 

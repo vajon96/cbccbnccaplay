@@ -110,7 +110,7 @@ export function AdmissionGuideModal({ isOpen, onClose }: AdmissionGuideModalProp
                     referrerPolicy="no-referrer"
                   />
                   <div className="text-center">
-                    <h1 className="text-md font-black text-slate-900 tracking-tight leading-none">কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন</h1>
+                    <h1 className="text-md font-black text-slate-900 tracking-tight leading-none">কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন</h1>
                     <p className="text-[10px] text-slate-600 font-bold mt-1 uppercase">১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট</p>
                     <p className="text-[8px] text-slate-400 font-mono mt-0.5">ESTD. 2020 • COX'S BAZAR CITY COLLEGE</p>
                   </div>
