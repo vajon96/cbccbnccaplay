@@ -25,6 +25,7 @@ import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { AICircularManager } from "../components/modular/AICircularManager";
 import { AIGuideManager } from "../components/modular/AIGuideManager";
 import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
+import { PendingProfileApprovals } from "../components/cadet/PendingProfileApprovals";
 
 export function AdminDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -37,7 +38,7 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "guide" | "passwordResets">("applicants");
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "guide" | "passwordResets" | "profileApprovals">("applicants");
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
@@ -684,6 +685,18 @@ export function AdminDashboard() {
           {activeTab === "applicants" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
         </button>
         <button
+          onClick={() => setActiveTab("profileApprovals")}
+          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
+            activeTab === "profileApprovals" ? "text-amber-400" : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={18} className="text-amber-400" />
+            Profile Approvals
+          </div>
+          {activeTab === "profileApprovals" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-amber-400 rounded-t-full" />}
+        </button>
+        <button
           onClick={() => setActiveTab("broadcast")}
           className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
             activeTab === "broadcast" ? "text-primary" : "text-slate-500 hover:text-slate-300"
@@ -1326,6 +1339,10 @@ export function AdminDashboard() {
               )}
             </div>
           </div>
+        </div>
+      ) : activeTab === "profileApprovals" ? (
+        <div className="pb-12">
+          <PendingProfileApprovals adminSession={adminSession} />
         </div>
       ) : activeTab === "circular" ? (
         <div className="pb-12 h-full">
