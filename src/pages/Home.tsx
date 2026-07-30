@@ -72,13 +72,6 @@ export function Home() {
               <FileText className="w-5 h-5 text-primary" />
               সার্কুলার ডাউনলোড
             </button>
-            <button
-              onClick={() => setIsGuideOpen(true)}
-              className="group px-8 py-4 bg-emerald-900/40 hover:bg-emerald-900 text-white font-bold rounded-xl border border-emerald-500/20 flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg cursor-pointer"
-            >
-              <BookOpen className="w-5 h-5 text-emerald-400" />
-              ভর্তি সহায়িকা (PDF Guide)
-            </button>
           </motion.div>
         </div>
       </section>
@@ -262,15 +255,7 @@ export function Home() {
                 <ul className="space-y-1.5 text-xs text-slate-300">
                   <li className="flex items-start gap-2">
                     <span className="text-primary mt-0.5">•</span>
-                    <span><strong>পুরুষ (সাধারণ প্রার্থী):</strong> ন্যূনতম উচ্চতা ৫ ফুট ৬ ইঞ্চি।</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
                     <span><strong>পুরুষ (নৃতাত্ত্বিক জনগোষ্ঠী):</strong> অনেক নিয়োগে ন্যূনতম উচ্চতা ৫ ফুট ৪ ইঞ্চি পর্যন্ত শিথিলযোগ্য।</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span><strong>নারী (সাধারণ প্রার্থী):</strong> ন্যূনতম উচ্চতা ৫ ফুট ২ ইঞ্চি।</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary mt-0.5">•</span>

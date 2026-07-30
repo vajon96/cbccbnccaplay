@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Users, CheckCircle, XCircle, Download, Trash2, 
   Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
-  X, Sparkles, BrainCircuit, Info, FileText,
+  X, Sparkles, BrainCircuit, Info, FileText, HelpCircle,
   History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
   MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock, ArrowRight,
   TrendingUp, PieChart as PieChartIcon, BarChart as BarChartIcon, Bell, Megaphone, Activity, QrCode,
@@ -23,6 +23,7 @@ import { AuditLogs } from "../components/modular/AuditLogs";
 import { BulkActions } from "../components/modular/BulkActions";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { AICircularManager } from "../components/modular/AICircularManager";
+import { AIGuideManager } from "../components/modular/AIGuideManager";
 import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
 
 export function AdminDashboard() {
@@ -36,7 +37,7 @@ export function AdminDashboard() {
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
   const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "passwordResets">("applicants");
+  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "guide" | "passwordResets">("applicants");
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
@@ -734,6 +735,18 @@ export function AdminDashboard() {
               </div>
               {activeTab === "circular" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
             </button>
+            <button
+              onClick={() => setActiveTab("guide")}
+              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
+                activeTab === "guide" ? "text-primary" : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <HelpCircle size={18} className="text-primary" />
+                Guide Maker
+              </div>
+              {activeTab === "guide" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
+            </button>
           </>
         )}
         <button
@@ -1325,6 +1338,25 @@ export function AdminDashboard() {
                   details,
                   actorId: adminSession?.username || "super_admin",
                   targetId: "CIRCULAR_SYSTEM",
+                  timestamp: Timestamp.now()
+                });
+              } catch (e) {
+                console.error("Activity Log Save Incident:", e);
+              }
+            }} 
+          />
+        </div>
+      ) : activeTab === "guide" ? (
+        <div className="pb-12 h-full">
+          <AIGuideManager 
+            adminSession={adminSession} 
+            onLogActivity={async (type: string, details: string) => {
+              try {
+                await addDoc(collection(db, "activity_logs"), {
+                  type,
+                  details,
+                  actorId: adminSession?.username || "super_admin",
+                  targetId: "GUIDE_SYSTEM",
                   timestamp: Timestamp.now()
                 });
               } catch (e) {

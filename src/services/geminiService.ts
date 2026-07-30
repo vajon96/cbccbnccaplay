@@ -133,3 +133,24 @@ export async function generateAICircular(
     throw error; // Let caller (AICircularManager) handle it and trigger local template fallback
   }
 }
+
+export async function generateAIGuide(
+  promptInstruction: string,
+  refNumber: string
+): Promise<any> {
+  try {
+    const response = await fetch("/api/gemini/generate-guide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ promptInstruction, refNumber }),
+    });
+    if (!response.ok) {
+      throw new Error(`Server returned status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Client generateAIGuide Error:", error);
+    throw error;
+  }
+}

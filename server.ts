@@ -361,6 +361,142 @@ app.post("/api/gemini/generate-circular", async (req: express.Request, res: expr
   }
 });
 
+// 8. ADMISSION GUIDE & MANUAL GENERATOR
+app.post("/api/gemini/generate-guide", async (req: express.Request, res: express.Response) => {
+  const { promptInstruction, refNumber } = req.body;
+  try {
+    const prompt = `
+    You are an AI assistant for Cox's Bazar City College BNCC Platoon (কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন).
+    Generate a complete, official, highly detailed "Admission Application Guide & Information Manual" (আবেদন নির্দেশিকা ও তথ্য সহায়িকা) in Unicode Bengali (Bangla).
+    
+    Leader: Ujjal Kanti Deb, Platoon Commander, Professor Under Officer.
+    Affiliation: 15 BNCC Battalion, Karnaphuli Regiment.
+    Reference Number: ${refNumber || "CBCC-BNCC-GUIDE-2026"}
+    
+    User prompt/instruction: ${promptInstruction || "ক্যাডেট ভর্তি আবেদনের প্রতিটি ধাপ, ছবি তোলার নিয়মাবলী, এআই চেকিং ও কাগজপত্রের তালিকা নিয়ে সম্পূর্ণ গাইড তৈরি করুন।"}
+    
+    Return strict JSON matching the schema below in formal Bengali:
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING, description: "Main guide title" },
+            refNumber: { type: Type.STRING, description: "Guide reference number" },
+            collegeName: { type: Type.STRING, description: "College and Platoon Name" },
+            regimentInfo: { type: Type.STRING, description: "Battalion and Regiment info" },
+            establishedYear: { type: Type.STRING, description: "ESTD text" },
+            introText: { type: Type.STRING, description: "Introductory paragraph" },
+            photoRulesTitle: { type: Type.STRING, description: "Title for photo rules" },
+            photoRules: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "List of photo guidelines"
+            },
+            aiRulesTitle: { type: Type.STRING, description: "Title for AI check section" },
+            aiRulesText: { type: Type.STRING, description: "AI photo verification details" },
+            securityRulesTitle: { type: Type.STRING, description: "Title for security & password section" },
+            securityRulesText: { type: Type.STRING, description: "Password & security instructions" },
+            workflowTitle: { type: Type.STRING, description: "Title for workflow section" },
+            workflowSteps: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  step: { type: Type.INTEGER },
+                  title: { type: Type.STRING },
+                  desc: { type: Type.STRING }
+                },
+                required: ["step", "title", "desc"]
+              },
+              description: "Step-by-step workflow"
+            },
+            admitCardTitle: { type: Type.STRING, description: "Title for admit card section" },
+            admitCardText: { type: Type.STRING, description: "Admit card details" },
+            docsTitle: { type: Type.STRING, description: "Title for required docs section" },
+            docsList: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "List of required documents"
+            },
+            warningText: { type: Type.STRING, description: "Warning / Disqualification note" },
+            commanderName: { type: Type.STRING, description: "Commander Name" },
+            commanderRank: { type: Type.STRING, description: "Commander Rank" },
+            platoonFooter: { type: Type.STRING, description: "Platoon Footer" },
+            subFooter: { type: Type.STRING, description: "Sub Footer" }
+          },
+          required: [
+            "title", "refNumber", "collegeName", "regimentInfo", "establishedYear",
+            "introText", "photoRulesTitle", "photoRules", "aiRulesTitle", "aiRulesText",
+            "securityRulesTitle", "securityRulesText", "workflowTitle", "workflowSteps",
+            "admitCardTitle", "admitCardText", "docsTitle", "docsList", "warningText",
+            "commanderName", "commanderRank", "platoonFooter", "subFooter"
+          ]
+        }
+      }
+    });
+
+    if (response.text) {
+      let rawText = response.text.trim();
+      if (rawText.startsWith("```")) {
+        rawText = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+      }
+      const data = JSON.parse(rawText.trim());
+      return res.json(data);
+    }
+    throw new Error("Empty response from AI");
+  } catch (error: any) {
+    console.error("Server AI Guide Generator Error (Falling back):", error);
+    const fallbackGuide = {
+      title: "অনলাইন ভর্তি আবেদন নির্দেশিকা ও নিয়মাবলী (OFFICIAL APPLICANT GUIDE)",
+      refNumber: refNumber || "CBCC-BNCC-GUIDE-2026",
+      collegeName: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন",
+      regimentInfo: "১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট",
+      establishedYear: "ESTD. 2020 • COX'S BAZAR CITY COLLEGE",
+      introText: "বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC) কক্সবাজার সিটি কলেজ প্লাটুনে যোগদানে ইচ্ছুক সকল ভর্তিচ্ছু শিক্ষার্থীর সুবিধার্থে অনলাইন আবেদন প্রক্রিয়া সহজতর করতে এই নির্দেশিকা প্রকাশ করা হলো। আবেদন করার পূর্বে নিয়মাবলীসমূহ অত্যন্ত সতর্কতার সাথে পাঠ করার জন্য নির্দেশ প্রদান করা যাচ্ছে।",
+      photoRulesTitle: "১. ছবি আপলোডের সঠিক নিয়মাবলী (Photo Rules)",
+      photoRules: [
+        "ব্যাকগ্রাউন্ড: অবশ্যই এক রঙের (সাদা অথবা হালকা নীল) ব্যাকগ্রাউন্ড হতে হবে। কোনো প্রাকৃতিক দৃশ্য বা আসবাবপত্র থাকা যাবে না।",
+        "পোশাক: কলারযুক্ত মার্জিত ফরমাল পোশাক পরিহিত হতে হবে। চশমা, টুপি বা ক্যাপ পরা ছবি গ্রহণযোগ্য নয়।",
+        "পোজ ও অবস্থান: সরাসরি ক্যামেরার দিকে সোজা হয়ে তাকাতে হবে (Military aligned)। দুই কান ও কাঁধ সমানভাবে স্পষ্ট দেখা যেতে হবে।",
+        "আলো ও স্পষ্টতা: ছবিতে পর্যাপ্ত আলো থাকতে হবে। কোনো অস্পষ্ট, ঘোলাটে, বা অতিরিক্ত ফিল্টার করা সেলফি আপলোড করা যাবে না।"
+      ],
+      aiRulesTitle: "২. আর্টিফিশিয়াল ইন্টেলিজেন্স (AI) ফটো চেকিং",
+      aiRulesText: "আবেদন ফর্মে যুক্ত রয়েছে Gemini AI Integration। আপনি যখনই ছবি আপলোড করবেন, এআই স্বয়ংক্রিয়ভাবে ছবির ব্যাকগ্রাউন্ড, চশমা, টুপি, ছবির গুণমান এবং পোজ বিশ্লেষণ করবে। ছবি নিয়ম বহির্ভূত হলে পোর্টাল আপনাকে সতর্কবার্তা দেবে এবং সংশোধন করতে বলবে।",
+      securityRulesTitle: "৩. সুরক্ষিত পাসওয়ার্ড সংরক্ষণ (Password Guard)",
+      securityRulesText: "আবেদনপত্রটি সফলভাবে সাবমিট করার সাথে সাথে স্ক্রিনে একটি অটো-জেনারেটেড সুরক্ষিত পাসওয়ার্ড (Auto-generated Password) প্রদর্শিত হবে। আপনার নিবন্ধিত মোবাইল নম্বর এবং এই পাসওয়ার্ডটি অত্যন্ত যত্নসহকারে লিখে রাখুন। আপনার ড্যাশবোর্ডে প্রবেশের একমাত্র চাবিকাঠি এটি।",
+      workflowTitle: "৪. আবেদন প্রক্রিয়া (Application Workflow)",
+      workflowSteps: [
+        { step: 1, title: "ধাপ ১ (রেজিস্ট্রেশন)", desc: "ফর্মে ব্যক্তিগত বিবরণ, নাম (বাংলা ও ইংরেজিতে), এবং এসএসসি জিপিএ টাইপ করুন।" },
+        { step: 2, title: "ধাপ ২ (ছবি আপলোড)", desc: "সঠিক নিয়ম মেনে ছবি আপলোড করুন এবং এআই সনাক্তকরণ সম্পন্ন করুন।" },
+        { step: 3, title: "ধাপ ৩ (শারীরিক বিবরণ)", desc: "আপনার সঠিক উচ্চতা, ওজন এবং রক্তের গ্রুপ ইনপুট করুন।" },
+        { step: 4, title: "ধাপ ৪ (সাবমিশন)", desc: "ফর্ম সাবমিট করে পাসওয়ার্ড লিখে রাখুন।" }
+      ],
+      admitCardTitle: "৫. প্রবেশপত্র (Admit Card) সংগ্রহ প্রক্রিয়া",
+      admitCardText: "আবেদনটি জমা হওয়ার পর আমাদের পিইউও এবং প্লাটুন অ্যাডমিনগণ আবেদনপত্রের সকল তথ্য ও ছবি গভীরভাবে নিরীক্ষণ করবেন। সবকিছু নির্ভুল থাকলে আবেদনটি অনুমোদন (Approved) করা হবে। অনুমোদন সম্পন্ন হওয়া মাত্রই আপনি ড্যাশবোর্ডে লগইন করে অফিশিয়াল কিউআর ও বারকোড সম্বলিত প্রবেশপত্র ডাউনলোড করতে পারবেন।",
+      docsTitle: "৬. প্রয়োজনীয় কাগজপত্র (সংগে আনতে হবে)",
+      docsList: [
+        "এসএসসি ও এইচএসসি সনদপত্রের ফটোকপি (২ কপি)",
+        "কলেজে ভর্তির রশিদ/রশিদ কপি (১ কপি)",
+        "পাসপোর্ট সাইজ রঙিন ছবি (২ কপি)",
+        "ব্লাড গ্রুপ রিপোর্টের ফটোকপি",
+        "জাতীয় পরিচয়পত্র অথবা জন্ম সনদের ফটোকপি"
+      ],
+      warningText: "সতর্কতা: ভুল বা মিথ্যা তথ্য এবং জালিয়াতিপূর্ণ ছবি প্রদান করলে আবেদনপত্র সরাসরি বাতিল বলে গণ্য হবে।",
+      commanderName: "উজ্জ্বল কান্তি দেব",
+      commanderRank: "প্রফেসর আন্ডার অফিসার ও প্লাটুন কমান্ডার",
+      platoonFooter: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন",
+      subFooter: "১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট"
+    };
+    return res.json(fallbackGuide);
+  }
+});
+
 // START EXPRESS/VITE ENGINE
 async function startServer() {
   // Vite middleware for development

@@ -55,5 +55,25 @@ service cloud.firestore {
     match /qr_records/{id} {
       allow read, write: if true;
     }
+
+    match /guides/{id} {
+      allow read, write: if true;
+    }
+
+    match /guide_settings/{id} {
+      allow read, write: if true;
+    }
+
+    match /adminTokens/{id} {
+      allow read, write: if true;
+    }
+
+    match /security_logs/{id} {
+      allow read, write: if true;
+    }
+
+    match /test/{id} {
+      allow read, write: if true;
+    }
   }
 }

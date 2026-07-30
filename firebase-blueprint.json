@@ -225,6 +225,18 @@
     },
     "/qr_records/{qrRecordId}": {
       "description": "Independent QR Admin snapshot records"
+    },
+    "/guides/{guideId}": {
+      "description": "Official enrollment guides"
+    },
+    "/guide_settings/{settingId}": {
+      "description": "General settings for the guide module"
+    },
+    "/adminTokens/{tokenId}": {
+      "description": "Admin session tokens"
+    },
+    "/security_logs/{logId}": {
+      "description": "Security logs"
     }
   }
 }
