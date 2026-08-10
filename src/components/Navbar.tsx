@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   Menu, X, Home, Users, 
   Image as ImageIcon, Medal, 
-  UserPlus, MessageCircle, LogIn, FileText, Scan
+  UserPlus, MessageCircle, LogIn, FileText, Scan, BookOpen
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,7 @@ export function Navbar() {
   const navLinks = [
     { name: "Main Website", path: "https://cbccbncc.netlify.app/", icon: Home },
     { name: "Verify QR", path: "/qr-scan", icon: Scan },
+    { name: "Exam Portal", path: "/exam", icon: BookOpen },
     { name: "Cadets", path: "https://cbccbncc.netlify.app/cadets", icon: Users },
     { name: "Gallery", path: "https://cbccbncc.netlify.app/gallery", icon: ImageIcon },
     { name: "Hall of In-Charges", path: "https://cbccbncc.netlify.app/hall-of-incharges", icon: Medal },
@@ -59,13 +60,23 @@ export function Navbar() {
             <div className="flex items-center border-r border-white/10 pr-4 mr-4 space-x-1">
               {navLinks.map((link) => {
                 const isExternal = link.path.startsWith("http");
-                const className = `flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-all rounded-lg hover:bg-white/10 ${
-                  location.pathname === link.path ? "text-white bg-white/20" : "text-sand/70 hover:text-white"
+                const isExam = link.path === "/exam";
+                const className = `flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-all rounded-lg relative ${
+                  isExam 
+                    ? "bg-amber-400/20 text-amber-300 hover:bg-amber-400/30 border border-amber-400/30"
+                    : location.pathname === link.path 
+                    ? "text-white bg-white/20" 
+                    : "text-sand/70 hover:text-white hover:bg-white/10"
                 }`;
                 const content = (
                   <>
-                    <link.icon size={14} className={location.pathname === link.path ? "text-white" : "text-sand/40"} />
+                    <link.icon size={14} className={isExam ? "text-amber-300" : location.pathname === link.path ? "text-white" : "text-sand/40"} />
                     {link.name}
+                    {isExam && (
+                      <span className="ml-1 px-1.5 py-0.2 bg-amber-400 text-slate-950 text-[9px] font-black rounded-full leading-tight uppercase animate-pulse">
+                        LIVE
+                      </span>
+                    )}
                   </>
                 );
 
@@ -182,19 +193,31 @@ export function Navbar() {
                 <span className="block px-4 py-2 text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Quick Navigation</span>
                 {navLinks.map((link) => {
                   const isExternal = link.path.startsWith("http");
+                  const isExam = link.path === "/exam";
                   const className = `flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all ${
-                    location.pathname === link.path 
+                    isExam
+                      ? "bg-amber-400/20 text-amber-300 border border-amber-400/30"
+                      : location.pathname === link.path 
                       ? "bg-white/20 text-white shadow-inner" 
                       : "text-sand/70 hover:bg-white/5 hover:text-white"
                   }`;
                   const content = (
                     <>
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                        location.pathname === link.path ? "bg-white text-primary shadow-lg" : "bg-white/5"
+                        isExam
+                          ? "bg-amber-400 text-slate-950 shadow-lg"
+                          : location.pathname === link.path ? "bg-white text-primary shadow-lg" : "bg-white/5"
                       }`}>
                         <link.icon size={18} />
                       </div>
-                      <span className="font-bold text-xs uppercase tracking-wide">{link.name}</span>
+                      <div className="flex items-center justify-between flex-1">
+                        <span className="font-bold text-xs uppercase tracking-wide">{link.name}</span>
+                        {isExam && (
+                          <span className="px-2 py-0.5 bg-amber-400 text-slate-950 text-[9px] font-black rounded-full uppercase">
+                            LIVE
+                          </span>
+                        )}
+                      </div>
                     </>
                   );
 

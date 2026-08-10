@@ -100,3 +100,173 @@ export interface ProfileAuditLog {
   details: string;
   changes?: Record<string, { old: any; new: any }>;
 }
+
+// ============================================================================
+// EXAMINATION MODULE TYPES
+// ============================================================================
+
+export type QuestionType = "mcq" | "fill_gaps" | "tag_question" | "changing_sentence" | "short_question" | "true_false";
+
+export type QuestionDifficulty = "easy" | "medium" | "hard";
+
+export interface QuestionBankItem {
+  id: string;
+  subject: string; // e.g., "বাংলা", "English", "গণিত", "সাধারণ বিজ্ঞান", "বাংলাদেশ ও আন্তর্জাতিক বিষয়াবলি", "BNCC", "IQ"
+  questionType: QuestionType;
+  question: string;
+  options?: {
+    A?: string;
+    B?: string;
+    C?: string;
+    D?: string;
+  };
+  correctAnswer: string | string[]; // Answer key (hidden from candidates during exam)
+  acceptedAnswers?: string[]; // Optional alternative accepted spellings/strings for fill gaps / short question
+  expectedAnswer?: string; // Reference text for subjective questions / short questions
+  marks: number;
+  difficulty: QuestionDifficulty;
+  tags?: string[];
+  explanation?: string;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export type ExamStatus = "draft" | "published" | "scheduled" | "live" | "completed" | "archived";
+
+export interface RandomQuestionRule {
+  subject: string;
+  questionType?: QuestionType;
+  count: number;
+  marksPerQuestion?: number;
+}
+
+export interface ExamEligibility {
+  type: "all_approved" | "specific_batches" | "specific_sessions" | "specific_users";
+  allowedSessions?: string[];
+  allowedUserIds?: string[];
+  allowedRegistrationNumbers?: string[];
+}
+
+export interface ExamModel {
+  id: string;
+  title: string;
+  description?: string;
+  instructions?: string;
+  status: ExamStatus;
+  startAt: any; // Date/string or Firestore Timestamp
+  endAt: any;
+  durationMinutes: number;
+  totalMarks: number;
+  passMarks: number;
+  questionSelectionMode: "manual" | "random";
+  selectedQuestionIds?: string[];
+  randomRules?: RandomQuestionRule[];
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  maxAttempts: number;
+  negativeMarking?: {
+    enabled: boolean;
+    marksPerWrongAnswer: number;
+  };
+  showResultImmediately: boolean;
+  allowAnswerReview: boolean;
+  allowQuestionNavigation: boolean;
+  autoSubmit: boolean;
+  eligibility?: ExamEligibility;
+  createdBy: string;
+  createdAt: any;
+  updatedAt: any;
+  questionSnapshots?: QuestionBankItem[]; // Snapshot of questions bound to this exam
+}
+
+export type AttemptStatus = "not_started" | "in_progress" | "submitted" | "auto_submitted" | "expired";
+
+export interface ExamAttempt {
+  id: string;
+  examId: string;
+  examTitle?: string;
+  candidateId: string; // User ID in applicants collection
+  userId: string;
+  registrationNumber: string;
+  candidateName?: string;
+  candidatePhoto?: string;
+  session?: string;
+  collegeName?: string;
+  startedAt: any;
+  submittedAt?: any;
+  status: AttemptStatus;
+  score?: number;
+  percentage?: number;
+  correctCount?: number;
+  wrongCount?: number;
+  unansweredCount?: number;
+  isPassed?: boolean;
+  questionSnapshot?: QuestionBankItem[]; // Frozen question set for this attempt
+  answers?: Record<string, {
+    questionId: string;
+    selectedAnswer?: string | string[];
+    answeredAt?: any;
+    isMarkedForReview?: boolean;
+  }>;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface ExamAnswer {
+  attemptId: string;
+  questionId: string;
+  selectedAnswer?: string | string[];
+  answeredAt: any;
+  isMarkedForReview?: boolean;
+}
+
+export interface ExamResult {
+  id: string;
+  examId: string;
+  examTitle: string;
+  attemptId: string;
+  candidateId: string;
+  userId: string;
+  registrationNumber: string;
+  candidateName: string;
+  candidatePhoto?: string;
+  score: number;
+  totalMarks: number;
+  percentage: number;
+  passMarks: number;
+  isPassed: boolean;
+  correctCount: number;
+  wrongCount: number;
+  unansweredCount: number;
+  timeTakenSeconds?: number;
+  submittedAt: any;
+  rank?: number;
+}
+
+export interface ExamSetting {
+  id: string;
+  defaultDurationMinutes: number;
+  defaultPassPercentage: number;
+  enableNegativeMarkingDefault: boolean;
+  defaultWrongPenalty: number;
+  allowStudentReviewAnswers: boolean;
+  showLeaderboardToStudents: boolean;
+  autoSubmitOnTimeExpiry: boolean;
+  preventTabSwitching: boolean;
+  updatedAt: any;
+  updatedBy: string;
+}
+
+export interface ExamActivityLog {
+  id: string;
+  action: "EXAM_CREATED" | "EXAM_UPDATED" | "EXAM_PUBLISHED" | "EXAM_STARTED" | "EXAM_STOPPED" | "QUESTION_CREATED" | "QUESTION_UPDATED" | "QUESTION_DELETED" | "QUESTION_IMPORTED" | "RESULT_EXPORTED" | "EXAM_SETTINGS_UPDATED";
+  targetId: string;
+  actorId: string;
+  actorName?: string;
+  timestamp: any;
+  details: string;
+  meta?: any;
+}
+

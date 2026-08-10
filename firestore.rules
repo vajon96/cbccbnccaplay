@@ -7,7 +7,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Explicit Rules for Collections
+    // Helper functions
+    function isNonEmptyString(val) {
+      return val is string && val.size() > 0;
+    }
+
+    function isPositiveNumber(val) {
+      return val is number && val >= 0;
+    }
+
+    // Circular Settings & Circulars
     match /circular_settings/{id} {
       allow read, write: if true;
     }
@@ -16,15 +25,34 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Applicants & Profile Changes
     match /applicants/{id} {
       allow read, write: if true;
     }
 
+    match /pending_profile_changes/{id} {
+      allow read, write: if true;
+    }
+
+    // Admins & Admin Tokens
     match /admins/{id} {
       allow read, write: if true;
     }
 
+    match /adminTokens/{id} {
+      allow read, write: if true;
+    }
+
+    match /admin_config/{id} {
+      allow read, write: if true;
+    }
+
+    // Activity & System Logs
     match /activity_logs/{id} {
+      allow read, write: if true;
+    }
+
+    match /security_logs/{id} {
       allow read, write: if true;
     }
 
@@ -44,10 +72,6 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    match /admin_config/{id} {
-      allow read, write: if true;
-    }
-
     match /attendance_logs/{id} {
       allow read, write: if true;
     }
@@ -64,15 +88,32 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    match /adminTokens/{id} {
-      allow read, write: if true;
-    }
-
-    match /security_logs/{id} {
-      allow read, write: if true;
-    }
-
     match /test/{id} {
+      allow read, write: if true;
+    }
+
+    // Examination Module Security Rules
+    match /question_bank/{id} {
+      allow read, write: if true;
+    }
+
+    match /exams/{id} {
+      allow read, write: if true;
+    }
+
+    match /exam_attempts/{id} {
+      allow read, write: if true;
+    }
+
+    match /exam_results/{id} {
+      allow read, write: if true;
+    }
+
+    match /exam_settings/{id} {
+      allow read, write: if true;
+    }
+
+    match /exam_activity_logs/{id} {
       allow read, write: if true;
     }
   }

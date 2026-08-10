@@ -497,6 +497,11 @@ app.post("/api/gemini/generate-guide", async (req: express.Request, res: express
   }
 });
 
+// EXAM MODULE HEALTH ENDPOINT
+app.get("/api/exam/health", (req: express.Request, res: express.Response) => {
+  res.json({ status: "ok", module: "Examination System", timestamp: new Date().toISOString() });
+});
+
 // START EXPRESS/VITE ENGINE
 async function startServer() {
   // Vite middleware for development

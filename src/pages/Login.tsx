@@ -1,12 +1,12 @@
-import { useState, FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, FormEvent, useEffect } from "react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { 
   Shield, Lock, ArrowRight, Eye, EyeOff, 
-  User as UserIcon, Loader2, HelpCircle
+  User as UserIcon, Loader2, HelpCircle, CheckCircle2, LogOut, LayoutDashboard
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { db, doc, getDoc, handleFirestoreError, OperationType, collection, query, where, getDocs } from "../firebase";
-import { comparePassword, setSession } from "../lib/auth";
+import { handleFirestoreError, OperationType } from "../firebase";
+import { centralAuthenticate, setSession, getSession, clearSession, isAuthorizedAdmin } from "../lib/auth";
 import { ResetPasswordModal } from "../components/ResetPasswordModal";
 
 export function Login() {
@@ -16,105 +16,64 @@ export function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  
   const navigate = useNavigate();
+  const location = useLocation();
+  const activeSession = getSession();
 
-  // Handle standard login
+  // If user is already logged in, show status or allow fast redirect
+  const handleGoToDashboard = () => {
+    if (!activeSession) return;
+    if (isAuthorizedAdmin(activeSession.role)) {
+      navigate("/admin/dashboard");
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
+  const handleLogoutExisting = () => {
+    clearSession();
+    window.location.reload();
+  };
+
+  // Handle standard centralized login
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      // Static Admin Check (Super Admin fallback)
-      const envPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "").trim();
-      const fallbackPassword = "BNCC@Admin#2026!Secure";
+      const res = await centralAuthenticate(userId, password);
       
-      const checkAdmin = userId.toLowerCase() === "admin";
-      if (checkAdmin) {
-        if (password === fallbackPassword || (envPassword && password === envPassword)) {
-          setSession({ 
-            id: "super_admin", 
-            role: "super_admin", 
-            name: "Super Admin",
-            permissions: {
-              canAdd: true,
-              canEdit: true,
-              canDelete: true,
-              canViewLogs: true,
-              canResetPW: true,
-              canApprove: true,
-              canExport: true,
-              canChat: true
-            }
-          });
+      if (!res.success || !res.user) {
+        setError(res.error || "লগইন করতে ব্যর্থ হয়েছেন।");
+        setLoading(false);
+        return;
+      }
+
+      // Store central session
+      setSession(res.user);
+
+      // Check if there was a target route in location state
+      const targetPath = (location.state as any)?.from;
+      if (targetPath) {
+        navigate(targetPath);
+        return;
+      }
+
+      // Navigate based on role
+      if (isAuthorizedAdmin(res.user.role)) {
+        if (res.user.role === "qr_admin") {
+          navigate("/admin/qr-dashboard");
+        } else {
           navigate("/admin/dashboard");
-          return;
-        } else {
-          setError("ভুল অ্যাডমিন পাসওয়ার্ড।");
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Dynamic Admin Check (Secondary Admins)
-      const adminsRef = collection(db, "admins");
-      const adminQuery = query(adminsRef, where("username", "==", userId.toLowerCase()));
-      const adminSnapshot = await getDocs(adminQuery);
-
-      if (!adminSnapshot.empty) {
-        const adminData = adminSnapshot.docs[0].data();
-        const isMatch = await comparePassword(password, adminData.password);
-        if (isMatch) {
-          const userRole = adminData.role || "admin";
-          setSession({
-            id: adminSnapshot.docs[0].id,
-            role: userRole,
-            name: adminData.name,
-            permissions: adminData.permissions || {
-              canAdd: userRole !== "qr_admin",
-              canEdit: true,
-              canDelete: false,
-              canViewLogs: userRole !== "qr_admin",
-              canResetPW: false,
-              canApprove: userRole !== "qr_admin",
-              canExport: false,
-              canChat: userRole !== "qr_admin"
-            }
-          });
-          
-          if (userRole === "qr_admin") {
-            navigate("/admin/qr-dashboard");
-          } else {
-            navigate("/admin/dashboard");
-          }
-          return;
-        }
-      }
-
-      // User Login
-      const docRef = doc(db, "applicants", userId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const userData = docSnap.data();
-        const isMatch = await comparePassword(password, userData.password);
-        
-        if (isMatch) {
-          setSession({ 
-            id: userData.id, 
-            role: userData.role || "user", 
-            name: userData.fullNameEnglish 
-          });
-          navigate("/dashboard");
-        } else {
-          setError("ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।");
         }
       } else {
-        setError("ইউজার আইডি পাওয়া যায়নি।");
+        navigate("/dashboard");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Login error:", err);
-      setError("লগইন করতে সমস্যা হয়েছে।");
+      setError("লগইন সিস্টেমে সমস্যা দেখা দিয়েছে: " + (err.message || ""));
       handleFirestoreError(err, OperationType.GET, `applicants/${userId}`);
     } finally {
       setLoading(false);
@@ -135,11 +94,37 @@ export function Login() {
           <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-primary/20">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-black text-white uppercase tracking-tighter">BNCC Portal Login</h1>
+          <h1 className="text-2xl font-black text-white uppercase tracking-tighter font-display">BNCC Central Login</h1>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
-            Enter your credentials to enter Portal
+            Single Sign-On for Admin & Cadet Portals
           </p>
         </div>
+
+        {/* Existing Session Active Notice */}
+        {activeSession && (
+          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-3 text-center">
+            <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs">
+              <CheckCircle2 size={16} />
+              <span>You are logged in as <strong className="text-white">{activeSession.name}</strong> ({activeSession.role})</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <button
+                onClick={handleGoToDashboard}
+                className="px-4 py-2 bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl flex items-center gap-1.5 hover:bg-emerald-400 transition-all cursor-pointer"
+              >
+                <LayoutDashboard size={14} />
+                Dashboard
+              </button>
+              <button
+                onClick={handleLogoutExisting}
+                className="px-4 py-2 bg-white/10 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center gap-1.5 hover:bg-white/20 transition-all cursor-pointer"
+              >
+                <LogOut size={14} />
+                Logout
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <motion.div 
@@ -165,8 +150,8 @@ export function Login() {
                 type="text"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
-                className="w-full bg-slate-900/50 border border-slate-800 rounded-xl pl-12 pr-4 py-4 text-white focus:border-primary outline-none transition-all"
-                placeholder="User ID (e.g. 1234)"
+                className="w-full bg-slate-900/50 border border-slate-800 rounded-xl pl-12 pr-4 py-4 text-white focus:border-primary outline-none transition-all font-mono font-bold"
+                placeholder="User ID / Admin Username (e.g. admin or 1234)"
                 required
               />
             </div>
@@ -186,7 +171,7 @@ export function Login() {
                 id="login-toggle-password-btn"
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -211,13 +196,16 @@ export function Login() {
               disabled={loading}
               className="w-full py-4 bg-primary text-white font-black uppercase tracking-widest text-xs rounded-xl flex items-center justify-center gap-2 hover:bg-primary/95 transition-all disabled:opacity-50 shadow-lg shadow-primary/20 cursor-pointer"
             >
-              {loading ? <Loader2 className="animate-spin" size={18} /> : "Login to Dashboard"}
+              {loading ? <Loader2 className="animate-spin" size={18} /> : "Central Login"}
               {!loading && <ArrowRight size={18} />}
             </button>
           </div>
         </motion.form>
 
-        <div className="text-center">
+        <div className="text-center pt-2 border-t border-white/5 space-y-1">
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+            One Account for Admin Dashboard, Examination & Cadet Services
+          </p>
           <p className="text-slate-600 text-[9px] uppercase font-bold tracking-widest">
             Cox's Bazar City College BNCC Platoon
           </p>
@@ -232,3 +220,4 @@ export function Login() {
     </div>
   );
 }
+

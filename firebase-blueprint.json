@@ -195,6 +195,9 @@
       "schema": "applicant",
       "description": "Collection of applicants"
     },
+    "/pending_profile_changes/{changeId}": {
+      "description": "Pending profile change requests from cadets awaiting admin approval"
+    },
     "/counters/{counterId}": {
       "schema": "counter",
       "description": "Sequential ID counters"
@@ -231,6 +234,24 @@
     },
     "/guide_settings/{settingId}": {
       "description": "General settings for the guide module"
+    },
+    "/question_bank/{questionId}": {
+      "description": "Central question bank storing exam questions"
+    },
+    "/exams/{examId}": {
+      "description": "Exams configuration and rules"
+    },
+    "/exam_attempts/{attemptId}": {
+      "description": "Candidate exam attempts and temporary answer states"
+    },
+    "/exam_results/{resultId}": {
+      "description": "Final scored exam results for candidates"
+    },
+    "/exam_settings/{settingId}": {
+      "description": "Global exam portal settings"
+    },
+    "/exam_activity_logs/{logId}": {
+      "description": "Audit trail logs for exam admin operations"
     },
     "/adminTokens/{tokenId}": {
       "description": "Admin session tokens"

@@ -81,9 +81,9 @@ export function Home() {
         <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-white/5 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
           
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
+          <div className="grid grid-cols-1 gap-12 items-center relative z-10">
             {/* Guide Info Left */}
-            <div className="lg:col-span-7 space-y-6">
+            <div className="space-y-6">
               <span className="inline-block px-4 py-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-black uppercase tracking-widest rounded-full">
                 ভর্তি নির্দেশিকা / Guide Summary
               </span>
@@ -91,7 +91,7 @@ export function Home() {
                 অনলাইন আবেদন করবেন যেভাবে এবং প্রয়োজনীয় শর্তাবলি
               </h2>
               <p className="text-slate-400 text-sm leading-relaxed">
-                আমাদের পোর্টালে সম্পূর্ণ ডিজিটাল প্রক্রিয়ায় বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC) ভর্তি আবেদন সম্পন্ন করা যায়। আবেদন করার পূর্বে প্রয়োজনীয় ছবি তোলার নিয়ম এবং ধাপসমূহ নিচে দেওয়া হলো:
+                আমাদের পোর্টালে সম্পূর্ণ ডিজিটাল প্রক্রিয়ায় বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC) ভর্তি আবেদন সম্পন্ন করা যায়। আবেদন করার পূর্বে প্রয়োজনীয় শর্তাবলি এবং ধাপসমূহ নিচে দেওয়া হলো:
               </p>
 
               {/* Steps overview */}
@@ -134,48 +134,6 @@ export function Home() {
                     <h4 className="text-sm font-bold text-white">অনুমোদিত প্রবেশপত্র</h4>
                     <p className="text-xs text-slate-500 mt-1">অ্যাডমিন অনুমোদন করলে ড্যাশবোর্ড থেকে কিউআর সম্বলিত প্রবেশপত্র ডাউনলোড করুন।</p>
                   </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Photo Guidelines Right Card */}
-            <div className="lg:col-span-5">
-              <div className="bg-slate-900/50 border border-white/10 p-6 md:p-8 rounded-[2rem] space-y-6 shadow-xl relative overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/15 border border-primary/20 rounded-xl text-primary">
-                    <Camera className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-md font-bold text-white">ছবির বিধিমালা ও নিয়ম (Photo Rules)</h3>
-                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-500">Must Read Instructions</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {[
-                    { label: "ব্যাকগ্রাউন্ড (Background)", desc: "অবশ্যই সাদা অথবা হালকা নীল রঙের এক কালার ব্যাকগ্রাউন্ড হতে হবে।" },
-                    { label: "পোশাক (Dress Code)", desc: "কলারযুক্ত মার্জিত ফরমাল পোশাক। টুপি, ক্যাপ বা চশমা পরা ছবি গ্রহণযোগ্য নয়।" },
-                    { label: "পোজ ও ভঙ্গি (Posture)", desc: "সরাসরি সোজা হয়ে ক্যামেরার দিকে তাকাতে হবে এবং দুই কান স্পষ্ট থাকতে হবে।" },
-                    { label: "এআই সিস্টেম (Gemini Check)", desc: "পোর্টালের এআই সিস্টেম স্বয়ংক্রিয়ভাবে নিয়ম বহির্ভূত ছবি ব্লক/রিজেক্ট করে দিবে।" }
-                  ].map((rule, idx) => (
-                    <div key={idx} className="space-y-1">
-                      <p className="text-xs font-bold text-primary flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-accent rounded-full shrink-0" />
-                        {rule.label}
-                      </p>
-                      <p className="text-[11px] text-slate-400 pl-3 leading-relaxed">{rule.desc}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-2 border-t border-white/5">
-                  <button
-                    onClick={() => setIsGuideOpen(true)}
-                    className="w-full py-4 bg-primary hover:bg-primary/95 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    ডাউনলোড করুন ভর্তি সহায়িকা (PDF)
-                  </button>
                 </div>
               </div>
             </div>
