@@ -183,6 +183,50 @@ export interface ExamModel {
 
 export type AttemptStatus = "not_started" | "in_progress" | "submitted" | "auto_submitted" | "expired";
 
+export type EvaluationStatus = "pending" | "in_progress" | "partially_evaluated" | "fully_evaluated" | "finalized" | "reopened";
+
+export interface ManualQuestionEvaluation {
+  questionId: string;
+  obtainedMarks: number;
+  maxMarks: number;
+  comment?: string;
+  isManuallyOverridden?: boolean;
+  originalAutoScore?: number;
+  evaluatedBy?: string;
+  evaluatedByName?: string;
+  evaluatedAt?: string;
+  overrideReason?: string;
+  // AI Examiner Evaluation
+  aiEvaluated?: boolean;
+  aiSuggestedMarks?: number;
+  aiJustification?: string;
+  aiConfidence?: number;
+}
+
+export interface MarksHistoryEntry {
+  id: string;
+  questionId: string;
+  previousMarks: number;
+  newMarks: number;
+  changedBy: string;
+  changedByName?: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export interface AnswerScriptAuditLog {
+  id: string;
+  attemptId: string;
+  questionId?: string;
+  action: string;
+  actorId: string;
+  actorName?: string;
+  oldValue?: any;
+  newValue?: any;
+  reason?: string;
+  timestamp: string;
+}
+
 export interface ExamAttempt {
   id: string;
   examId: string;
@@ -210,6 +254,35 @@ export interface ExamAttempt {
     answeredAt?: any;
     isMarkedForReview?: boolean;
   }>;
+  // Evaluation & Manual Marking Module
+  evaluationStatus?: EvaluationStatus;
+  assignedExaminerId?: string;
+  assignedExaminerName?: string;
+  evaluatedAt?: string;
+  evaluatedBy?: string;
+  evaluatedByName?: string;
+  finalizedAt?: string;
+  finalizedBy?: string;
+  finalizedByName?: string;
+  autoScore?: number;
+  manualMarks?: number;
+  finalScore?: number;
+  aiEvaluatedAt?: string;
+  aiEvaluatedBy?: string;
+  aiOverallFeedback?: string;
+  manualEvaluations?: Record<string, ManualQuestionEvaluation>;
+  marksHistory?: MarksHistoryEntry[];
+  markingSummary?: {
+    totalQuestions: number;
+    attempted: number;
+    unanswered: number;
+    autoEvaluatedMarks: number;
+    manualMarks: number;
+    totalMarks: number;
+    obtainedMarks: number;
+    percentage: number;
+    isPassed: boolean;
+  };
   createdAt: any;
   updatedAt: any;
 }
@@ -261,7 +334,7 @@ export interface ExamSetting {
 
 export interface ExamActivityLog {
   id: string;
-  action: "EXAM_CREATED" | "EXAM_UPDATED" | "EXAM_PUBLISHED" | "EXAM_STARTED" | "EXAM_STOPPED" | "QUESTION_CREATED" | "QUESTION_UPDATED" | "QUESTION_DELETED" | "QUESTION_IMPORTED" | "RESULT_EXPORTED" | "EXAM_SETTINGS_UPDATED";
+  action: "EXAM_CREATED" | "EXAM_UPDATED" | "EXAM_DELETED" | "SCRIPT_DELETED" | "EXAM_PUBLISHED" | "EXAM_STARTED" | "EXAM_STOPPED" | "QUESTION_CREATED" | "QUESTION_UPDATED" | "QUESTION_DELETED" | "QUESTION_IMPORTED" | "RESULT_EXPORTED" | "EXAM_SETTINGS_UPDATED";
   targetId: string;
   actorId: string;
   actorName?: string;

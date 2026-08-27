@@ -46,15 +46,13 @@ export function ExamAdminLogin() {
         return;
       }
 
-      if (!isAuthorizedAdmin(res.user.role)) {
-        setError("উক্ত অ্যাকাউন্ট দিয়ে অ্যাডমিন প্যানেলে প্রবেশের অনুমতি নেই।");
-        setLoading(false);
-        return;
-      }
-
       // Set central session
       setSession(res.user);
-      navigate("/exam/admin");
+      if (isAuthorizedAdmin(res.user.role)) {
+        navigate("/exam/admin");
+      } else {
+        navigate("/exam/dashboard");
+      }
     } catch (err: any) {
       console.error("Exam admin login error:", err);
       setError("অ্যাডমিন লগইন করতে সমস্যা হয়েছে: " + (err.message || ""));
@@ -75,10 +73,10 @@ export function ExamAdminLogin() {
               <Shield size={28} />
             </div>
             <h2 className="text-2xl font-black text-white uppercase tracking-tight font-display">
-              Exam Admin Portal
+              Examination Portal Access
             </h2>
             <p className="text-slate-400 text-xs font-semibold">
-              পরীক্ষা পরিচালনা ও কন্ট্রোল প্যানেলে প্রবেশের জন্য সেন্ট্রাল লগইন করুন
+              ইউজার আইডি / অ্যাডমিন আইডি ও পাসওয়ার্ড ব্যবহার করে লগইন করুন
             </p>
           </div>
 

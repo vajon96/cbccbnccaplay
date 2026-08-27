@@ -4,7 +4,8 @@ import {
 } from "../firebase";
 import { 
   QuestionBankItem, QuestionType, QuestionDifficulty, ExamModel, ExamStatus, 
-  ExamAttempt, ExamResult, ExamSetting, ExamActivityLog, RandomQuestionRule, AttemptStatus
+  ExamAttempt, ExamResult, ExamSetting, ExamActivityLog, RandomQuestionRule, AttemptStatus,
+  EvaluationStatus, ManualQuestionEvaluation, MarksHistoryEntry, AnswerScriptAuditLog
 } from "../types";
 
 // ============================================================================
@@ -719,17 +720,39 @@ export async function startExamAttempt(params: {
     // Prepare question set snapshot
     let questions = exam.questionSnapshots || [];
     if (questions.length === 0) {
-      // Fallback: load questions from selection
+      // Fallback 1: load questions from selection
       if (exam.selectedQuestionIds && exam.selectedQuestionIds.length > 0) {
         const allQ = await fetchQuestions();
         questions = allQ.filter(q => exam.selectedQuestionIds?.includes(q.id));
-      } else if (exam.randomRules) {
+      } 
+      
+      // Fallback 2: load from random rules if still 0
+      if (questions.length === 0 && exam.randomRules && exam.randomRules.length > 0) {
         questions = await generateRandomQuestionSet(exam.randomRules);
+      }
+
+      // Fallback 3: if still 0 questions, fetch all active questions or seed defaults
+      if (questions.length === 0) {
+        let allActive = await fetchQuestions({ isActiveOnly: true });
+        if (allActive.length === 0) {
+          await seedDefaultQuestionsIfEmpty(userId);
+          allActive = await fetchQuestions({ isActiveOnly: true });
+        }
+        questions = allActive;
       }
     }
 
+    // Ensure every question object explicitly normalizes `question` text and `options`
+    const normalizedQuestions = questions.map(q => {
+      const qText = (q as any).question || (q as any).questionText || (q as any).question_text || (q as any).text || (q as any).title || (q as any).content || (q as any).name || "Question text unavailable";
+      return {
+        ...q,
+        question: qText
+      };
+    });
+
     // Shuffle questions if required
-    let finalQuestions = [...questions];
+    let finalQuestions = [...normalizedQuestions];
     if (exam.shuffleQuestions) {
       finalQuestions = finalQuestions.sort(() => 0.5 - Math.random());
     }
@@ -1128,3 +1151,619 @@ export async function fetchExamActivityLogs(): Promise<ExamActivityLog[]> {
     return [];
   }
 }
+
+// ============================================================================
+// ANSWER SCRIPT EVALUATION & MANUAL MARKING MODULE SERVICES
+// ============================================================================
+
+export async function fetchAnswerScripts(filters?: {
+  examId?: string;
+  search?: string;
+  evaluationStatus?: string;
+  sortBy?: string;
+  timeFilter?: string; // "ALL", "TODAY", "YESTERDAY", "THIS_WEEK"
+  startDate?: string;
+  endDate?: string;
+}): Promise<ExamAttempt[]> {
+  try {
+    const ref = collection(db, "exam_attempts");
+    const q = query(ref, orderBy("createdAt", "desc"));
+    const snap = await getDocs(q);
+
+    let items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamAttempt));
+
+    // Filter out unstarted attempts (only show submitted, auto_submitted, expired, or in_progress with answers)
+    items = items.filter(a => a.status !== "not_started");
+
+    if (filters) {
+      if (filters.examId && filters.examId !== "ALL") {
+        items = items.filter(a => a.examId === filters.examId);
+      }
+      if (filters.evaluationStatus && filters.evaluationStatus !== "ALL") {
+        items = items.filter(a => (a.evaluationStatus || "pending") === filters.evaluationStatus);
+      }
+      if (filters.timeFilter && filters.timeFilter !== "ALL") {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        if (filters.timeFilter === "TODAY") {
+          items = items.filter(a => {
+            const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
+            return dt >= startOfToday;
+          });
+        } else if (filters.timeFilter === "YESTERDAY") {
+          const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+          items = items.filter(a => {
+            const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
+            return dt >= startOfYesterday && dt < startOfToday;
+          });
+        } else if (filters.timeFilter === "THIS_WEEK") {
+          const startOfWeek = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
+          items = items.filter(a => {
+            const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
+            return dt >= startOfWeek;
+          });
+        }
+      }
+      if (filters.startDate) {
+        const start = new Date(filters.startDate);
+        items = items.filter(a => new Date(a.submittedAt || a.startedAt || a.createdAt) >= start);
+      }
+      if (filters.endDate) {
+        const end = new Date(filters.endDate);
+        end.setHours(23, 59, 59, 999);
+        items = items.filter(a => new Date(a.submittedAt || a.startedAt || a.createdAt) <= end);
+      }
+      if (filters.search && filters.search.trim()) {
+        const s = filters.search.toLowerCase().trim();
+        items = items.filter(a => 
+          (a.candidateName || "").toLowerCase().includes(s) ||
+          (a.registrationNumber || "").toLowerCase().includes(s) ||
+          (a.userId || "").toLowerCase().includes(s) ||
+          (a.examTitle || "").toLowerCase().includes(s) ||
+          a.id.toLowerCase().includes(s)
+        );
+      }
+      if (filters.sortBy) {
+        if (filters.sortBy === "highest_score") {
+          items.sort((a, b) => (b.finalScore ?? b.score ?? 0) - (a.finalScore ?? a.score ?? 0));
+        } else if (filters.sortBy === "lowest_score") {
+          items.sort((a, b) => (a.finalScore ?? a.score ?? 0) - (b.finalScore ?? b.score ?? 0));
+        } else if (filters.sortBy === "oldest") {
+          items.sort((a, b) => new Date(a.startedAt || a.createdAt).getTime() - new Date(b.startedAt || b.createdAt).getTime());
+        } else if (filters.sortBy === "candidate_name") {
+          items.sort((a, b) => (a.candidateName || "").localeCompare(b.candidateName || ""));
+        } else if (filters.sortBy === "roll_number") {
+          items.sort((a, b) => (a.registrationNumber || "").localeCompare(b.registrationNumber || ""));
+        }
+      }
+    }
+
+    return items;
+  } catch (error) {
+    console.error("Error fetching answer scripts:", error);
+    return [];
+  }
+}
+
+export async function logAnswerScriptAudit(audit: Omit<AnswerScriptAuditLog, "id" | "timestamp">): Promise<void> {
+  try {
+    const docRef = doc(collection(db, "answer_script_audit_logs"));
+    const entry: AnswerScriptAuditLog = {
+      ...audit,
+      id: docRef.id,
+      timestamp: new Date().toISOString()
+    };
+    await setDoc(docRef, entry);
+  } catch (err) {
+    console.warn("Could not log answer script audit:", err);
+  }
+}
+
+export async function fetchAttemptAuditLogs(attemptId: string): Promise<AnswerScriptAuditLog[]> {
+  try {
+    const ref = collection(db, "answer_script_audit_logs");
+    const q = query(ref, where("attemptId", "==", attemptId));
+    const snap = await getDocs(q);
+    const logs = snap.docs.map(d => ({ id: d.id, ...d.data() } as AnswerScriptAuditLog));
+    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  } catch (err) {
+    console.error("Error fetching attempt audit logs:", err);
+    return [];
+  }
+}
+
+export async function saveQuestionEvaluation(params: {
+  attemptId: string;
+  questionId: string;
+  obtainedMarks: number;
+  maxMarks: number;
+  comment?: string;
+  actorId: string;
+  actorName?: string;
+  overrideReason?: string;
+  isManuallyOverridden?: boolean;
+}): Promise<ExamAttempt> {
+  const { attemptId, questionId, obtainedMarks, maxMarks, comment, actorId, actorName, overrideReason, isManuallyOverridden } = params;
+
+  // Validation Rule 13: 0 <= obtainedMarks <= maxMarks
+  if (obtainedMarks < 0 || obtainedMarks > maxMarks) {
+    throw new Error(`Obtained marks must be between 0 and maximum marks (${maxMarks}). (নম্বর ০ থেকে ${maxMarks} এর মধ্যে হতে হবে)`);
+  }
+
+  const attempt = await getAttemptById(attemptId);
+  if (!attempt) throw new Error("Answer script attempt not found.");
+
+  if (attempt.evaluationStatus === "finalized") {
+    throw new Error("This answer script evaluation is FINALIZED. Please reopen before modifying marks.");
+  }
+
+  const now = new Date().toISOString();
+  const existingEvaluations = attempt.manualEvaluations || {};
+  const currentEval = existingEvaluations[questionId];
+  const previousMarks = currentEval ? currentEval.obtainedMarks : 0;
+
+  const newEval: ManualQuestionEvaluation = {
+    questionId,
+    obtainedMarks,
+    maxMarks,
+    comment: comment || "",
+    isManuallyOverridden: isManuallyOverridden ?? false,
+    originalAutoScore: currentEval?.originalAutoScore ?? previousMarks,
+    evaluatedBy: actorId,
+    evaluatedByName: actorName || "Examiner",
+    evaluatedAt: now,
+    overrideReason: overrideReason || ""
+  };
+
+  const updatedEvaluations = {
+    ...existingEvaluations,
+    [questionId]: newEval
+  };
+
+  // Record history entry
+  const historyEntry: MarksHistoryEntry = {
+    id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    questionId,
+    previousMarks,
+    newMarks: obtainedMarks,
+    changedBy: actorId,
+    changedByName: actorName || "Examiner",
+    reason: overrideReason || comment || "Manual evaluation updated",
+    timestamp: now
+  };
+
+  const updatedHistory = [...(attempt.marksHistory || []), historyEntry];
+
+  // Re-calculate counts and scores across questions
+  const questions = attempt.questionSnapshot || [];
+  let totalManualMarks = 0;
+  let evaluatedQuestionsCount = 0;
+
+  questions.forEach(q => {
+    const ev = updatedEvaluations[q.id];
+    if (ev !== undefined) {
+      totalManualMarks += ev.obtainedMarks;
+      evaluatedQuestionsCount++;
+    }
+  });
+
+  let evalStatus: EvaluationStatus = "in_progress";
+  if (evaluatedQuestionsCount === 0) {
+    evalStatus = "pending";
+  } else if (evaluatedQuestionsCount >= questions.length) {
+    evalStatus = "fully_evaluated";
+  } else {
+    evalStatus = "partially_evaluated";
+  }
+
+  const attemptRef = doc(db, "exam_attempts", attemptId);
+
+  await updateDoc(attemptRef, {
+    manualEvaluations: updatedEvaluations,
+    marksHistory: updatedHistory,
+    evaluationStatus: evalStatus,
+    evaluatedBy: actorId,
+    evaluatedByName: actorName || "Examiner",
+    evaluatedAt: now,
+    updatedAt: now
+  });
+
+  // Log audit
+  await logAnswerScriptAudit({
+    attemptId,
+    questionId,
+    action: "SAVE_QUESTION_EVALUATION",
+    actorId,
+    actorName,
+    oldValue: previousMarks,
+    newValue: obtainedMarks,
+    reason: overrideReason || comment || "Question evaluation updated",
+  });
+
+  // Recalculate final combined result and sync
+  return await recalculateAttemptResult(attemptId, actorId, actorName);
+}
+
+export async function saveBulkEvaluations(params: {
+  attemptId: string;
+  evaluations: Array<{
+    questionId: string;
+    obtainedMarks: number;
+    maxMarks: number;
+    comment?: string;
+  }>;
+  actorId: string;
+  actorName?: string;
+}): Promise<ExamAttempt> {
+  const { attemptId, evaluations, actorId, actorName } = params;
+
+  const attempt = await getAttemptById(attemptId);
+  if (!attempt) throw new Error("Attempt not found");
+
+  if (attempt.evaluationStatus === "finalized") {
+    throw new Error("Cannot modify a finalized answer script.");
+  }
+
+  const now = new Date().toISOString();
+  const updatedEvaluations = { ...(attempt.manualEvaluations || {}) };
+  const updatedHistory = [...(attempt.marksHistory || [])];
+
+  evaluations.forEach(item => {
+    if (item.obtainedMarks < 0 || item.obtainedMarks > item.maxMarks) {
+      throw new Error(`Marks for question ID ${item.questionId} must be between 0 and ${item.maxMarks}`);
+    }
+
+    const prevMarks = updatedEvaluations[item.questionId]?.obtainedMarks || 0;
+    updatedEvaluations[item.questionId] = {
+      questionId: item.questionId,
+      obtainedMarks: item.obtainedMarks,
+      maxMarks: item.maxMarks,
+      comment: item.comment || "",
+      evaluatedBy: actorId,
+      evaluatedByName: actorName || "Examiner",
+      evaluatedAt: now
+    };
+
+    updatedHistory.push({
+      id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      questionId: item.questionId,
+      previousMarks: prevMarks,
+      newMarks: item.obtainedMarks,
+      changedBy: actorId,
+      changedByName: actorName || "Examiner",
+      reason: "Bulk evaluation saved",
+      timestamp: now
+    });
+  });
+
+  const questions = attempt.questionSnapshot || [];
+  const evaluatedCount = Object.keys(updatedEvaluations).length;
+  const evalStatus: EvaluationStatus = evaluatedCount >= questions.length ? "fully_evaluated" : "partially_evaluated";
+
+  const attemptRef = doc(db, "exam_attempts", attemptId);
+  await updateDoc(attemptRef, {
+    manualEvaluations: updatedEvaluations,
+    marksHistory: updatedHistory,
+    evaluationStatus: evalStatus,
+    evaluatedBy: actorId,
+    evaluatedByName: actorName || "Examiner",
+    evaluatedAt: now,
+    updatedAt: now
+  });
+
+  await logAnswerScriptAudit({
+    attemptId,
+    action: "SAVE_BULK_EVALUATION",
+    actorId,
+    actorName,
+    reason: `Saved bulk evaluations for ${evaluations.length} questions`
+  });
+
+  return await recalculateAttemptResult(attemptId, actorId, actorName);
+}
+
+export async function recalculateAttemptResult(attemptId: string, actorId: string, actorName?: string): Promise<ExamAttempt> {
+  const attempt = await getAttemptById(attemptId);
+  if (!attempt) throw new Error("Attempt not found");
+
+  const exam = await getExamById(attempt.examId);
+  if (!exam) throw new Error("Exam model not found");
+
+  const allQ = await fetchQuestions();
+  const qMap = new Map<string, QuestionBankItem>();
+  if (exam.questionSnapshots) exam.questionSnapshots.forEach(q => qMap.set(q.id, q));
+  allQ.forEach(q => {
+    if (qMap.has(q.id) || attempt.questionSnapshot?.some(qs => qs.id === q.id)) {
+      qMap.set(q.id, q);
+    }
+  });
+
+  const questions = attempt.questionSnapshot || [];
+  const answers = attempt.answers || {};
+  const manualEvals = attempt.manualEvaluations || {};
+
+  let autoScore = 0;
+  let manualMarks = 0;
+  let correctCount = 0;
+  let wrongCount = 0;
+  let unansweredCount = 0;
+
+  const penalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
+    ? exam.negativeMarking.marksPerWrongAnswer
+    : 0;
+
+  questions.forEach(q => {
+    const fullQ = qMap.get(q.id);
+    const userAnsObj = answers[q.id];
+    const qMaxMarks = q.marks || fullQ?.marks || 1;
+    const isSubjective = ["short_question", "fill_gaps", "changing_sentence", "tag_question"].includes(q.questionType);
+
+    const manualEval = manualEvals[q.id];
+
+    if (manualEval !== undefined) {
+      // Use manual score directly
+      manualMarks += manualEval.obtainedMarks;
+      if (manualEval.obtainedMarks >= qMaxMarks) {
+        correctCount++;
+      } else if (manualEval.obtainedMarks === 0) {
+        wrongCount++;
+      }
+    } else {
+      // Evaluate objective auto score
+      if (!userAnsObj || userAnsObj.selectedAnswer === undefined || userAnsObj.selectedAnswer === null || userAnsObj.selectedAnswer === "") {
+        unansweredCount++;
+        return;
+      }
+
+      const given = userAnsObj.selectedAnswer;
+      const key = fullQ?.correctAnswer || q.correctAnswer;
+      const accepted = fullQ?.acceptedAnswers || [];
+
+      let isCorrect = false;
+
+      if (q.questionType === "mcq" || q.questionType === "true_false") {
+        if (typeof given === "string" && typeof key === "string") {
+          isCorrect = given.trim().toUpperCase() === key.trim().toUpperCase();
+        }
+      } else {
+        const normGiven = typeof given === "string" ? given.trim().toLowerCase() : "";
+        const normKey = typeof key === "string" ? key.trim().toLowerCase() : "";
+        const normAccepted = accepted.map(a => a.trim().toLowerCase());
+        if (normGiven === normKey || normAccepted.includes(normGiven)) {
+          isCorrect = true;
+        }
+      }
+
+      if (isCorrect) {
+        correctCount++;
+        autoScore += qMaxMarks;
+      } else {
+        wrongCount++;
+        if (penalty > 0) autoScore -= penalty;
+      }
+    }
+  });
+
+  const calculatedTotalMarks = exam.totalMarks || questions.reduce((acc, q) => acc + (q.marks || 1), 0);
+  const combinedObtainedScore = Math.max(0, Number((autoScore + manualMarks).toFixed(2)));
+  const percentage = calculatedTotalMarks > 0 ? Number(((combinedObtainedScore / calculatedTotalMarks) * 100).toFixed(2)) : 0;
+  const isPassed = combinedObtainedScore >= (exam.passMarks || 0);
+
+  const attemptRef = doc(db, "exam_attempts", attemptId);
+
+  const markingSummary = {
+    totalQuestions: questions.length,
+    attempted: questions.length - unansweredCount,
+    unanswered: unansweredCount,
+    autoEvaluatedMarks: Math.max(0, Number(autoScore.toFixed(2))),
+    manualMarks: Number(manualMarks.toFixed(2)),
+    totalMarks: calculatedTotalMarks,
+    obtainedMarks: combinedObtainedScore,
+    percentage,
+    isPassed
+  };
+
+  await updateDoc(attemptRef, {
+    autoScore: Math.max(0, Number(autoScore.toFixed(2))),
+    manualMarks: Number(manualMarks.toFixed(2)),
+    finalScore: combinedObtainedScore,
+    score: combinedObtainedScore,
+    percentage,
+    correctCount,
+    wrongCount,
+    unansweredCount,
+    isPassed,
+    markingSummary,
+    updatedAt: new Date().toISOString()
+  });
+
+  // Sync to exam_results collection so candidates & rankings see authoritative updated result
+  const existingResult = await getResultByAttemptId(attemptId);
+  const now = new Date().toISOString();
+
+  if (existingResult) {
+    await updateDoc(doc(db, "exam_results", existingResult.id), {
+      score: combinedObtainedScore,
+      totalMarks: calculatedTotalMarks,
+      percentage,
+      isPassed,
+      correctCount,
+      wrongCount,
+      unansweredCount,
+      submittedAt: attempt.submittedAt || now
+    });
+  } else {
+    const newResRef = doc(collection(db, "exam_results"));
+    await setDoc(newResRef, {
+      id: newResRef.id,
+      examId: exam.id,
+      examTitle: exam.title,
+      attemptId,
+      candidateId: attempt.candidateId,
+      userId: attempt.userId,
+      registrationNumber: attempt.registrationNumber,
+      candidateName: attempt.candidateName || "Candidate",
+      candidatePhoto: attempt.candidatePhoto || "",
+      score: combinedObtainedScore,
+      totalMarks: calculatedTotalMarks,
+      percentage,
+      passMarks: exam.passMarks || 0,
+      isPassed,
+      correctCount,
+      wrongCount,
+      unansweredCount,
+      submittedAt: attempt.submittedAt || now
+    });
+  }
+
+  const reloaded = await getAttemptById(attemptId);
+  return reloaded!;
+}
+
+export async function finalizeAttemptEvaluation(attemptId: string, actorId: string, actorName?: string): Promise<ExamAttempt> {
+  const attempt = await recalculateAttemptResult(attemptId, actorId, actorName);
+  const now = new Date().toISOString();
+
+  await updateDoc(doc(db, "exam_attempts", attemptId), {
+    evaluationStatus: "finalized",
+    finalizedAt: now,
+    finalizedBy: actorId,
+    finalizedByName: actorName || "Examiner",
+    updatedAt: now
+  });
+
+  await logAnswerScriptAudit({
+    attemptId,
+    action: "FINALIZE_EVALUATION",
+    actorId,
+    actorName,
+    reason: `Finalized script evaluation with final score ${attempt.finalScore ?? attempt.score}/${attempt.markingSummary?.totalMarks}`
+  });
+
+  const reloaded = await getAttemptById(attemptId);
+  return reloaded!;
+}
+
+export async function reopenAttemptEvaluation(attemptId: string, reason: string, actorId: string, actorName?: string): Promise<ExamAttempt> {
+  if (!reason || !reason.trim()) {
+    throw new Error("Reason is required to reopen a finalized evaluation script.");
+  }
+
+  const now = new Date().toISOString();
+  await updateDoc(doc(db, "exam_attempts", attemptId), {
+    evaluationStatus: "reopened",
+    updatedAt: now
+  });
+
+  await logAnswerScriptAudit({
+    attemptId,
+    action: "REOPEN_EVALUATION",
+    actorId,
+    actorName,
+    reason
+  });
+
+  const reloaded = await getAttemptById(attemptId);
+  return reloaded!;
+}
+
+export async function recheckExamQuestionKey(params: {
+  examId: string;
+  questionId: string;
+  action: "change_key" | "cancel_question" | "full_marks_all";
+  newCorrectAnswer?: string;
+  actorId: string;
+  actorName?: string;
+  reason?: string;
+}): Promise<number> {
+  const { examId, questionId, action, newCorrectAnswer, actorId, actorName, reason } = params;
+
+  // 1. Update Question Bank item if changing key
+  if (action === "change_key" && newCorrectAnswer) {
+    await updateQuestion(questionId, { correctAnswer: newCorrectAnswer }, actorId);
+  }
+
+  // 2. Fetch all attempts for this exam
+  const attemptsRef = collection(db, "exam_attempts");
+  const q = query(attemptsRef, where("examId", "==", examId));
+  const snap = await getDocs(q);
+  const attempts = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamAttempt));
+
+  let affectedCount = 0;
+
+  for (const att of attempts) {
+    const qSnapshot = att.questionSnapshot || [];
+    const targetQ = qSnapshot.find(item => item.id === questionId);
+    if (!targetQ) continue;
+
+    const manualEvals = { ...(att.manualEvaluations || {}) };
+    const maxMarks = targetQ.marks || 1;
+
+    if (action === "full_marks_all" || action === "cancel_question") {
+      manualEvals[questionId] = {
+        questionId,
+        obtainedMarks: maxMarks,
+        maxMarks,
+        comment: `Grace marks awarded (${action.replace("_", " ")}) - ${reason || 'Admin action'}`,
+        isManuallyOverridden: true,
+        evaluatedBy: actorId,
+        evaluatedByName: actorName || "Admin",
+        evaluatedAt: new Date().toISOString()
+      };
+    }
+
+    await updateDoc(doc(db, "exam_attempts", att.id), {
+      manualEvaluations: manualEvals,
+      updatedAt: new Date().toISOString()
+    });
+
+    await recalculateAttemptResult(att.id, actorId, actorName);
+    affectedCount++;
+  }
+
+  await logExamActivity({
+    action: "QUESTION_UPDATED",
+    targetId: examId,
+    actorId,
+    details: `Rechecked question ${questionId} on exam ${examId}: Action '${action}'. Recalculated ${affectedCount} attempt scripts.`
+  });
+
+  return affectedCount;
+}
+
+export async function deleteAttemptById(attemptId: string, actorId: string, actorName?: string): Promise<void> {
+  const attemptRef = doc(db, "exam_attempts", attemptId);
+  const snap = await getDoc(attemptRef);
+  if (!snap.exists()) {
+    throw new Error("Answer script / attempt not found");
+  }
+
+  const data = snap.data();
+  const examId = data.examId;
+  const candidateId = data.candidateId || data.userId;
+
+  // 1. Delete from exam_attempts
+  await deleteDoc(attemptRef);
+
+  // 2. Try deleting matching entry in leaderboard if exists
+  try {
+    const lbRef = collection(db, "leaderboard");
+    const q = query(lbRef, where("attemptId", "==", attemptId));
+    const lbSnap = await getDocs(q);
+    for (const lbDoc of lbSnap.docs) {
+      await deleteDoc(doc(db, "leaderboard", lbDoc.id));
+    }
+  } catch (err) {
+    console.warn("Could not delete associated leaderboard entry:", err);
+  }
+
+  // 3. Log activity
+  await logExamActivity({
+    action: "EXAM_DELETED",
+    targetId: examId,
+    actorId,
+    details: `Deleted answer script / attempt ${attemptId} for candidate ${data.candidateName || candidateId} by ${actorName || actorId}`
+  });
+}
+

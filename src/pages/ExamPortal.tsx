@@ -32,16 +32,8 @@ export function ExamPortal() {
               className="w-full sm:w-auto px-8 py-4 bg-primary hover:bg-primary/90 text-white font-black text-sm uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-primary/25 flex items-center justify-center gap-2 group cursor-pointer"
             >
               <UserCheck size={18} />
-              Candidate Portal Access
+              Unified Examination Portal Login
               <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-            </Link>
-
-            <Link
-              to="/exam/admin/login"
-              className="w-full sm:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white font-bold text-sm uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <ShieldCheck size={18} />
-              Exam Admin Login
             </Link>
           </div>
         </div>

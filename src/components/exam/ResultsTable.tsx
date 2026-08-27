@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { 
   Award, Search, Download, CheckCircle, XCircle, 
-  Clock, FileSpreadsheet, RefreshCw, User 
+  Clock, FileSpreadsheet, RefreshCw, User, FileText
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { fetchAllExamResults, fetchExams } from "../../services/examService";
 import { ExamResult, ExamModel } from "../../types";
+import { MarksheetViewer } from "./MarksheetViewer";
 
 interface ResultsTableProps {
   initialExamId?: string;
@@ -15,6 +16,7 @@ export function ResultsTable({ initialExamId }: ResultsTableProps) {
   const [results, setResults] = useState<ExamResult[]>([]);
   const [exams, setExams] = useState<ExamModel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewingMarksheetAttemptId, setViewingMarksheetAttemptId] = useState<string | null>(null);
 
   const [selectedExamId, setSelectedExamId] = useState<string>(initialExamId || "ALL");
   const [search, setSearch] = useState("");
@@ -155,19 +157,20 @@ export function ResultsTable({ initialExamId }: ResultsTableProps) {
                 <th className="py-4 px-4 text-center">% Percentage</th>
                 <th className="py-4 px-4 text-center">Correct / Wrong</th>
                 <th className="py-4 px-4 text-center">Status</th>
+                <th className="py-4 px-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-xs font-medium text-slate-300">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={9} className="py-12 text-center text-slate-500">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-primary" />
                     Loading exam results...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={9} className="py-12 text-center text-slate-500">
                     <Award size={32} className="mx-auto mb-2 text-slate-600" />
                     কোনো পরীক্ষার ফলাফল পাওয়া যায়নি।
                   </td>
@@ -212,6 +215,17 @@ export function ResultsTable({ initialExamId }: ResultsTableProps) {
                       </span>
                     </td>
 
+                    <td className="py-4 px-4 text-right">
+                      <button
+                        onClick={() => setViewingMarksheetAttemptId(r.attemptId)}
+                        className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white border border-blue-500/30 font-bold text-xs uppercase tracking-wider rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        title="View Complete Read-Only Marksheet"
+                      >
+                        <FileText size={13} />
+                        View Marksheet
+                      </button>
+                    </td>
+
                   </tr>
                 ))
               )}
@@ -219,6 +233,15 @@ export function ResultsTable({ initialExamId }: ResultsTableProps) {
           </table>
         </div>
       </div>
+
+      {/* Read-Only Marksheet Viewer Modal */}
+      {viewingMarksheetAttemptId && (
+        <MarksheetViewer
+          attemptId={viewingMarksheetAttemptId}
+          onClose={() => setViewingMarksheetAttemptId(null)}
+          isCandidateView={false}
+        />
+      )}
 
     </div>
   );

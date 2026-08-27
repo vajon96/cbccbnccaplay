@@ -71,13 +71,13 @@ export function ExamCandidateLogin() {
           
           <div className="text-center space-y-2">
             <div className="w-14 h-14 rounded-2xl bg-primary/20 text-primary border border-primary/30 flex items-center justify-center mx-auto mb-3">
-              <User size={28} />
+              <Shield size={28} />
             </div>
             <h2 className="text-2xl font-black text-white uppercase tracking-tight font-display">
-              Candidate Portal Access
+              Examination Portal Access
             </h2>
             <p className="text-slate-400 text-xs font-semibold">
-              ক্যাডেট লিখিত অনলাইন পরীক্ষায় অংশগ্রহণের জন্য প্রবেশ করুন
+              ইউজার আইডি / অ্যাডমিন আইডি ও পাসওয়ার্ড ব্যবহার করে লগইন করুন
             </p>
           </div>
 
@@ -116,14 +116,14 @@ export function ExamCandidateLogin() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase mb-2">User ID / Phone (ইউজার আইডি)</label>
+              <label className="block text-xs font-bold text-slate-300 uppercase mb-2">User ID / Username (ইউজার বা অ্যাডমিন আইডি)</label>
               <div className="relative">
                 <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
                   type="text"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
-                  placeholder="e.g. BNCC2026-XXXX or 1234"
+                  placeholder="e.g. BNCC2026-XXXX or admin"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-xs text-white outline-none focus:border-primary font-mono font-bold"
                   required
                 />
@@ -150,7 +150,7 @@ export function ExamCandidateLogin() {
               disabled={loading}
               className="w-full py-3.5 bg-primary hover:bg-primary/90 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-primary/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
             >
-              {loading ? "Verifying Central Credentials..." : "Enter Candidate Dashboard"}
+              {loading ? "Authenticating Credentials..." : "Access Examination Portal"}
               <ArrowRight size={16} />
             </button>
           </form>

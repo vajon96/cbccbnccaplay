@@ -5,16 +5,20 @@ import {
   Home, RefreshCw, Trophy, ArrowLeft, FileText 
 } from "lucide-react";
 import { getResultByAttemptId, getExamById } from "../services/examService";
+import { getSession } from "../lib/auth";
 import { ExamResult, ExamModel } from "../types";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
+import { MarksheetViewer } from "../components/exam/MarksheetViewer";
 
 export function ExamResultPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const navigate = useNavigate();
+  const session = getSession();
 
   const [result, setResult] = useState<ExamResult | null>(null);
   const [exam, setExam] = useState<ExamModel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAnswerScript, setShowAnswerScript] = useState(false);
 
   useEffect(() => {
     if (!attemptId) return;
@@ -133,15 +137,33 @@ export function ExamResultPage() {
 
         {/* Action Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <button
+            onClick={() => setShowAnswerScript(true)}
+            className="w-full sm:w-auto px-8 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <FileText size={16} /> View My Answer Script
+          </button>
+
           <Link
             to="/exam/dashboard"
-            className="w-full sm:w-auto px-8 py-3.5 bg-primary hover:bg-primary/90 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-8 py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all border border-slate-700 shadow-xl flex items-center justify-center gap-2"
           >
             <Home size={16} /> Candidate Dashboard
           </Link>
         </div>
 
       </main>
+
+      {/* Read-Only Answer Script / Marksheet Viewer Modal */}
+      {showAnswerScript && attemptId && (
+        <MarksheetViewer
+          attemptId={attemptId}
+          onClose={() => setShowAnswerScript(false)}
+          isCandidateView={session?.role !== "admin" && session?.role !== "super_admin"}
+          currentCandidateId={session?.id}
+          currentCandidateReg={session?.registrationNumber || session?.id}
+        />
+      )}
     </div>
   );
 }

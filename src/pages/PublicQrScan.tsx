@@ -283,9 +283,9 @@ export function PublicQrScan() {
         }
 
       } catch (err: any) {
-        console.error("Camera startup failed:", err);
+        console.warn("Camera startup note:", err);
         setCameraStatus("error");
-        setCameraPermissionError("ক্যামেরা অন করতে ব্যর্থ হয়েছে। সেটিংস থেকে ক্যামেরা পারমিশন চেক করুন।");
+        setCameraPermissionError("ক্যামেরা চালুর অনুমতি নেই বা ক্যামেরা ডিটেক্ট হয়নি। আপনি নিচে 'QR ছবি আপলোড করুন' বা ID টাইপ করে তথ্য দেখতে পারেন।");
       }
     };
 
@@ -355,10 +355,10 @@ export function PublicQrScan() {
       if (html5QrCode) {
         try {
           if (html5QrCode.isScanning) {
-            html5QrCode.stop().catch(err => console.error("Scanner stop on exit:", err));
+            html5QrCode.stop().catch(err => console.warn("Scanner stop on exit:", err));
           }
         } catch (e) {
-          console.error("Cleanup error in scanner effect:", e);
+          console.warn("Cleanup warning in scanner effect:", e);
         }
       }
     };

@@ -16,7 +16,7 @@ import {
   db, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, collection, Timestamp,
   onSnapshot, handleFirestoreError, OperationType, orderBy 
 } from "../firebase";
-import { getSession, clearSession } from "../lib/auth";
+import { getSession, clearSession, isAuthorizedAdmin } from "../lib/auth";
 
 export function AdminQrDashboard() {
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -82,7 +82,7 @@ export function AdminQrDashboard() {
   // Auth Verification
   useEffect(() => {
     const session = getSession();
-    if (!session || (session.role !== "super_admin" && session.role !== "sub_admin" && session.role !== "attendance_officer" && session.role !== "qr_admin")) {
+    if (!session || !isAuthorizedAdmin(session.role)) {
       navigate("/login");
       return;
     }
@@ -275,7 +275,7 @@ export function AdminQrDashboard() {
           console.warn("Camera capabilities check warning:", capError);
         }
       } catch (err: any) {
-        console.error("Scanner startup failed:", err);
+        console.warn("Scanner startup notice:", err);
         setCameraStatus("error");
         let msg = "ক্যামেরা চালুর অনুমতি পাওয়া যায়নি।";
         if (err?.name === "NotAllowedError" || String(err).includes("NotAllowedError") || String(err).includes("Permission")) {
@@ -314,7 +314,7 @@ export function AdminQrDashboard() {
       isActive = false;
       clearTimeout(timer);
       if (html5QrCode?.isScanning) {
-        html5QrCode.stop().catch(err => console.error("Scanner stop error:", err));
+        html5QrCode.stop().catch(err => console.warn("Scanner stop warning:", err));
       }
     };
   }, [loading, activeTab, scannedCadet, selectedCameraId]);

@@ -149,12 +149,12 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }: ResetPassword
         try {
           await videoRef.current.play();
         } catch (playErr) {
-          console.error("Video element play failed:", playErr);
+          console.warn("Video element play notice:", playErr);
         }
       }
       setCameraActive(true);
     } catch (err: any) {
-      console.error("Camera capture failed completely:", err);
+      console.warn("Camera capture note:", err);
       setError("ক্যামেরা অন করতে ব্যর্থ হয়েছে। অনুগ্রহ করে ক্যামেরার পারমিশন দিন অথবা আপনার ডিভাইস ক্যামেরা সচল রাখুন।");
     }
   };

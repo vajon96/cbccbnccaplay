@@ -10,6 +10,7 @@ import { getSession } from "../lib/auth";
 import { fetchExams, getUserAttempts, getResultByAttemptId } from "../services/examService";
 import { ExamModel, ExamAttempt, ExamResult } from "../types";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
+import { MarksheetViewer } from "../components/exam/MarksheetViewer";
 
 export function ExamCandidateDashboard() {
   const session = getSession();
@@ -20,6 +21,7 @@ export function ExamCandidateDashboard() {
   const [myAttempts, setMyAttempts] = useState<ExamAttempt[]>([]);
   const [myResultsMap, setMyResultsMap] = useState<Record<string, ExamResult>>({});
   const [loading, setLoading] = useState(true);
+  const [viewingMarksheetAttemptId, setViewingMarksheetAttemptId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -116,11 +118,15 @@ export function ExamCandidateDashboard() {
         {/* Available Exams Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-              <Play className="text-emerald-400" size={20} />
-              Active Online Examinations
+            <h2 className="text-lg sm:text-xl font-black text-emerald-400 uppercase tracking-tight flex items-center gap-2.5">
+              <span className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <Play size={18} className="fill-emerald-400" />
+              </span>
+              <span>Active Online Examinations</span>
             </h2>
-            <span className="text-xs text-slate-400 font-semibold">Published Exams</span>
+            <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+              Published Exams
+            </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -217,7 +223,8 @@ export function ExamCandidateDashboard() {
           </div>
 
           <div className="bg-slate-900 border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-950/80 border-b border-white/10 text-[11px] font-black uppercase text-slate-400 tracking-wider">
@@ -270,12 +277,21 @@ export function ExamCandidateDashboard() {
                             </td>
 
                             <td className="py-4 px-4 text-right">
-                              <Link
-                                to={`/exam/result/${att.id}`}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1"
-                              >
-                                View Marksheet <ChevronRight size={14} />
-                              </Link>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setViewingMarksheetAttemptId(att.id)}
+                                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-lg transition-all shadow-md shadow-amber-500/20 inline-flex items-center gap-1.5 cursor-pointer"
+                                  title="View My Full Answer Script (Read-Only)"
+                                >
+                                  <FileText size={13} /> View My Answer Script
+                                </button>
+                                <Link
+                                  to={`/exam/result/${att.id}`}
+                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1"
+                                >
+                                  Result <ChevronRight size={14} />
+                                </Link>
+                              </div>
                             </td>
 
                           </tr>
@@ -285,10 +301,82 @@ export function ExamCandidateDashboard() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Cards View */}
+            <div className="md:hidden divide-y divide-white/10">
+              {myAttempts.filter(a => a.status === "submitted" || a.status === "auto_submitted").length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs">
+                  আপনি এখনও কোনো পরীক্ষা সম্পন্ন করেননি।
+                </div>
+              ) : (
+                myAttempts
+                  .filter(a => a.status === "submitted" || a.status === "auto_submitted")
+                  .map((att) => {
+                    const res = myResultsMap[att.id];
+                    return (
+                      <div key={att.id} className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h4 className="text-sm font-black text-white">{att.examTitle || "BNCC Online Exam"}</h4>
+                            <span className="text-[10px] text-slate-400 font-semibold block">
+                              Date: {new Date(att.submittedAt || att.startedAt).toLocaleDateString("bn-BD")}
+                            </span>
+                          </div>
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border shrink-0 ${
+                            att.isPassed || res?.isPassed
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                              : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                          }`}>
+                            {att.isPassed || res?.isPassed ? "PASSED" : "FAILED"}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 bg-slate-950 p-2.5 rounded-xl border border-white/5 text-center text-xs">
+                          <div>
+                            <span className="text-[9px] text-slate-500 block font-bold uppercase">Obtained Score</span>
+                            <strong className="text-white font-black">{att.score ?? res?.score ?? 0}</strong>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 block font-bold uppercase">Percentage</span>
+                            <strong className="text-amber-400 font-black">{att.percentage ?? res?.percentage ?? 0}%</strong>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => setViewingMarksheetAttemptId(att.id)}
+                            className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-amber-500/20"
+                          >
+                            <FileText size={13} /> Answer Script
+                          </button>
+                          <Link
+                            to={`/exam/result/${att.id}`}
+                            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1"
+                          >
+                            Result <ChevronRight size={14} />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
           </div>
         </div>
 
       </main>
+
+      {/* Read-Only Answer Script / Marksheet Viewer Modal */}
+      {viewingMarksheetAttemptId && (
+        <MarksheetViewer
+          attemptId={viewingMarksheetAttemptId}
+          onClose={() => setViewingMarksheetAttemptId(null)}
+          isCandidateView={true}
+          currentCandidateId={session?.id}
+          currentCandidateReg={session?.registrationNumber || session?.id}
+        />
+      )}
     </div>
   );
 }

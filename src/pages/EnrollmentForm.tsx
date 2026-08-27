@@ -76,7 +76,7 @@ export function EnrollmentForm() {
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      console.error("Error accessing camera:", err);
+      console.warn("Camera access note:", err);
     }
   };
 
