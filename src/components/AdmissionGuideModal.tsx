@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Download, Loader2, Sparkles, Camera, User, CheckCircle, Shield, Award, HelpCircle } from "lucide-react";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-import { handleHtml2CanvasClone } from "../lib/pdfUtils";
+import { downloadElementAsPdf } from "../lib/pdfUtils";
 import { db, doc, onSnapshot } from "../firebase";
 
 interface AdmissionGuideModalProps {
@@ -74,22 +72,11 @@ export function AdmissionGuideModal({ isOpen, onClose }: AdmissionGuideModalProp
     if (!printRef.current) return;
     setIsDownloading(true);
     try {
-      await new Promise(r => setTimeout(r, 600));
-      const canvas = await html2canvas(printRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        onclone: handleHtml2CanvasClone
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`BNCC_Admission_Guide_${guide.refNumber || "2026"}.pdf`);
+      await new Promise(r => setTimeout(r, 400));
+      await downloadElementAsPdf(
+        printRef.current,
+        `BNCC_Admission_Guide_${guide.refNumber || "2026"}.pdf`
+      );
     } catch (e) {
       console.error(e);
       alert("PDF ডাউনলোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");

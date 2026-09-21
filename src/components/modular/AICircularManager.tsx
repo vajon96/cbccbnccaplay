@@ -6,9 +6,7 @@ import {
 } from "lucide-react";
 import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot } from "../../firebase";
 import { generateAICircular } from "../../services/geminiService";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-import { handleHtml2CanvasClone, getSafePdfUrl } from "../../lib/pdfUtils";
+import { downloadElementAsPdf, getSafePdfUrl } from "../../lib/pdfUtils";
 
 interface CircularContent {
   title: string;
@@ -421,24 +419,11 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
     if (!printRef.current) return;
     setIsPrinting(true);
     try {
-      // Small pause for layout adjustment
-      await new Promise(r => setTimeout(r, 600));
-
-      const canvas = await html2canvas(printRef.current, {
-        scale: 2, // High resolution crisp image render
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        onclone: handleHtml2CanvasClone
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Official_Circular_${refNumber || "BNCC"}.pdf`);
+      await new Promise(r => setTimeout(r, 400));
+      await downloadElementAsPdf(
+        printRef.current,
+        `Official_Circular_${refNumber || "BNCC"}.pdf`
+      );
       await onLogActivity("CIRCULAR_PDF_DOWNLOADED", `Downloaded Official PDF with Ref: ${refNumber || "N/A"}`);
     } catch (e) {
       console.error("PDF Export Crash:", e);
