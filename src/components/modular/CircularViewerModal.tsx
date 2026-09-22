@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Download, Loader2, Sparkles, AlertTriangle, FileText } from "lucide-react";
+import { X, Download, Loader2, Sparkles, AlertTriangle, FileText, ExternalLink, Eye } from "lucide-react";
 import { db, collection, getDocs, query, where, limit, onSnapshot } from "../../firebase";
 import { downloadElementAsPdf, getSafePdfUrl } from "../../lib/pdfUtils";
+import { loadCircularPdf, downloadCircularPdf } from "../../lib/circularPdfStorage";
 
 interface CircularViewerModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
   const [circular, setCircular] = useState<any | null>(null);
   const [publicAccessAllowed, setPublicAccessAllowed] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [pdfDataUrl, setPdfDataUrl] = useState<string>("");
+  const [loadingPdf, setLoadingPdf] = useState(false);
   
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -89,15 +92,38 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (circular?.fileType === "pdf") {
+      let isMounted = true;
+      setLoadingPdf(true);
+      loadCircularPdf(circular)
+        .then((url) => {
+          if (isMounted) {
+            setPdfDataUrl(url);
+            setLoadingPdf(false);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load PDF:", err);
+          if (isMounted) {
+            setLoadingPdf(false);
+          }
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setPdfDataUrl("");
+      setLoadingPdf(false);
+    }
+  }, [circular?.id, circular?.fileType]);
+
   const handleDownloadPDF = async () => {
-    if (circular?.fileType === "pdf" && circular?.pdfData) {
+    if (circular?.fileType === "pdf") {
       setIsDownloading(true);
       try {
-        const safeUrl = getSafePdfUrl(circular.pdfData);
-        const link = document.createElement("a");
-        link.href = safeUrl;
-        link.download = `BNCC_Circular_${circular.referenceNumber || "Official"}.pdf`;
-        link.click();
+        await downloadCircularPdf(circular, "BNCC_Official");
       } catch (e) {
         console.error(e);
         alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
@@ -141,7 +167,19 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
             <FileText className="w-6 h-6" />
             <h3 className="text-lg font-black uppercase tracking-tight">অফিসিয়াল সার্কুলার পোর্টাল</h3>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {circular && circular.fileType === "pdf" && pdfDataUrl && (
+              <a
+                href={getSafePdfUrl(pdfDataUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[10px] rounded-full transition-all flex items-center gap-1.5 border border-slate-200"
+                title="নতুন ট্যাবে PDF খুলুন (Open PDF in new tab)"
+              >
+                <ExternalLink size={13} />
+                <span className="hidden sm:inline">নতুন ট্যাবে দেখুন</span>
+              </a>
+            )}
             {circular && (
               <button
                 onClick={handleDownloadPDF}
@@ -186,13 +224,50 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
               </button>
             </div>
           ) : circular ? (
-            circular.fileType === "pdf" && circular.pdfData ? (
-              <div className="w-full flex justify-center items-center bg-slate-100 p-2 rounded-2xl border border-slate-200">
-                <iframe
-                  src={getSafePdfUrl(circular.pdfData)}
-                  className="w-full h-[72vh] rounded-xl shadow-lg border border-slate-300 bg-white"
-                  title="Official Circular PDF"
-                />
+            circular.fileType === "pdf" ? (
+              <div className="w-full flex flex-col bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
+                {/* PDF Sub-header Action bar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-slate-200/80 border-b border-slate-300">
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FileText className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold truncate max-w-[280px] sm:max-w-md">
+                      {circular.title || "অফিসিয়াল সার্কুলার (Official Circular)"}
+                    </span>
+                  </div>
+                  {pdfDataUrl && (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={getSafePdfUrl(pdfDataUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 shadow-sm flex items-center gap-1.5 transition-all"
+                      >
+                        <ExternalLink size={13} />
+                        নতুন ট্যাবে খুলুন
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="w-full flex justify-center items-center p-2 min-h-[520px]">
+                  {loadingPdf ? (
+                    <div className="flex flex-col items-center justify-center p-12 text-slate-500 gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      <p className="text-sm font-bold">অফিসিয়াল PDF সার্কুলার লোড হচ্ছে...</p>
+                    </div>
+                  ) : pdfDataUrl ? (
+                    <iframe
+                      src={getSafePdfUrl(pdfDataUrl)}
+                      className="w-full h-[72vh] rounded-xl shadow-inner border border-slate-300 bg-white"
+                      title="Official Circular PDF"
+                    />
+                  ) : (
+                    <div className="text-center p-12 text-slate-500">
+                      <AlertTriangle className="w-8 h-8 mx-auto text-amber-500 mb-2" />
+                      <p className="text-sm font-bold">PDF ফাইলটি লোড করা সম্ভব হয়নি।</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               /* Sized Document view */

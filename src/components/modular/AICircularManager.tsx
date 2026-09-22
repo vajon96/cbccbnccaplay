@@ -4,9 +4,15 @@ import {
   X, AlertCircle, Loader2, Download, Trash2, Edit2, ShieldAlert,
   ShieldCheck, Eye, Copy, Power, Settings as SettingsIcon, Archive, Upload
 } from "lucide-react";
-import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot } from "../../firebase";
+import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, setDoc, Timestamp, onSnapshot } from "../../firebase";
 import { generateAICircular } from "../../services/geminiService";
 import { downloadElementAsPdf, getSafePdfUrl } from "../../lib/pdfUtils";
+import { 
+  saveCircularPdfChunks, 
+  loadCircularPdf, 
+  deleteCircularPdfChunks, 
+  downloadCircularPdf 
+} from "../../lib/circularPdfStorage";
 
 interface CircularContent {
   title: string;
@@ -26,6 +32,135 @@ interface CircularContent {
 interface AICircularManagerProps {
   adminSession: any;
   onLogActivity: (type: string, details: string) => Promise<any>;
+}
+
+function ActivePdfCard({
+  activePdf,
+  onLogActivity
+}: {
+  activePdf: any;
+  onLogActivity: (type: string, details: string) => Promise<any>;
+}) {
+  const [pdfUrl, setPdfUrl] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!activePdf) {
+      setPdfUrl("");
+      return;
+    }
+    let isMounted = true;
+    setLoading(true);
+    loadCircularPdf(activePdf)
+      .then((data) => {
+        if (isMounted) {
+          setPdfUrl(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading active PDF preview:", err);
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activePdf?.id]);
+
+  if (!activePdf) {
+    return (
+      <div className="flex-grow flex flex-col items-center justify-center p-12 text-center text-slate-500">
+        <FileText className="w-12 h-12 text-slate-700 mb-4" />
+        <p className="text-xs font-bold">এই মুহূর্তে কোনো সক্রিয় PDF সার্কুলার নেই।</p>
+        <p className="text-[10px] text-slate-600 mt-1 leading-normal">
+          নতুন PDF সার্কুলার আপলোড করার সাথে সাথে তা এখানে প্রদর্শিত হবে এবং ওয়েবসাইটে প্রকাশিত হবে।
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 flex flex-col flex-grow">
+      <div className="p-4 bg-slate-950 rounded-xl space-y-2 border border-white/5">
+        <div className="flex items-center justify-between">
+          <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black uppercase tracking-wider rounded">Published</span>
+          <span className="text-[10px] font-mono text-slate-500 font-bold">{activePdf.referenceNumber}</span>
+        </div>
+        <h5 className="text-xs font-black text-white line-clamp-1">{activePdf.title}</h5>
+        <p className="text-[10px] text-slate-500 font-bold">
+          Duration: {activePdf.startDate} to {activePdf.deadlineDate}
+        </p>
+      </div>
+
+      {/* PDF Preview Container */}
+      <div className="flex-grow rounded-xl overflow-hidden border border-white/10 bg-white min-h-[280px] flex items-center justify-center">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center p-8 text-slate-500 gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <span className="text-xs font-bold">PDF প্রিভিউ লোড হচ্ছে...</span>
+          </div>
+        ) : pdfUrl ? (
+          <iframe 
+            src={getSafePdfUrl(pdfUrl)} 
+            className="w-full h-[280px]" 
+            title="Active Circular PDF Preview"
+          />
+        ) : (
+          <div className="p-8 text-center text-slate-400 text-xs font-bold">
+            প্রিভিউ উপলব্ধ নয়
+          </div>
+        )}
+      </div>
+
+      {/* Test Actions */}
+      <div className="grid grid-cols-2 gap-3 pt-2">
+        <button
+          onClick={async () => {
+            setDownloading(true);
+            try {
+              await downloadCircularPdf(activePdf);
+            } catch (err) {
+              console.error(err);
+              alert("PDF ডাউনলোড করতে সমস্যা হয়েছে।");
+            } finally {
+              setDownloading(false);
+            }
+          }}
+          disabled={downloading}
+          className="py-3 bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-750 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-white/5 transition-all disabled:opacity-50"
+        >
+          {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download size={14} />}
+          Download Test
+        </button>
+        <button
+          onClick={async () => {
+            if (confirm("আপনি কি নিশ্চিতভাবে এই PDF সার্কুলারটি বাতিল/ডিলিট করতে চান?")) {
+              setDeleting(true);
+              try {
+                await deleteCircularPdfChunks(activePdf.id);
+                await deleteDoc(doc(db, "circulars", activePdf.id));
+                await onLogActivity("CIRCULAR_PDF_DELETED", `Super Admin deleted active PDF circular ${activePdf.id}`);
+                alert("PDF সার্কুলারটি সফলভাবে মুছে ফেলা হয়েছে।");
+              } catch (e) {
+                console.error(e);
+                alert("সার্কুলার ডিলিট করতে সমস্যা হয়েছে।");
+              } finally {
+                setDeleting(false);
+              }
+            }
+          }}
+          disabled={deleting}
+          className="py-3 bg-red-500/10 text-red-500 hover:bg-red-500/20 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-red-500/10 transition-all disabled:opacity-50"
+        >
+          {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 size={14} />}
+          Delete PDF
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function AICircularManager({ adminSession, onLogActivity }: AICircularManagerProps) {
@@ -48,6 +183,8 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   const [pdfDeadlineDate, setPdfDeadlineDate] = useState("");
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [activePdfUrl, setActivePdfUrl] = useState<string>("");
+  const [loadingActivePdf, setLoadingActivePdf] = useState(false);
   
   // Settings State
   const [publicAccessEnabled, setPublicAccessEnabled] = useState(true);
@@ -285,6 +422,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to permanently delete this circular?")) return;
     try {
+      await deleteCircularPdfChunks(id);
       await deleteDoc(doc(db, "circulars", id));
       await onLogActivity("CIRCULAR_DELETED", `Super Admin deleted circular document: ${id}`);
       alert("Circular removed successfully.");
@@ -348,13 +486,13 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
 
   const handlePdfFileChange = (file: File) => {
     if (!file) return;
-    if (file.type !== "application/pdf") {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
       alert("শুধুমাত্র PDF (.pdf) ফাইল গ্রহণযোগ্য।");
       return;
     }
-    const maxSize = 1 * 1024 * 1024; // 1 MB
+    const maxSize = 5 * 1024 * 1024; // 5 MB comfortably supported with chunked storage
     if (file.size > maxSize) {
-      alert("ফাইল সাইজ ১ MB-এর বেশি হওয়া যাবে না। অনুগ্রহ করে একটি সংকুচিত (Compressed) PDF আপলোড করুন।");
+      alert("ফাইল সাইজ ৫ MB-এর বেশি হওয়া যাবে না। অনুগ্রহ করে একটি সংকুচিত বা অপ্টিমাইজড PDF আপলোড করুন।");
       return;
     }
     
@@ -369,7 +507,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   };
 
   const handleUploadPdfCircular = async () => {
-    if (!pdfBase64) {
+    if (!pdfBase64 || !pdfFile) {
       alert("অনুগ্রহ করে প্রথমে একটি PDF ফাইল নির্বাচন করুন।");
       return;
     }
@@ -385,10 +523,19 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
       }
 
       const generatedRef = generateReferenceNumber(circulars.length);
+      const circularRef = doc(collection(db, "circulars"));
+      const circularId = circularRef.id;
+
+      // Save PDF data across subcollection chunks to guarantee document size stays far below 1MB
+      const chunksCount = await saveCircularPdfChunks(circularId, pdfBase64);
+
       const payload = {
         title: pdfTitle || "অফিসিয়াল ভর্তি সার্কুলার (Official Enrollment Circular)",
         fileType: "pdf",
-        pdfData: pdfBase64,
+        hasPdfChunks: true,
+        chunksCount,
+        pdfFileName: pdfFile.name,
+        pdfFileSize: pdfFile.size,
         startDate: pdfStartDate || new Date().toISOString().split("T")[0],
         deadlineDate: pdfDeadlineDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
         status: "published",
@@ -398,7 +545,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
         updatedAt: Timestamp.now()
       };
 
-      await addDoc(collection(db, "circulars"), payload);
+      await setDoc(circularRef, payload);
       await onLogActivity("CIRCULAR_PDF_UPLOADED", `Super Admin uploaded and published PDF circular with Ref: ${generatedRef}`);
       alert("PDF সার্কুলার সফলভাবে আপলোড ও পাবলিশ হয়েছে!");
       
@@ -408,7 +555,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
       setPdfStartDate("");
       setPdfDeadlineDate("");
     } catch (e) {
-      console.error(e);
+      console.error("PDF upload error:", e);
       alert("PDF আপলোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
     } finally {
       setUploadingPdf(false);
@@ -869,7 +1016,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                           <Upload className="w-12 h-12 text-slate-600 mx-auto" />
                           <div>
                             <p className="text-xs font-bold text-slate-300">ড্র্যাগ ও ড্রপ করুন অথবা ফাইল সিলেক্ট করুন</p>
-                            <p className="text-[10px] text-slate-500 font-bold mt-1">শুধুমাত্র PDF ফাইল গ্রহণযোগ্য (সর্বোচ্চ ১ MB)</p>
+                            <p className="text-[10px] text-slate-500 font-bold mt-1">শুধুমাত্র PDF ফাইল গ্রহণযোগ্য (সর্বোচ্চ ৫ MB)</p>
                           </div>
                         </div>
                       )}
@@ -899,77 +1046,10 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                 <div className="space-y-6 bg-slate-900/30 p-6 rounded-2xl border border-white/5 flex flex-col h-full">
                   <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">বর্তমান সক্রিয় PDF সার্কুলার (Active PDF Circular)</h4>
                   
-                  {(() => {
-                    const activePdf = circulars.find(c => c.status === "published" && c.fileType === "pdf");
-                    if (!activePdf) {
-                      return (
-                        <div className="flex-grow flex flex-col items-center justify-center p-12 text-center text-slate-500">
-                          <FileText className="w-12 h-12 text-slate-700 mb-4" />
-                          <p className="text-xs font-bold">এই মুহূর্তে কোনো সক্রিয় PDF সার্কুলার নেই।</p>
-                          <p className="text-[10px] text-slate-600 mt-1 leading-normal">নতুন PDF সার্কুলার আপলোড করার সাথে সাথে তা এখানে প্রদর্শিত হবে এবং ওয়েবসাইটে প্রকাশিত হবে।</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-4 flex flex-col flex-grow">
-                        <div className="p-4 bg-slate-950 rounded-xl space-y-2 border border-white/5">
-                          <div className="flex items-center justify-between">
-                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black uppercase tracking-wider rounded">Published</span>
-                            <span className="text-[10px] font-mono text-slate-500 font-bold">{activePdf.referenceNumber}</span>
-                          </div>
-                          <h5 className="text-xs font-black text-white line-clamp-1">{activePdf.title}</h5>
-                          <p className="text-[10px] text-slate-500 font-bold">
-                            Duration: {activePdf.startDate} to {activePdf.deadlineDate}
-                          </p>
-                        </div>
-
-                        {/* PDF Preview Container */}
-                        <div className="flex-grow rounded-xl overflow-hidden border border-white/10 bg-white">
-                          <iframe 
-                            src={getSafePdfUrl(activePdf.pdfData)} 
-                            className="w-full h-[280px]" 
-                            title="Active Circular PDF Preview"
-                          />
-                        </div>
-
-                        {/* Test Actions */}
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                          <button
-                            onClick={() => {
-                              const safeUrl = getSafePdfUrl(activePdf.pdfData);
-                              const link = document.createElement("a");
-                              link.href = safeUrl;
-                              link.download = `BNCC_Circular_${activePdf.referenceNumber || "Official"}.pdf`;
-                              link.click();
-                            }}
-                            className="py-3 bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-750 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-white/5 transition-all"
-                          >
-                            <Download size={14} />
-                            Download Test
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (confirm("আপনি কি নিশ্চিতভাবে এই PDF সার্কুলারটি বাতিল/ডিলিট করতে চান?")) {
-                                try {
-                                  await deleteDoc(doc(db, "circulars", activePdf.id));
-                                  await onLogActivity("CIRCULAR_PDF_DELETED", `Super Admin deleted active PDF circular ${activePdf.id}`);
-                                  alert("PDF সার্কুলারটি সফলভাবে মুছে ফেলা হয়েছে।");
-                                } catch (e) {
-                                  console.error(e);
-                                  alert("সার্কুলার ডিলিট করতে সমস্যা হয়েছে।");
-                                }
-                              }
-                            }}
-                            className="py-3 bg-red-500/10 text-red-500 hover:bg-red-500/20 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-red-500/10 transition-all"
-                          >
-                            <Trash2 size={14} />
-                            Delete PDF
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <ActivePdfCard 
+                    activePdf={circulars.find(c => c.status === "published" && c.fileType === "pdf")}
+                    onLogActivity={onLogActivity}
+                  />
                 </div>
               </div>
             </div>
@@ -1064,21 +1144,20 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
                           </button>
                         </>
                       ) : (
-                        item.pdfData && (
-                          <button
-                            onClick={() => {
-                              const safeUrl = getSafePdfUrl(item.pdfData);
-                              const link = document.createElement("a");
-                              link.href = safeUrl;
-                              link.download = `BNCC_Circular_${item.referenceNumber || "Official"}.pdf`;
-                              link.click();
-                            }}
-                            className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
-                            title="Download PDF"
-                          >
-                            <Download size={16} />
-                          </button>
-                        )
+                        <button
+                          onClick={async () => {
+                            try {
+                              await downloadCircularPdf(item);
+                            } catch (err) {
+                              console.error(err);
+                              alert("PDF ডাউনলোড করতে সমস্যা হয়েছে।");
+                            }
+                          }}
+                          className="p-2.5 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                          title="Download PDF"
+                        >
+                          <Download size={16} />
+                        </button>
                       )}
 
                       <button

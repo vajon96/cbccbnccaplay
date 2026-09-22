@@ -18,7 +18,7 @@ export function ExamPortal() {
             <Award size={14} /> Official BNCC Cadet Recruitment Portal
           </div>
 
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white font-display leading-tight">
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-[#00e7ff] font-display leading-tight">
             কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনের <span className="text-primary">অনলাইন ভর্তি পরীক্ষা</span>
           </h1>
 

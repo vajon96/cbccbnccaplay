@@ -104,11 +104,16 @@ export function Navbar() {
                 </Link>
               ))}
               <button
+                id="navbar-circular-btn"
                 onClick={() => setIsCircularModalOpen(true)}
-                className="px-5 py-2 border border-white/25 hover:border-white/55 text-white bg-white/5 hover:bg-white/15 text-[11px] font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 cursor-pointer"
+                className="px-4 py-2 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 text-[11px] font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-amber-400/10"
+                title="ভর্তি সার্কুলার দেখুন (View Admission Circular)"
               >
-                <FileText size={13} className="text-primary-dark" />
-                Circular
+                <FileText size={13} className="text-amber-300" />
+                <span>Circular</span>
+                <span className="px-1.5 py-0.5 bg-amber-400 text-slate-950 text-[8px] font-black rounded-full uppercase leading-none animate-pulse">
+                  NEW
+                </span>
               </button>
               <Link
                 to="/enroll"
@@ -134,11 +139,14 @@ export function Navbar() {
                 </Link>
               ))}
               <button
+                id="mobile-navbar-circular-btn"
                 onClick={() => setIsCircularModalOpen(true)}
-                className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10"
-                title="Circular"
+                className="w-9 h-9 rounded-full bg-amber-400/20 hover:bg-amber-400/30 flex items-center justify-center text-amber-300 border border-amber-400/40 relative shadow-sm"
+                title="ভর্তি সার্কুলার (Circular)"
               >
                 <FileText size={16} />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full" />
               </button>
             </div>
             <Link
@@ -238,7 +246,22 @@ export function Navbar() {
                 })}
               </div>
               
-              <div className="pt-8 px-2">
+              <div className="pt-8 px-2 space-y-3">
+                <button
+                  id="drawer-circular-btn"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsCircularModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-3 w-full py-4 bg-amber-400/20 text-amber-300 border border-amber-400/40 font-black uppercase tracking-[0.15em] text-xs rounded-2xl hover:bg-amber-400/30 transition-all cursor-pointer shadow-lg"
+                >
+                  <FileText size={18} />
+                  <span>Admission Circular (PDF)</span>
+                  <span className="px-1.5 py-0.5 bg-amber-400 text-slate-950 text-[9px] font-black rounded-full uppercase">
+                    NEW
+                  </span>
+                </button>
+
                 <Link
                   to="/enroll"
                   onClick={() => setIsOpen(false)}

@@ -166,6 +166,12 @@
         "contactInfo": { "type": "string" },
         "footer": { "type": "string" },
         "category": { "type": "string" },
+        "fileType": { "type": "string" },
+        "hasPdfChunks": { "type": "boolean" },
+        "chunksCount": { "type": "integer" },
+        "pdfFileName": { "type": "string" },
+        "pdfFileSize": { "type": "integer" },
+        "pdfData": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -186,6 +192,9 @@
     "/circulars/{circularId}": {
       "schema": "circular",
       "description": "System generated enrollment circulars"
+    },
+    "/circulars/{circularId}/chunks/{chunkId}": {
+      "description": "Chunked storage for large PDF circular files to prevent exceeding document size limits"
     },
     "/circular_settings/{settingId}": {
       "schema": "circular_setting",

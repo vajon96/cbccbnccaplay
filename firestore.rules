@@ -23,6 +23,9 @@ service cloud.firestore {
 
     match /circulars/{id} {
       allow read, write: if true;
+      match /{allChildren=**} {
+        allow read, write: if true;
+      }
     }
 
     // Applicants & Profile Changes
