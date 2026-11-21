@@ -4,7 +4,8 @@ import {
   X, AlertCircle, Loader2, Download, Trash2, Edit2, Shield,
   Eye, Power, Settings as SettingsIcon, FileText, Camera, User, Award, Plus, Trash
 } from "lucide-react";
-import { db, collection, query, orderBy, doc, setDoc, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot, getDocs } from "../../firebase";
+import { db, collection, query, orderBy, doc, setDoc, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot, getDocs, reportFirestoreListenerError, OperationType } from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
 import { generateAIGuide } from "../../services/geminiService";
 import { downloadElementAsPdf } from "../../lib/pdfUtils";
 
@@ -109,8 +110,11 @@ export function AIGuideManager({ adminSession, onLogActivity }: AIGuideManagerPr
 
   const printRef = useRef<HTMLDivElement>(null);
 
+  const { loading: authLoading } = useAuth();
+
   // Load guides from Firestore in real-time
   useEffect(() => {
+    if (authLoading) return;
     setIsLoadingArchive(true);
     const q = query(collection(db, "guides"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -128,7 +132,7 @@ export function AIGuideManager({ adminSession, onLogActivity }: AIGuideManagerPr
       }
       setIsLoadingArchive(false);
     }, (err) => {
-      console.error("Error loading guides from Firestore:", err);
+      reportFirestoreListenerError(err, OperationType.LIST, "guides");
       setIsLoadingArchive(false);
     });
 
@@ -136,7 +140,7 @@ export function AIGuideManager({ adminSession, onLogActivity }: AIGuideManagerPr
     fetchSettings();
 
     return () => unsubscribe();
-  }, []);
+  }, [authLoading]);
 
   const fetchSettings = async () => {
     try {

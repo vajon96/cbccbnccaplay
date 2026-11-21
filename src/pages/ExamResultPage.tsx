@@ -159,7 +159,7 @@ export function ExamResultPage() {
         <MarksheetViewer
           attemptId={attemptId}
           onClose={() => setShowAnswerScript(false)}
-          isCandidateView={session?.role !== "admin" && session?.role !== "super_admin"}
+          isCandidateView={!["super_admin", "admin", "sub_admin", "exam_admin"].includes(session?.role || "")}
           currentCandidateId={session?.id}
           currentCandidateReg={session?.registrationNumber || session?.id}
         />

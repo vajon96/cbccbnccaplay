@@ -50,27 +50,27 @@ export class ErrorBoundary extends React.Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-bg-light p-4">
-          <div className="max-w-md w-full glass-card rounded-3xl p-8 text-center border border-primary/10">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-8 h-8 text-primary" />
+        <div className="min-h-screen flex items-center justify-center bg-[#00152e] p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center border border-slate-200 shadow-2xl">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-8 h-8 text-[#002147]" />
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Oops! Something went wrong</h2>
-            <p className="text-slate-600 mb-8">
-              {isFirestoreError ? "There was a problem communicating with the database." : "We encountered an error while processing your request."}
+            <p className="text-slate-600 mb-6 text-sm leading-relaxed">
+              {isFirestoreError
+                ? "There was a problem communicating with the database."
+                : "We encountered an unexpected error while processing your request."}
             </p>
-            
-            <div className="bg-primary/5 rounded-2xl p-4 mb-8 text-left border border-primary/10">
-              <p className="text-sm font-mono text-primary break-words">
-                {errorMessage}
-              </p>
+
+            <div className="bg-slate-100 rounded-2xl p-4 mb-6 text-left border border-slate-200">
+              <p className="text-xs font-mono text-slate-800 break-words">{errorMessage}</p>
             </div>
 
             <button
               onClick={this.handleReset}
-              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg shadow-primary/20"
+              className="w-full flex items-center justify-center gap-2 bg-[#002147] hover:bg-[#0B2545] text-white font-bold py-3.5 px-6 rounded-2xl transition-all shadow-lg cursor-pointer"
             >
-              <RefreshCcw className="w-5 h-5" />
+              <RefreshCcw className="w-4 h-4" />
               Try Again
             </button>
           </div>

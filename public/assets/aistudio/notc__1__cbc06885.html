@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cox's Bazar City College BNCC Platoon Official Website. Discover discipline, leadership, and patriotism.">
+    <meta name="keywords" content="BNCC, Cox's Bazar City College, BNCC Platoon, Army Wing, Cadets">
+    <title>Cox's Bazar City College BNCC Platoon</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- NEW COLOR PALETTE: DEEP GREEN & GOLD --- */
+        :root {
+            --primary-green: #1b5e20; /* Deep Olive Green */
+            --secondary-green: #388e3c; /* Mid Green */
+            --dark-green: #003300; /* Very Dark Green */
+            --light-bg: #f5f5f5;
+            --accent-gold: #ffc107; /* Gold/Yellow Accent */
+            --text-dark: #212121;
+            --text-light: #fff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light-bg);
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        header {
+            background-color: var(--primary-green);
+            color: var(--text-light);
+            padding: 15px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        header img {
+            height: 70px;
+            border-radius: 50%; /* Added rounded logo effect */
+            background-color: var(--text-light);
+            padding: 5px;
+            transition: transform 0.3s ease;
+        }
+
+        header img:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px var(--accent-gold);
+        }
+        
+        /* Marquee Text adjusted for new contrast */
+        .marquee-container {
+            width: 100%;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.3); 
+            padding: 8px 0;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+
+        .marquee-text {
+            display: inline-block;
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--accent-gold); /* Used gold for high visibility */
+            white-space: nowrap;
+            padding-left: 100%;
+            animation: marquee 15s linear infinite;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* Navigation Bar */
+        nav {
+            background-color: var(--secondary-green);
+            padding: 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        nav a {
+            color: var(--text-light);
+            text-decoration: none;
+            font-weight: 600;
+            padding: 12px 18px;
+            font-size: 16px;
+            display: inline-block;
+            transition: all 0.3s ease;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        nav a:last-child {
+            border-right: none;
+        }
+
+        nav a:hover {
+            background-color: var(--dark-green);
+            transform: translateY(-2px);
+            color: var(--accent-gold); /* Hover text color */
+        }
+
+        nav a.active {
+            background-color: var(--dark-green);
+            box-shadow: inset 0 -3px 0 var(--accent-gold); /* Gold underline for active */
+        }
+
+        /* Banner */
+        .banner {
+            /* Changed gradient to green/dark green */
+            background: linear-gradient(135deg, var(--secondary-green) 0%, var(--primary-green) 100%); 
+            color: var(--text-light);
+            text-align: center;
+            padding: 80px 20px; /* Increased padding */
+            margin-bottom: 20px;
+            /* Placeholder for a military-themed image */
+            background-image: url('https://images.unsplash.com/photo-1510078021966-235889a2b535?ixlib=rb-4.0.3&auto=format&fit=crop&w=1500&q=80'); 
+            background-blend-mode: overlay;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .banner h2 {
+            font-size: 3.2rem; /* Larger font */
+            margin: 0 0 15px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            color: var(--accent-gold); /* Gold color for heading */
+        }
+
+        .banner p {
+            font-size: 1.3rem;
+            max-width: 800px;
+            margin: 0 auto;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+            font-style: italic;
+        }
+
+        /* Main Content */
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        section {
+            background-color: var(--text-light);
+            border-radius: 10px; /* More rounded corners */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* Stronger shadow */
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        #cadets h1 {
+            color: var(--primary-green);
+            border-bottom: 3px solid var(--accent-gold); /* Gold accent line */
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .link {
+            text-align: center;
+            margin-top: 25px;
+        }
+
+        .link a {
+            text-decoration: none;
+            color: var(--text-light);
+            background-color: var(--primary-green); /* Green button */
+            padding: 12px 30px;
+            border-radius: 25px; /* Pill shape */
+            font-size: 16px;
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .link a i {
+            color: var(--accent-gold); /* Gold icon inside button */
+            margin-right: 5px;
+        }
+
+        .link a:hover {
+            background-color: var(--dark-green);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        .notice-container {
+            border: 2px solid var(--secondary-green); /* Green border */
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Featured Section - Card Redesign */
+        .featured-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .featured-card {
+            flex: 1;
+            min-width: 300px;
+            background: var(--text-light);
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+            border-bottom: 5px solid var(--accent-gold); /* Gold bottom border accent */
+        }
+
+        .featured-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .featured-card h3 {
+            color: var(--primary-green);
+            margin-bottom: 15px;
+            font-size: 1.6rem;
+        }
+
+        .featured-card i {
+            font-size: 3rem; /* Larger icon */
+            color: var(--accent-gold); /* Gold icon color */
+            margin-bottom: 15px;
+        }
+
+        /* Footer */
+        footer {
+            background-color: var(--dark-green); /* Darker green footer */
+            color: var(--text-light);
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 40px;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        footer p {
+            margin: 10px 0;
+        }
+
+        .social-icons {
+            margin-top: 15px;
+        }
+
+        .social-icons a {
+            color: var(--accent-gold); /* Gold social icons */
+            font-size: 1.8rem; /* Larger social icons */
+            margin: 0 12px;
+            transition: color 0.3s ease;
+        }
+
+        .social-icons a:hover {
+            color: var(--text-light);
+        }
+
+        /* Responsive adjustments remain mostly the same, ensuring visual balance */
+        @media (max-width: 992px) {
+            .header-container {
+                flex-direction: column;
+                text-align: center;
+            }
+            .logo-container {
+                justify-content: center;
+                margin-bottom: 15px;
+            }
+            .marquee-text {
+                font-size: 18px;
+            }
+            .banner h2 {
+                font-size: 2.5rem;
+            }
+            .nav-container {
+                justify-content: flex-start;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            nav a {
+                padding: 10px 15px;
+                font-size: 15px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .banner {
+                padding: 60px 15px;
+            }
+            .banner h2 {
+                font-size: 2.0rem;
+            }
+            .banner p {
+                font-size: 1.1rem;
+            }
+            section {
+                padding: 20px;
+            }
+            .featured-card {
+                min-width: 100%;
+            }
+        }
+
+        @media (max-width: 576px) {
+            header img {
+                height: 60px;
+            }
+            .marquee-text {
+                font-size: 16px;
+                animation: marquee 12s linear infinite;
+            }
+            .banner h2 {
+                font-size: 1.8rem;
+            }
+            nav a {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-container">
+            <div class="logo-container">
+                <a href="https://cbcc.edu.bd/" target="_blank" title="Visit College Website">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo">
+                </a>
+                <a href="https://bncc.info/" target="_blank" title="Visit BNCC Website">
+                    <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                </a>
+            </div>
+            <h1 style="color: var(--accent-gold); font-size: 2.5rem; margin: 10px 0;">Cox's Bazar City College BNCC Platoon</h1>
+            <div class="marquee-container">
+                <div class="marquee-text">Discipline is the soul of an army. It makes small numbers formidable. - George Washington</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="banner">
+        <h2>BNCC Platoon (Army Wing)</h2>
+        <p>Developing Responsible Citizens, Leaders, and Patriots for a Strong Nation.</p>
+    </div>
+
+    <nav>
+        <div class="nav-container">
+            <a href="index.html" class="active"><i class="fas fa-home"></i> Home</a>
+            <a href="about.html"><i class="fas fa-info-circle"></i> About Us</a>
+            <a href="activities.html"><i class="fas fa-running"></i> Activities</a>
+            <a href="cadets.html"><i class="fas fa-users"></i> Cadets</a>
+            <a href="gallery.html"><i class="fas fa-images"></i> Gallery</a>
+            <a href="contact.html"><i class="fas fa-envelope"></i> Contact</a>
+            <a href="hall-of-incharges.html"><i class="fas fa-award"></i> Hall of In-Charges</a>
+            <a href="how-to-become-cadet.html"><i class="fas fa-question-circle"></i> How to Become a Cadet</a>
+            <a href="become-cadet.html"><i class="fas fa-user-plus"></i> Join Now</a>
+        </div>
+    </nav>
+
+    <main>
+        <div class="featured-section">
+            <div class="featured-card">
+                <i class="fas fa-flag"></i>
+                <h3>Patriotism</h3>
+                <p>Instilling love for the country and commitment to national service</p>
+            </div>
+            <div class="featured-card">
+                <i class="fas fa-medal"></i>
+                <h3>Discipline</h3>
+                <p>Building character through strict discipline and ethical values</p>
+            </div>
+            <div class="featured-card">
+                <i class="fas fa-chart-line"></i>
+                <h3>Leadership</h3>
+                <p>Developing future leaders through intensive training and responsibility</p>
+            </div>
+        </div>
+
+        <section id="cadets">
+            <h1><i class="fas fa-bullhorn"></i> নোটিশ (Latest Notices)</h1>
+            <p><strong>Latest Notices:</strong> Stay updated with important announcements and events from the BNCC Platoon.</p>
+            <div class="notice-container">
+                <iframe src="https://docs.google.com/document/d/1ej5TVfzgkKG8mfU2cWRuliKrC2_QBLCn/preview" width="100%" height="500px" style="border: none;" allow="autoplay"></iframe>
+            </div>
+            <div class="link">
+                <a href="notices.html"><i class="fas fa-external-link-alt"></i> View All Notices</a>
+            </div>
+        </section>
+
+       <section>
+    <h1><i class="fas fa-flag"></i> স্বাধীনতা দিবস কুচকাওয়াজ ২০২৬</h1>
+    <p>২৬শে মার্চ মহান স্বাধীনতা দিবস উপলক্ষে কক্সবাজার জেলা প্রশাসন কর্তৃক আয়োজিত কুচকাওয়াজে অংশগ্রহণকারী ক্যাডেটদের তালিকা প্রকাশিত হলো।</p>
+    <p>এই কুচকাওয়াজে আমাদের BNCC প্লাটুনের ক্যাডেটরা তাদের দেশপ্রেম, দৃঢ়তা ও শৃঙ্খলা প্রদর্শন করবে। সকল ক্যাডেটদের সঠিক সময়ানুবর্তিতা ও পূর্ণ ইউনিফর্ম (Full Rig) সহ উপস্থিত থাকার জন্য বিশেষ নির্দেশনা প্রদান করা হয়েছে।</p>
+    <div class="link">
+        <a href="ddddf.html"><i class="fas fa-users"></i> অংশগ্রহণকারী ক্যাডেটদের তালিকা দেখুন</a>
+    </div>
+</section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>&copy; ২০২৫ কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন। সর্বস্বত্ব সংরক্ষিত।</p>
+            <p>&copy; 2025 Cox's Bazar City College BNCC Platoon. All Rights Reserved.</p>
+            <div class="social-icons">
+                <a href="#" aria-label="Facebook"><i class="fab fa-facebook"></i></a>
+                <a href="#" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+                <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+            </div>
+            <p>Contact: bncc@cbcc.edu.bd | Phone: +880 XXX-XXXXXXX</p>
+        </div>
+    </footer>
+
+    <script>
+        // Highlight current page in navigation
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPage = window.location.pathname.split('/').pop();
+            const navLinks = document.querySelectorAll('nav a');
+            
+            navLinks.forEach(link => {
+                // Remove 'active' from all links first to prevent duplication
+                link.classList.remove('active');
+                
+                const linkPage = link.getAttribute('href');
+                // Check if current page matches link href, or if it's the index page ('index.html' or '/')
+                if (currentPage === linkPage || (currentPage === '' && linkPage === 'index.html')) {
+                    link.classList.add('active');
+                }
+            });
+            
+            // Smooth scrolling for anchor links (kept from original)
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    if(targetId === '#') return;
+                    
+                    const targetElement = document.querySelector(targetId);
+                    if(targetElement) {
+                        window.scrollTo({
+                            top: targetElement.offsetTop - 80, // Adjust for sticky nav height
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

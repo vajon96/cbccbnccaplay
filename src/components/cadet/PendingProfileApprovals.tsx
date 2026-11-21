@@ -1,33 +1,42 @@
 import React, { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, Clock, User, Eye, Loader2, RefreshCw } from "lucide-react";
-import { db, collection, query, where, onSnapshot, doc, updateDoc, Timestamp, addDoc, handleFirestoreError, OperationType } from "../../firebase";
+import { db, collection, query, where, onSnapshot, doc, updateDoc, Timestamp, addDoc, handleFirestoreError, reportFirestoreListenerError, OperationType } from "../../firebase";
 import { PendingProfileChange } from "../../types";
 import { FIELD_LABELS } from "../../lib/profileUtils";
+import { useAuth } from "../../context/AuthContext";
 
 interface PendingProfileApprovalsProps {
   adminSession: any;
 }
 
 export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = ({ adminSession }) => {
+  const { firebaseUser, loading: authLoading } = useAuth();
   const [requests, setRequests] = useState<PendingProfileChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [showRejectModalId, setShowRejectModalId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!firebaseUser) {
+      setLoading(false);
+      return;
+    }
+
     const q = query(collection(db, "pending_profile_changes"), where("status", "==", "pending"));
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as PendingProfileChange));
       setRequests(list);
       setLoading(false);
     }, (err) => {
-      console.error("Error fetching pending profile requests:", err);
+      reportFirestoreListenerError(err, OperationType.LIST, "pending_profile_changes");
       setLoading(false);
     });
 
     return () => unsub();
-  }, []);
+  }, [authLoading, firebaseUser]);
 
   const handleApprove = async (req: PendingProfileChange) => {
     setProcessingId(req.id);
@@ -71,7 +80,7 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
         timestamp: Timestamp.now()
       });
 
-      alert(`Sensitive changes for ${req.cadetName} have been successfully approved!`);
+      setFeedback({ type: "success", text: `Sensitive changes for ${req.cadetName} have been approved.` });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `applicants/${req.cadetId}`);
     } finally {
@@ -117,7 +126,7 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
       });
 
       setShowRejectModalId(null);
-      alert(`Request rejected for ${req.cadetName}.`);
+      setFeedback({ type: "success", text: `Request rejected for ${req.cadetName}.` });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `pending_profile_changes/${req.id}`);
     } finally {
@@ -150,6 +159,12 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
           Pending: {requests.length} Requests
         </div>
       </div>
+
+      {feedback && (
+        <div role="status" className={`px-4 py-3 rounded-2xl border text-xs font-bold ${feedback.type === "error" ? "bg-rose-950/70 border-rose-500/40 text-rose-200" : "bg-emerald-950/70 border-emerald-500/40 text-emerald-200"}`}>
+          {feedback.text}
+        </div>
+      )}
 
       {requests.length === 0 ? (
         <div className="glass-card p-12 text-center rounded-3xl space-y-3">

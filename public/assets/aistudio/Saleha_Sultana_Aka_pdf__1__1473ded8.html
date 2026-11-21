@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saleha Sultana Aka - Endorsement</title>
+    <link rel="stylesheet" href="styles2.css">
+    <style>
+        .certificate-container {
+            max-width: 850px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 40px;
+            border: 10px double #2c3e50;
+            text-align: center;
+            line-height: 1.6;
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .cert-header { 
+            text-transform: uppercase; 
+            text-decoration: underline; 
+            margin-bottom: 20px; 
+            color: #1a252f;
+        }
+        .cadet-photo {
+            width: 150px;
+            height: 180px;
+            object-fit: cover;
+            border: 3px solid #2c3e50;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .cert-body { 
+            text-align: justify; 
+            margin-bottom: 30px; 
+            font-size: 1.05rem;
+        }
+        .download-box {
+            background: #f4f4f4;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+        .download-btn {
+            display: inline-block;
+            background: #27ae60;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s;
+        }
+        .download-btn:hover { background: #219150; }
+        
+        .nav-links a {
+            margin: 0 10px;
+            text-decoration: none;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        header img { height: 60px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="https://cbcc.edu.bd/"><img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo"></a>
+        <a href="https://bncc.info/"><img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo"></a>
+        <div class="marquee-container"><div class="marquee-text">Cox's Bazar City College BNCC Platoon</div></div>
+    </header>
+
+    <div class="certificate-container">
+        <h1 class="cert-header">Certificate of Endorsement</h1>
+        
+        <img src="gg (2).jpeg" alt="Cadet Saleha Sultana Aka" class="cadet-photo">
+
+        <div class="cert-body">
+            <p>This is to certify that <strong>Cadet Saleha Sultana Aka</strong>, <strong>Cadet No: 25154365</strong>, is a bona fide and active member of the Bangladesh National Cadet Corps (BNCC), Cox’s Bazar City College BNCC Platoon (Army Wing).</p>
+            
+            <p>She was duly enrolled as a cadet of the 2025–2026 Batch and has actively participated in various platoon activities with sincerity, dedication, and a strong sense of commitment.</p>
+            
+            <p>Throughout her tenure in BNCC, Cadet Saleha Sultana Aka has consistently demonstrated commendable discipline, integrity, teamwork, leadership potential, and a high standard of personal responsibility. She has actively taken part in character-building, leadership-oriented, and national consciousness-enhancing programs conducted under the BNCC framework, which have contributed positively to her personal development and civic responsibility.</p>
+            
+            <p>Her conduct, moral character, and overall performance have been evaluated and found to be highly satisfactory. She is known to be polite, disciplined, cooperative, and motivated—reflecting the core values, principles, and ethos upheld by the BNCC.</p>
+            
+            <p>This certificate is issued upon her request for submission to the Bangladesh Army recruitment process and for other relevant official purposes.</p>
+            
+            <p>We wish her every success in her future endeavors.</p>
+        </div>
+
+        <div class="download-box">
+            <h2>OFFICIAL BNCC DOCUMENT</h2>
+            <p>Authorization required. Enter the password to download the PDF version:</p>
+            <button onclick="checkPassword()" class="download-btn">Download PDF</button>
+        </div>
+
+        <div class="nav-links" style="margin-top: 20px;">
+            <a href="fahim.html">Prev</a>
+            <a href="sakib.html">Next</a>
+            <a href="saleha.html">View Profile Card</a>
+        </div>
+    </div>
+
+    <footer><p>&copy; 2025 Cox's Bazar City College BNCC Platoon. All Rights Reserved.</p></footer>
+
+    <script>
+        function checkPassword() {
+            // Set password
+            const correctPassword = "BNCC2026"; 
+            const userPassword = prompt("Enter the authorization password:");
+
+            if (userPassword === correctPassword) {
+                const fileUrl = "Saleha Sultana Aka.pdf"; 
+                const link = document.createElement("a");
+                link.href = fileUrl;
+                link.download = "Saleha_Sultana_Aka_Certificate.pdf";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else if (userPassword !== null) {
+                alert("Incorrect password. Access denied.");
+            }
+        }
+    </script>
+</body>
+</html>

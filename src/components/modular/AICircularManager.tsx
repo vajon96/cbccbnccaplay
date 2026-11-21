@@ -4,7 +4,8 @@ import {
   X, AlertCircle, Loader2, Download, Trash2, Edit2, ShieldAlert,
   ShieldCheck, Eye, Copy, Power, Settings as SettingsIcon, Archive, Upload
 } from "lucide-react";
-import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, setDoc, Timestamp, onSnapshot } from "../../firebase";
+import { db, collection, query, orderBy, getDocs, doc, addDoc, updateDoc, deleteDoc, setDoc, Timestamp, onSnapshot, reportFirestoreListenerError, OperationType } from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
 import { generateAICircular } from "../../services/geminiService";
 import { downloadElementAsPdf, getSafePdfUrl } from "../../lib/pdfUtils";
 import { 
@@ -102,7 +103,7 @@ function ActivePdfCard({
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
             <span className="text-xs font-bold">PDF প্রিভিউ লোড হচ্ছে...</span>
           </div>
-        ) : pdfUrl ? (
+        ) : (pdfUrl && getSafePdfUrl(pdfUrl)) ? (
           <iframe 
             src={getSafePdfUrl(pdfUrl)} 
             className="w-full h-[280px]" 
@@ -194,8 +195,11 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
   const printRef = useRef<HTMLDivElement>(null);
   const [isPrinting, setIsPrinting] = useState(false);
 
+  const { firebaseUser, loading: authLoading } = useAuth();
+
   // Load baseline values (Archive & Settings)
   useEffect(() => {
+    if (authLoading) return;
     setLoadingArchive(true);
     const q = query(collection(db, "circulars"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snap) => {
@@ -206,7 +210,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
       setCirculars(items);
       setLoadingArchive(false);
     }, (err) => {
-      console.error("Error loading circulars in real-time:", err);
+      reportFirestoreListenerError(err, OperationType.LIST, "circulars");
       setLoadingArchive(false);
     });
 
@@ -215,7 +219,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [authLoading, firebaseUser]);
 
   const fetchSettings = async () => {
     try {
@@ -228,8 +232,7 @@ export function AICircularManager({ adminSession, onLogActivity }: AICircularMan
       
       if (settingsMap.public_access !== undefined) {
         setPublicAccessEnabled(settingsMap.public_access);
-      } else {
-        // Initialize if empty
+      } else if (firebaseUser) {
         await addDoc(collection(db, "circular_settings"), {
           key: "public_access",
           value: true

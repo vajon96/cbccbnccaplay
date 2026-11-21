@@ -1,0 +1,329 @@
+ /* ==========================================================
+       IMPROVED TACTICAL STYLES – BANGLADESH ARMY / BNCC
+       Based on classic olive drab, now with national colours 
+       and fully responsive layout.
+       ========================================================== */
+    :root {
+      --bd-green: #006a4e;      /* Bangladesh flag green */
+      --bd-red: #c41e3a;        /* Bangladesh flag red */
+      --army-green: #4B5320;    /* Classic olive drab – retained for tactical feel */
+      --army-dark: #2E3314;
+      --sand: #C2B280;
+      --stencil-font: 'Courier New', Courier, monospace;
+      --shadow-hard: 5px 5px 0px rgba(46, 51, 20, 0.4);
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background-color: #DEE2D1; /* Light camouflage tint */
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* ----- BANGLADESH ARMY HEADER (with flag colors) ----- */
+    header {
+      width: 100%;
+      background: linear-gradient(145deg, var(--bd-green) 0%, #0a5c3e 100%);
+      border-bottom: 5px solid var(--bd-red);
+      padding: 15px 25px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      box-sizing: border-box;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .bd-flag-icon {
+      width: 45px;
+      height: 30px;
+      background: linear-gradient(to bottom, var(--bd-green) 0%, var(--bd-green) 100%);
+      border: 1px solid white;
+      position: relative;
+      display: inline-block;
+    }
+    .bd-flag-icon::after {
+      content: "●";
+      color: var(--bd-red);
+      font-size: 24px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      text-shadow: 0 0 2px black;
+    }
+
+    header img {
+      height: 70px;
+      filter: grayscale(30%) brightness(1.1) contrast(1.2);
+      transition: filter 0.2s;
+    }
+    header img:hover {
+      filter: grayscale(0%) brightness(1.2);
+    }
+
+    .army-title {
+      font-family: var(--stencil-font);
+      color: white;
+      font-size: 2rem;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      margin: 0;
+      text-shadow: 3px 3px 0 #0a3a2e;
+      line-height: 1.2;
+    }
+    .army-sub {
+      font-family: var(--stencil-font);
+      color: var(--sand);
+      font-size: 0.8rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin: 5px 0 0;
+    }
+
+    /* ----- MARQUEE – CSS ONLY (BNCC MOTTO) ----- */
+    .marquee-container {
+      background: var(--army-dark);
+      color: var(--sand);
+      padding: 10px 0;
+      border-bottom: 2px dashed var(--bd-red);
+      border-top: 1px solid var(--bd-green);
+      font-family: var(--stencil-font);
+      letter-spacing: 2px;
+      width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+    .marquee-content {
+      display: inline-block;
+      animation: scrollMarquee 25s linear infinite;
+      padding-left: 100%;
+      font-weight: bold;
+      font-size: 1rem;
+    }
+    @keyframes scrollMarquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+
+    /* ----- TACTICAL NAVIGATION (RESPONSIVE) ----- */
+    .nav-links {
+      display: flex;
+      background: var(--sand);
+      width: 100%;
+      flex-wrap: wrap;
+      border-bottom: 2px solid var(--army-dark);
+    }
+    .nav-links a {
+      flex: 1 1 auto;
+      text-align: center;
+      padding: 14px 16px;
+      text-decoration: none;
+      color: var(--army-dark);
+      font-weight: bold;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      border-right: 1px solid var(--army-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .nav-links a:last-child { border-right: none; }
+    .nav-links a:hover {
+      background: var(--bd-green);
+      color: white;
+    }
+    .nav-links a i { font-size: 1.1em; }
+
+    /* ----- MAIN CONTAINER (RESPONSIVE GRID) ----- */
+    .container {
+      width: 100%;
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 30px 25px;
+      box-sizing: border-box;
+    }
+
+    /* ----- SECTION TITLE (BNCC STYLE) ----- */
+    .section-title {
+      font-family: var(--stencil-font);
+      color: var(--army-dark);
+      font-size: 2rem;
+      text-transform: uppercase;
+      letter-spacing: 5px;
+      border-bottom: 3px solid var(--bd-green);
+      padding-bottom: 12px;
+      margin-bottom: 35px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .section-title span {
+      background: var(--bd-red);
+      color: white;
+      padding: 0 12px;
+      font-size: 1.1rem;
+      border-radius: 2px;
+    }
+
+    /* ----- IMPROVED ARMY ID CARD – BNCC EDITION ----- */
+    .cards-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+    }
+    .id-card {
+      background: #fff;
+      width: 340px;
+      max-width: 100%;
+      border: 3px solid var(--army-dark);
+      box-shadow: var(--shadow-hard);
+      position: relative;
+      transition: all 0.25s ease;
+    }
+    .id-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 8px 8px 0px rgba(46, 51, 20, 0.6);
+    }
+    /* BNCC official header strip */
+    .id-card::before {
+      content: "বাংলাদেশ আর্মি · বিএনসিসি • RESTRICTED";
+      display: block;
+      background: var(--bd-green);
+      color: white;
+      font-size: 11px;
+      padding: 6px 4px;
+      text-align: center;
+      font-weight: bold;
+      font-family: var(--stencil-font);
+      letter-spacing: 1.2px;
+      border-bottom: 2px solid var(--bd-red);
+    }
+    .id-card img {
+      width: 130px;
+      height: 160px;
+      object-fit: cover;
+      border: 2px solid var(--army-dark);
+      margin: 20px auto;
+      display: block;
+      background-color: #d9d2b6;
+    }
+    .id-card h2 {
+      font-family: var(--stencil-font);
+      background: var(--army-dark);
+      color: #fff;
+      margin: 0;
+      padding: 12px;
+      font-size: 1.2rem;
+      text-transform: uppercase;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    .id-card p {
+      margin: 0;
+      padding: 8px 18px;
+      border-bottom: 1px solid #ddd;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .id-card p strong {
+      color: var(--army-dark);
+      font-family: var(--stencil-font);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    /* ----- BNCC TACTICAL STATS PANEL ----- */
+    .stats-panel {
+      display: flex;
+      justify-content: space-evenly;
+      flex-wrap: wrap;
+      margin-top: 60px;
+      background: rgba(0, 106, 78, 0.05);
+      padding: 30px 20px;
+      border-radius: 12px;
+      border-left: 6px solid var(--bd-green);
+      border-right: 6px solid var(--bd-red);
+    }
+    .stat-item {
+      text-align: center;
+      min-width: 130px;
+    }
+    .stat-icon {
+      font-size: 2.5rem;
+      color: var(--bd-green);
+    }
+    .stat-number {
+      font-family: var(--stencil-font);
+      color: var(--army-dark);
+      margin: 8px 0 0;
+      font-size: 2rem;
+      font-weight: 800;
+    }
+    .stat-label {
+      color: var(--army-dark);
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 1.5px;
+    }
+
+    /* ----- FOOTER (BANGLADESH ARMY) ----- */
+    footer {
+      padding: 25px;
+      font-family: var(--stencil-font);
+      font-size: 11px;
+      color: var(--sand);
+      background: var(--army-dark);
+      width: 100%;
+      text-align: center;
+      border-top: 5px solid var(--bd-red);
+      box-sizing: border-box;
+      margin-top: 30px;
+    }
+    footer span {
+      color: var(--sand);
+      font-weight: bold;
+    }
+
+    /* ----- FULLY RESPONSIVE MEDIA QUERIES ----- */
+    @media (max-width: 900px) {
+      .army-title { font-size: 1.8rem; letter-spacing: 4px; }
+    }
+    @media (max-width: 768px) {
+      header { flex-direction: column; text-align: center; }
+      .header-logo { justify-content: center; margin-bottom: 5px; }
+      .army-title { font-size: 1.6rem; }
+    }
+    @media (max-width: 600px) {
+      .nav-links a { flex: 1 1 100%; border-right: none; border-bottom: 1px solid var(--army-green); }
+      .nav-links a:last-child { border-bottom: none; }
+      .section-title { font-size: 1.6rem; flex-wrap: wrap; }
+      .marquee-content { font-size: 0.85rem; animation-duration: 20s; }
+    }
+    @media (max-width: 480px) {
+      .army-title { font-size: 1.3rem; letter-spacing: 3px; }
+      .id-card { width: 100%; }
+      .id-card img { width: 110px; height: 140px; }
+    }
+
+    /* ----- CAMOUFLAGE OVERLAY (subtle) ----- */
+    .camo-bg {
+      background-image: 
+        radial-gradient(circle at 10% 30%, #4b5320 1px, transparent 1px),
+        radial-gradient(circle at 90% 70%, #2e3314 1px, transparent 2px),
+        radial-gradient(circle at 30% 80%, #c2b280 1px, transparent 1px);
+      background-size: 40px 40px;
+    }

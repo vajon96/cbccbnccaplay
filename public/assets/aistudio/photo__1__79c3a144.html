@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Live Image Viewer</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--text:#e6eef8;--muted:#9fb0c9}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071322 0%, #0b1a2b 100%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    .wrap{min-height:100%;display:flex;flex-direction:column;gap:18px;padding:20px;box-sizing:border-box}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    h1{font-size:18px;margin:0;font-weight:600}
+    .controls{display:flex;gap:8px;align-items:center}
+    .card{background:rgba(255,255,255,0.03);border-radius:12px;padding:14px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    .viewer{display:flex;align-items:center;justify-content:center;flex:1;min-height:360px}
+    img#liveImg{max-width:100%;max-height:75vh;border-radius:8px;box-shadow:0 8px 30px rgba(2,6,23,0.6);background:#081829}
+    label{font-size:13px;color:var(--muted)}
+    input[type=number]{width:80px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--text)}
+    button{padding:8px 10px;border-radius:8px;border:0;background:#1f6feb;color:white;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text)}
+    .meta{font-size:13px;color:var(--muted);margin-top:8px}
+    .footer{font-size:12px;color:var(--muted);text-align:center;padding:10px 0}
+    @media (max-width:640px){
+      .controls{flex-direction:column;align-items:flex-start}
+      input[type=number]{width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Live Image Viewer</h1>
+        <div class="meta">Shows the image file (default <code>dd.jpg</code>) and reloads it so you always see the latest version.</div>
+      </div>
+
+      <div class="controls card" aria-hidden="false">
+        <label for="srcInput">Image source (replace if needed)</label>
+        <input id="srcInput" type="text" value="dd.jpg" title="Image URL or filename" />
+        <label for="interval" style="margin-left:8px">Interval (s)</label>
+        <input id="interval" type="number" min="1" value="5" />
+        <button id="toggleBtn" class="ghost">Start Auto</button>
+        <button id="refreshBtn">Refresh</button>
+        <button id="fullBtn" class="ghost">Full Screen</button>
+      </div>
+    </header>
+
+    <main class="card viewer" role="main">
+      <img id="liveImg" src="dd.jpg" alt="Live image (dd.jpg)" />
+    </main>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <strong>Last updated:</strong> <span id="lastUpdated">—</span>
+        </div>
+        <div style="text-align:right">
+          <small class="meta">If the image doesn't update, check CORS or that the server is replacing the file at the same path.</small>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">Tip: replace <code>dd.jpg</code> in the input with the full URL to your image if it's hosted remotely.</footer>
+  </div>
+
+  <script>
+    (function () {
+      const DEFAULT_SRC = 'dd.jpg'; // <-- change here if you want a different default
+      const img = document.getElementById('liveImg');
+      const srcInput = document.getElementById('srcInput');
+      const intervalInput = document.getElementById('interval');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const toggleBtn = document.getElementById('toggleBtn');
+      const fullBtn = document.getElementById('fullBtn');
+      const lastUpdated = document.getElementById('lastUpdated');
+
+      let timer = null;
+      let autoRunning = false;
+
+      function getSrcWithBust(base) {
+        // Append a cache-busting query string so browser fetches fresh copy
+        const sep = base.includes('?') ? '&' : '?';
+        return base + sep + 't=' + Date.now();
+      }
+
+      function updateImage() {
+        const base = (srcInput.value || DEFAULT_SRC).trim();
+        if (!base) return;
+        img.src = getSrcWithBust(base);
+        img.alt = 'Live image (' + base + ')';
+        lastUpdated.textContent = new Date().toLocaleString();
+      }
+
+      function startAuto() {
+        const sec = Math.max(1, Number(intervalInput.value) || 5);
+        stopAuto(); // clear existing
+        timer = setInterval(updateImage, sec * 1000);
+        autoRunning = true;
+        toggleBtn.textContent = 'Stop Auto';
+        toggleBtn.classList.remove('ghost');
+      }
+
+      function stopAuto() {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+        autoRunning = false;
+        toggleBtn.textContent = 'Start Auto';
+        toggleBtn.classList.add('ghost');
+      }
+
+      // Event listeners
+      refreshBtn.addEventListener('click', updateImage);
+      toggleBtn.addEventListener('click', function () {
+        if (autoRunning) stopAuto(); else { updateImage(); startAuto(); }
+      });
+
+      // Update source immediately when user changes URL
+      srcInput.addEventListener('change', function () {
+        updateImage();
+      });
+
+      // If interval changed while running, restart with new interval
+      intervalInput.addEventListener('change', function () {
+        if (autoRunning) startAuto();
+      });
+
+      // Full screen toggle for the image
+      fullBtn.addEventListener('click', function () {
+        if (!document.fullscreenElement) {
+          img.requestFullscreen?.();
+        } else {
+          document.exitFullscreen?.();
+        }
+      });
+
+      // Error handling: show placeholder text if image fails to load
+      img.addEventListener('error', function () {
+        lastUpdated.textContent = 'Error loading image at ' + new Date().toLocaleString();
+      });
+
+      // Load initial image once
+      updateImage();
+
+      // Optional: start auto-refresh by default (comment out if not wanted)
+      // startAuto();
+    })();
+  </script>
+</body>
+</html>

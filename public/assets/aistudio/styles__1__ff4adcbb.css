@@ -1,0 +1,344 @@
+/* General Styles */
+:root {
+    --primary-color: #b71c1c;
+    --secondary-color: #d32f2f;
+    --text-color: white;
+    --hover-color: #9a0007;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-image: url("New Project (1).png");
+    background-color: #ffffff; /* ব্যাকআপ রঙ যদি ইমেজ লোড না হয় */
+    background-size: cover; /* ইমেজ সম্পূর্ণ স্ক্রিনে ফিট করানোর জন্য */
+    background-repeat: no-repeat; /* ইমেজ যেন রিপিট না হয় */
+    background-position: center; /* ইমেজ স্ক্রিনের মাঝে থাকবে */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* অন্তত পুরো ভিউপোর্টের উচ্চতা নিবে */
+}
+
+
+/* Header */
+header {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    padding: 15px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+header img {
+    height: 70px;
+    margin-right: 15px;
+}
+
+header h1 {
+    font-size: 26px;
+    margin: 0;
+    text-align: center;
+}
+
+/* Marquee Alternative */
+.marquee-container {
+    width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.marquee-text {
+    display: inline-block;
+    font-size: 22px;
+    font-weight: bold;
+    animation: marquee 10s linear infinite;
+    will-change: transform; /* Improve animation performance */
+}
+
+@keyframes marquee {
+    from { transform: translateX(100%); }
+    to { transform: translateX(-100%); }
+}
+
+/* Navigation Bar */
+nav {
+    display: flex;
+    justify-content: center;
+    background-color: var(--secondary-color);
+    padding: 10px 0;
+    flex-wrap: wrap;
+}
+
+nav a {
+    color: var(--text-color);
+    text-decoration: none;
+    font-weight: bold;
+    padding: 10px 20px;
+    font-size: 16px;
+    transition: background 0.3s ease-in-out;
+}
+
+nav a:hover {
+    background-color: var(--hover-color);
+}
+
+/* Banner */
+.banner {
+    background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
+    color: var(--text-color);
+    text-align: center;
+    padding: 50px 20px;
+}
+
+.banner h2 {
+    font-size: 36px;
+    margin: 0;
+}
+
+.banner p {
+    font-size: 18px;
+    margin-top: 10px;
+}
+
+/* Main Content */
+main {
+    flex: 1; /* Allows the main content to grow and fill the space */
+    padding: 20px;
+}
+
+/* Section Styles */
+.section {
+    display: none;
+    padding: 30px;
+}
+
+.active {
+    display: block;
+}
+
+/* Footer */
+footer {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    text-align: center;
+    padding: 20px 0;
+    position: relative;
+    z-index: 10;
+}
+
+/* Gallery */
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    padding: 10px;
+}
+
+.gallery img {
+    width: 100%;
+    height: auto;
+    border-radius: 5px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.gallery img:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Rotating Logos Section */
+.container {
+    position: relative;
+    width: 400px;
+    height: 400px;
+    margin: 0 auto;
+}
+
+.center-logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    z-index: 2;
+    animation: float 3s ease-in-out infinite;
+}
+
+.orbit {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    animation: rotate 20s linear infinite;
+}
+
+.orbit img {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    animation: float 4s ease-in-out infinite;
+}
+
+/* Positioning Orbit Logos */
+.orbit img:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
+.orbit img:nth-child(2) { top: 50%; left: 100%; transform: translate(-50%, -50%); }
+.orbit img:nth-child(3) { top: 100%; left: 50%; transform: translate(-50%, -100%); }
+.orbit img:nth-child(4) { top: 50%; left: 0; transform: translateY(-50%); }
+
+/* Keyframes */
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    header {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    nav {
+        flex-direction: column;
+    }
+
+    nav a {
+        width: 100%;
+        text-align: center;
+        padding: 15px;
+    }
+
+    .banner {
+        padding: 30px 10px;
+    }
+
+    .banner h2 {
+        font-size: 30px;
+    }
+}
+
+@media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    nav {
+        flex-direction: column;
+    }
+    
+    nav a {
+        width: 100%;
+        text-align: center;
+        padding: 12px;
+    }
+
+    .banner h2 {
+        font-size: 26px;
+    }
+
+    .gallery {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .container {
+        width: 300px;
+        height: 300px;
+    }
+
+    .orbit img {
+        width: 80px;
+        height: 80px;
+    }
+
+    .center-logo {
+        width: 90px;
+        height: 90px;
+    }
+}
+
+@media (max-width: 480px) {
+    header {
+        padding: 10px;
+    }
+
+    header img {
+        height: 50px;
+    }
+
+    .banner h2 {
+        font-size: 22px;
+    }
+
+    .banner p {
+        font-size: 14px;
+    }
+
+    nav a {
+        font-size: 14px;
+        padding: 8px;
+    }
+
+    .gallery {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .container {
+        width: 250px;
+        height: 250px;
+    }
+
+    .orbit img {
+        width: 70px;
+        height: 70px;
+    }
+
+    .center-logo {
+        width: 80px;
+        height: 80px;
+    }
+} .form-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+iframe {
+    width: 80%;
+    height: 600px;
+    max-width: 800px;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    transition: 0.3s ease-in-out;
+}
+
+@media (max-width: 768px) {
+    iframe {
+        width: 95%;
+        height: 500px;
+    }
+}
+
+@media (max-width: 480px) {
+    iframe {
+        width: 100%;
+        height: 450px;
+    }
+}

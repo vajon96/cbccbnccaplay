@@ -1,50 +1,151 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Users, CheckCircle, XCircle, Download, Trash2, 
-  Search, Filter, FileSpreadsheet, Archive, LogOut, Shield,
-  X, Sparkles, BrainCircuit, Info, FileText, HelpCircle,
-  History, Key, Edit, Save, AlertCircle, Loader2, Eye, EyeOff, ExternalLink,
-  MessageSquare, UserPlus, Settings, ShieldCheck, ShieldAlert, Lock, Unlock, ArrowRight,
-  TrendingUp, PieChart as PieChartIcon, BarChart as BarChartIcon, Bell, Megaphone, Activity, QrCode,
-  Camera, Globe, MapPin, Clock
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Users,
+  CheckCircle,
+  Download,
+  Trash2,
+  FileSpreadsheet,
+  Archive,
+  Shield,
+  X,
+  FileText,
+  Key,
+  Edit,
+  Loader2,
+  ExternalLink,
+  MessageSquare,
+  UserPlus,
+  Settings,
+  TrendingUp,
+  PieChart as PieChartIcon,
+  Bell,
+  Megaphone,
+  Activity,
+  QrCode,
+  Camera,
+  Globe,
+  MapPin,
+  Award,
+  Mail,
+  RefreshCw,
+  Menu,
+  FolderKanban,
+  ArrowRight,
+  Power,
 } from "lucide-react";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line
-} from 'recharts';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
-import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc, where, getDocs, writeBatch } from "../firebase";
+import {
+  db,
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  getDoc,
+  updateDoc,
+  setDoc,
+  deleteDoc,
+  Timestamp,
+  handleFirestoreError,
+  reportFirestoreListenerError,
+  OperationType,
+  addDoc,
+  where,
+  getDocs,
+  writeBatch,
+} from "../firebase";
 import { getAdminInsights, getApplicantSummary } from "../services/geminiService";
-import { getSession, clearSession, hashPassword } from "../lib/auth";
+import {
+  getSession,
+  hashPassword,
+  SUPER_ADMIN_EMAIL,
+} from "../lib/auth";
+import { useAuth } from "../context/AuthContext";
+import { useCMS } from "../context/CMSContext";
+import { isAdminRole } from "../lib/rbac";
 import { AuditLogs } from "../components/modular/AuditLogs";
-import { BulkActions } from "../components/modular/BulkActions";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
-import { AICircularManager } from "../components/modular/AICircularManager";
-import { AIGuideManager } from "../components/modular/AIGuideManager";
 import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
 import { PendingProfileApprovals } from "../components/cadet/PendingProfileApprovals";
+import { CMSControlCenter } from "../components/cms/CMSControlCenter";
+import {
+  AdminSidebar,
+  AdminModuleId,
+  ADMIN_MODULE_LABELS,
+} from "../components/admin/AdminSidebar";
+import { MediaManager } from "../components/admin/MediaManager";
+import { ExamPortalWorkspace } from "../components/admin/ExamPortalWorkspace";
+import { AdmissionPortalWorkspace } from "../components/admin/AdmissionPortalWorkspace";
+import { AdmissionQrWorkspace } from "../components/admin/AdmissionQrWorkspace";
+
+const MODULE_STORAGE_KEY = "cbcc_admin_active_module_v1";
+const VALID_MODULES = new Set<AdminModuleId>([
+  "overview",
+  "website",
+  "content",
+  "users",
+  "media",
+  "suite-exam",
+  "suite-admission",
+  "suite-qr",
+  "notifications",
+  "logs",
+  "settings",
+  "security",
+]);
+
+function resolveInitialModule(urlParam: string | null): AdminModuleId {
+  if (urlParam && VALID_MODULES.has(urlParam as AdminModuleId)) {
+    return urlParam as AdminModuleId;
+  }
+  try {
+    const saved = localStorage.getItem(MODULE_STORAGE_KEY);
+    if (saved && VALID_MODULES.has(saved as AdminModuleId)) {
+      return saved as AdminModuleId;
+    }
+  } catch {
+    // ignore
+  }
+  return "overview";
+}
 
 export function AdminDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeModule, setActiveModule] = useState<AdminModuleId>(() =>
+    resolveInitialModule(searchParams.get("module"))
+  );
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
   const [applicants, setApplicants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [bnccFilter, setBnccFilter] = useState<"All" | "Previous" | "NonPrevious">("All");
+
   const [aiInsights, setAiInsights] = useState("");
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
-  const [applicantSummaries, setApplicantSummaries] = useState<{[key: string]: string}>({});
+  const [applicantSummaries, setApplicantSummaries] = useState<Record<string, string>>({});
   const [loadingSummaryId, setLoadingSummaryId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"applicants" | "logs" | "admins" | "analytics" | "broadcast" | "circular" | "guide" | "passwordResets" | "profileApprovals">("applicants");
+
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
   const [adminSession, setAdminSession] = useState<any>(null);
-  
-  // Create Admin State
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Admin creation & permission states
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [adminName, setAdminName] = useState("");
   const [adminUsername, setAdminUsername] = useState("");
@@ -57,124 +158,235 @@ export function AdminDashboard() {
     canResetPW: false,
     canApprove: true,
     canExport: false,
-    canChat: true
+    canChat: true,
   });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
-
-  // Edit Admin Permissions State
   const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
   const [editPermissions, setEditPermissions] = useState<any>(null);
   const [updatingPermissions, setUpdatingPermissions] = useState(false);
+  const [confirmDeleteAdminId, setConfirmDeleteAdminId] = useState<string | null>(null);
 
+  // Applicant password reset modal
   const [showPasswordReset, setShowPasswordReset] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
-  const [showPasswordId, setShowPasswordId] = useState<string | null>(null);
-  const [selectedApplicants, setSelectedApplicants] = useState<string[]>([]);
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [confirmDismissResetId, setConfirmDismissResetId] = useState<string | null>(null);
 
-  // Admin QR login management state
+  // Admin QR modal & system credentials
   const [selectedQrAdmin, setSelectedQrAdmin] = useState<any>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [generatedCredentials, setGeneratedCredentials] = useState<{username: string, password: string} | null>(null);
-  
-  // Broadcast State
+  const [generatedCredentials, setGeneratedCredentials] = useState<{
+    username: string;
+    password: string;
+  } | null>(null);
+
+  // Broadcast state
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastType, setBroadcastType] = useState("Announcement");
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [editingNotificationId, setEditingNotificationId] = useState<string | null>(null);
+  const [confirmDeleteBroadcastId, setConfirmDeleteBroadcastId] = useState<string | null>(null);
+
+  // Inquiries
+  const [inquiries, setInquiries] = useState<any[]>([]);
+  const [loadingInquiries, setLoadingInquiries] = useState(false);
+  const [savingWebsiteToggle, setSavingWebsiteToggle] = useState(false);
+
+  const [toastMessage, setToastMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   const navigate = useNavigate();
+  const {
+    firebaseUser,
+    loading: authLoading,
+    startImpersonation,
+    logout,
+  } = useAuth();
+  const { settings: cmsSettings, saveSettings } = useCMS();
+
+  const handleSelectModule = (id: AdminModuleId) => {
+    setActiveModule(id);
+    try {
+      localStorage.setItem(MODULE_STORAGE_KEY, id);
+    } catch {
+      // ignore
+    }
+    setSearchParams({ module: id }, { replace: true });
+    if (id === "notifications") {
+      void loadContactInquiries();
+    }
+  };
 
   useEffect(() => {
+    const paramMod = searchParams.get("module");
+    if (paramMod && VALID_MODULES.has(paramMod as AdminModuleId) && paramMod !== activeModule) {
+      setActiveModule(paramMod as AdminModuleId);
+    }
+  }, [searchParams]);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMessage({ type, text });
+    window.setTimeout(() => {
+      setToastMessage((prev) => (prev?.text === text ? null : prev));
+    }, 5000);
+  };
+
+  const loadContactInquiries = async () => {
+    setLoadingInquiries(true);
+    try {
+      const res = await fetch("/api/contact", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setInquiries(Array.isArray(data?.inquiries) ? data.inquiries : []);
+      }
+    } catch (err) {
+      console.error("Failed to load inquiries:", err);
+    } finally {
+      setLoadingInquiries(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authLoading) return;
+
     const session = getSession();
-    if (!session || (session.role !== "admin" && session.role !== "super_admin")) {
+    if (!session || !isAdminRole(session.role)) {
       navigate("/login");
       return;
     }
     setAdminSession(session);
+    void loadContactInquiries();
 
-    const q = query(collection(db, "applicants"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const applicantsData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-      setApplicants(applicantsData);
+    if (!firebaseUser) {
       setLoading(false);
-      setError(null);
-    }, (err) => {
-      console.error("Firestore onSnapshot error:", err);
-      setError("ডেটা লোড করতে সমস্যা হচ্ছে।");
-      setLoading(false);
-    });
-
-    // Fetch logs
-    const logsQ = query(collection(db, "activity_logs"), orderBy("timestamp", "desc"));
-    const logsUnsubscribe = onSnapshot(logsQ, (snapshot) => {
-      const logsData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-      setLogs(logsData);
-    });
-
-    // Fetch password resets
-    const resetsQ = query(collection(db, "password_resets"), orderBy("createdAt", "desc"));
-    const resetsUnsubscribe = onSnapshot(resetsQ, (snapshot) => {
-      const resetsData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-      setPasswordResets(resetsData);
-    });
-
-    // Fetch notifications
-    const notifQ = query(collection(db, "notifications"), orderBy("timestamp", "desc"));
-    const notifUnsubscribe = onSnapshot(notifQ, (snapshot) => {
-      const notifData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-      setNotifications(notifData);
-    });
-
-    // Fetch admins (only for super admin)
-    let adminsUnsubscribe = () => {};
-    if (session.role === "super_admin") {
-      const adminsQ = query(collection(db, "admins"), orderBy("createdAt", "desc"));
-      adminsUnsubscribe = onSnapshot(adminsQ, (snapshot) => {
-        const adminsData = snapshot.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id
-        }));
-        setAdmins(adminsData);
-      });
+      return;
     }
 
-    return () => {
-      unsubscribe();
-      logsUnsubscribe();
-      adminsUnsubscribe();
-      resetsUnsubscribe();
-      notifUnsubscribe();
-    };
-  }, [navigate]);
+    let cancelled = false;
+    const unsubscribers: Array<() => void> = [];
 
+    const startAdminListeners = async () => {
+      setLoading(true);
+
+      const providerEmail = firebaseUser.providerData?.find((p) => p.email)?.email || "";
+      const emailLower = (firebaseUser.email || providerEmail || "").toLowerCase();
+      try {
+        let adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
+        if (cancelled) return;
+        if (!adminDoc.exists() && emailLower === SUPER_ADMIN_EMAIL) {
+          await setDoc(
+            doc(db, "admins", firebaseUser.uid),
+            {
+              uid: firebaseUser.uid,
+              name: firebaseUser.displayName || "Platoon Commander",
+              username: "admin",
+              email: emailLower,
+              role: "super_admin",
+              isActive: true,
+              permissions: {
+                canAdd: true,
+                canEdit: true,
+                canDelete: true,
+                canViewLogs: true,
+                canResetPW: true,
+                canApprove: true,
+                canExport: true,
+                canChat: true,
+              },
+              updatedAt: Timestamp.now(),
+            },
+            { merge: true }
+          ).catch(() => {});
+          adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
+          if (cancelled) return;
+        }
+        if (!adminDoc.exists()) {
+          setLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        reportFirestoreListenerError(err, OperationType.GET, `admins/${firebaseUser.uid}`);
+        setLoading(false);
+        return;
+      }
+
+      if (cancelled) return;
+
+      const handleListenerError = (path: string) => (err: any) => {
+        reportFirestoreListenerError(err, OperationType.LIST, path);
+        setLoading(false);
+      };
+
+      unsubscribers.push(
+        onSnapshot(
+          query(collection(db, "applicants"), orderBy("createdAt", "desc")),
+          (snapshot) => {
+            setApplicants(snapshot.docs.map((d) => ({ ...d.data(), id: d.id })));
+            setLoading(false);
+          },
+          handleListenerError("applicants")
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          query(collection(db, "activity_logs"), orderBy("timestamp", "desc")),
+          (snapshot) => setLogs(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
+          (err) => reportFirestoreListenerError(err, OperationType.LIST, "activity_logs")
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          query(collection(db, "password_resets"), orderBy("createdAt", "desc")),
+          (snapshot) => setPasswordResets(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
+          (err) => reportFirestoreListenerError(err, OperationType.LIST, "password_resets")
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          query(collection(db, "notifications"), orderBy("timestamp", "desc")),
+          (snapshot) => setNotifications(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
+          (err) => reportFirestoreListenerError(err, OperationType.LIST, "notifications")
+        )
+      );
+
+      if (session.role === "super_admin") {
+        unsubscribers.push(
+          onSnapshot(
+            query(collection(db, "admins"), orderBy("createdAt", "desc")),
+            (snapshot) => setAdmins(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
+            (err) => reportFirestoreListenerError(err, OperationType.LIST, "admins")
+          )
+        );
+      }
+    };
+
+    void startAdminListeners();
+
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((u) => u());
+    };
+  }, [navigate, authLoading, firebaseUser?.uid]);
+
+  // Handlers
   const handleCreateAdmin = async () => {
     if (!adminName || !adminUsername || !adminPassword) return;
     setCreatingAdmin(true);
     try {
-      // Check if username exists in admins
-      const q = query(collection(db, "admins"), where("username", "==", adminUsername.toLowerCase()));
-      const snap = await getDocs(q);
+      const snap = await getDocs(
+        query(collection(db, "admins"), where("username", "==", adminUsername.toLowerCase()))
+      );
       if (!snap.empty) {
-        alert("This username is already taken.");
+        showToast("This username is already taken.", "error");
         return;
       }
-
       const hashedPassword = await hashPassword(adminPassword);
       await addDoc(collection(db, "admins"), {
         name: adminName,
@@ -182,27 +394,22 @@ export function AdminDashboard() {
         password: hashedPassword,
         role: "admin",
         permissions: adminPermissions,
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
       });
-
-      // Log activity
       await addDoc(collection(db, "activity_logs"), {
         type: "ADMIN_CREATED",
         targetId: adminUsername,
-        actorId: adminSession.id,
+        actorId: adminSession?.id || "super_admin",
         timestamp: Timestamp.now(),
-        details: `Super Admin created new admin: ${adminUsername}`
+        details: `Super Admin created new admin: ${adminUsername}`,
       });
-
       setShowAddAdmin(false);
       setAdminName("");
       setAdminUsername("");
       setAdminPassword("");
-      alert("Admin created successfully!");
+      showToast("Admin created successfully!");
     } catch (err: any) {
-      console.error("Create admin error:", err);
-      const errorMessage = err?.message || "Unknown error";
-      alert(`Failed to create admin: ${errorMessage}`);
+      showToast(`Failed to create admin: ${err?.message || "Unknown error"}`, "error");
     } finally {
       setCreatingAdmin(false);
     }
@@ -211,8 +418,6 @@ export function AdminDashboard() {
   const handleGenerateQrAdmin = async () => {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const genUsername = `qr_admin_${randomSuffix}`;
-    
-    // Generate system random password
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let genPassword = "";
     for (let i = 0; i < 12; i++) {
@@ -235,36 +440,32 @@ export function AdminDashboard() {
           canResetPW: false,
           canApprove: false,
           canExport: false,
-          canChat: false
+          canChat: false,
         },
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
       });
-
-      // Log activity
       await addDoc(collection(db, "activity_logs"), {
         type: "ADMIN_CREATED",
         targetId: genUsername,
         actorId: adminSession?.id || "super_admin",
         timestamp: Timestamp.now(),
-        details: `Super Admin generated system QR Admin account: ${genUsername}`
+        details: `Super Admin generated system QR Admin account: ${genUsername}`,
       });
-
       setGeneratedCredentials({ username: genUsername, password: genPassword });
-    } catch (err: any) {
-      console.error("Generate QR Admin error:", err);
-      alert("Failed to generate QR Admin.");
+    } catch {
+      showToast("Failed to generate QR Admin.", "error");
     } finally {
       setCreatingAdmin(false);
     }
   };
 
   const deleteAdmin = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this admin?")) return;
     try {
       await deleteDoc(doc(db, "admins", id));
-      alert("Admin removed.");
-    } catch (err) {
-      console.error("Delete admin error:", err);
+      setConfirmDeleteAdminId(null);
+      showToast("Admin removed.");
+    } catch {
+      showToast("Failed to remove admin.", "error");
     }
   };
 
@@ -272,63 +473,48 @@ export function AdminDashboard() {
     if (!editingAdminId || !editPermissions) return;
     setUpdatingPermissions(true);
     try {
-      await updateDoc(doc(db, "admins", editingAdminId), {
-        permissions: editPermissions
-      });
-      
-      // Log activity
+      await updateDoc(doc(db, "admins", editingAdminId), { permissions: editPermissions });
       await addDoc(collection(db, "activity_logs"), {
         type: "ADMIN_PERMISSIONS_UPDATED",
         targetId: editingAdminId,
-        actorId: adminSession.id,
+        actorId: adminSession?.id || "super_admin",
         timestamp: Timestamp.now(),
-        details: `Super Admin updated permissions for admin ID: ${editingAdminId}`
+        details: `Super Admin updated permissions for admin ID: ${editingAdminId}`,
       });
-
       setEditingAdminId(null);
-      alert("Permissions updated successfully!");
-    } catch (err) {
-      console.error("Update permissions error:", err);
-      alert("Failed to update permissions.");
+      showToast("Permissions updated successfully!");
+    } catch {
+      showToast("Failed to update permissions.", "error");
     } finally {
       setUpdatingPermissions(false);
     }
   };
 
-  const handleLogout = () => {
-    clearSession();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
   const handleResetPassword = async () => {
     if (!showPasswordReset || !newPassword) return;
-    
-    // Check permission
-    if (!adminSession?.permissions?.canResetPW) {
-      alert("আপনার এই কাজটি করার অনুমতি নেই। (Permission Denied)");
+    if (!adminSession?.permissions?.canResetPW && adminSession?.role !== "super_admin") {
+      showToast("আপনার এই কাজটি করার অনুমতি নেই। (Permission Denied)", "error");
       return;
     }
-
     setResetting(true);
     try {
       const hashedPassword = await hashPassword(newPassword);
-      await updateDoc(doc(db, "applicants", showPasswordReset), {
-        password: hashedPassword
-      });
-
-      // Log activity
-      const session = getSession();
+      await updateDoc(doc(db, "applicants", showPasswordReset), { password: hashedPassword });
       await addDoc(collection(db, "activity_logs"), {
         type: "PASSWORD_RESET_BY_ADMIN",
         targetId: showPasswordReset,
-        actorId: session.id,
+        actorId: adminSession?.id || "admin",
         timestamp: Timestamp.now(),
-        details: `Admin reset password for user ${showPasswordReset}`
+        details: `Admin reset password for user ${showPasswordReset}`,
       });
-
       setShowPasswordReset(null);
       setNewPassword("");
-      alert("Password reset successfully!");
+      showToast("Password reset successfully!");
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `applicants/${showPasswordReset}`);
     } finally {
@@ -336,203 +522,226 @@ export function AdminDashboard() {
     }
   };
 
-  const handleAdminLoginAsUser = (applicant: any) => {
-    // Set a temporary session that mimics the user but keeps admin context if needed
-    // For simplicity, we'll just set the user session and redirect
-    localStorage.setItem("bncc_session", JSON.stringify({
+  const handleAdminLoginAsUser = async (applicant: any) => {
+    await startImpersonation({
       id: applicant.id,
-      role: "user",
-      expiry: Date.now() + 1000 * 60 * 60 // 1 hour
-    }));
+      name: applicant.fullNameEnglish || applicant.fullNameBangla || "BNCC Cadet",
+      registrationNumber: applicant.registrationNumber || applicant.id,
+      email: applicant.studentEmail,
+    });
     navigate("/dashboard");
   };
 
-  const updateStatus = async (id: string, status?: string) => {
-    // Check permission
-    if (status && !adminSession?.permissions?.canApprove) {
-      alert("আপনার আবেদন অনুমোদন করার অনুমতি নেই।");
+  const updateStatus = async (id: string, status: string) => {
+    if (!adminSession?.permissions?.canApprove && adminSession?.role !== "super_admin") {
+      showToast("আপনার আবেদন অনুমোদন করার অনুমতি নেই।", "error");
       return;
     }
-
-    const path = `applicants/${id}`;
     try {
-      const docRef = doc(db, "applicants", id);
-      const updates: any = {};
-      if (status) updates.status = status;
-      await updateDoc(docRef, updates);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      await updateDoc(doc(db, "applicants", id), { status });
+      await setDoc(
+        doc(db, "public_qr_cards", id),
+        {
+          status,
+          isValidCadet: status === "Approved" || status === "Joined",
+          updatedAt: Timestamp.now(),
+        },
+        { merge: true }
+      ).catch(() => {});
+      showToast(`আবেদন স্ট্যাটাস '${status}' করা হয়েছে।`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `applicants/${id}`);
+    }
+  };
+
+  const toggleAccountActivation = async (app: any) => {
+    if (!adminSession?.permissions?.canEdit && adminSession?.role !== "super_admin") {
+      showToast("আপনার অ্যাকাউন্ট স্ট্যাটাস পরিবর্তন করার অনুমতি নেই।", "error");
+      return;
+    }
+    const nextActive = app.isActive === false;
+    try {
+      await updateDoc(doc(db, "applicants", app.id), {
+        isActive: nextActive,
+        accountStatus: nextActive ? "Active" : "Suspended",
+      });
+      await addDoc(collection(db, "activity_logs"), {
+        type: nextActive ? "ACCOUNT_ACTIVATED" : "ACCOUNT_SUSPENDED",
+        targetId: app.id,
+        actorId: adminSession?.id || "super_admin",
+        timestamp: Timestamp.now(),
+        details: `Admin set account ${app.id} to ${nextActive ? "Active" : "Suspended"}`,
+      }).catch(() => {});
+      showToast(`অ্যাকাউন্ট ${app.id} ${nextActive ? "সক্রিয় (Active)" : "স্থগিত (Suspended)"} করা হয়েছে।`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `applicants/${app.id}`);
     }
   };
 
   const deleteApplicant = async (id: string) => {
-    // Check permission
-    if (!adminSession?.permissions?.canDelete) {
-      alert("আপনার রেকর্ড মুছে ফেলার অনুমতি নেই।");
+    if (!adminSession?.permissions?.canDelete && adminSession?.role !== "super_admin") {
+      showToast("আপনার রেকর্ড মুছে ফেলার অনুমতি নেই।", "error");
       return;
     }
-
-    if (!confirm("আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?")) return;
-    const path = `applicants/${id}`;
     try {
       await deleteDoc(doc(db, "applicants", id));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      showToast("রেকর্ড মুছে ফেলা হয়েছে।");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `applicants/${id}`);
     }
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedApplicants(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleBulkAction = async (action: 'Approve' | 'Reject' | 'Delete') => {
-    if (selectedApplicants.length === 0) return;
-    if (!confirm(`Are you sure you want to ${action} ${selectedApplicants.length} candidates?`)) return;
-
-    setIsBulkProcessing(true);
+  const handleBulkAction = async (ids: string[], action: "Approve" | "Reject" | "Delete") => {
+    if (ids.length === 0) return;
     try {
       const batch = writeBatch(db);
-      selectedApplicants.forEach(id => {
+      ids.forEach((id) => {
         const ref = doc(db, "applicants", id);
-        if (action === 'Delete') {
+        const qrRef = doc(db, "public_qr_cards", id);
+        if (action === "Delete") {
           batch.delete(ref);
+          batch.delete(qrRef);
         } else {
-          batch.update(ref, { status: action });
+          const nextStatus = action === "Approve" ? "Approved" : "Rejected";
+          batch.update(ref, { status: nextStatus });
+          batch.set(
+            qrRef,
+            {
+              status: nextStatus,
+              isValidCadet: nextStatus === "Approved",
+              updatedAt: Timestamp.now(),
+            },
+            { merge: true }
+          );
         }
       });
       await batch.commit();
-
-      // Log bulk activity
       await addDoc(collection(db, "activity_logs"), {
         type: `BULK_${action.toUpperCase()}`,
         targetId: "MULTIPLE",
-        actorId: adminSession.id,
+        actorId: adminSession?.id || "admin",
         timestamp: Timestamp.now(),
-        details: `Admin performed bulk ${action} on ${selectedApplicants.length} candidates.`
+        details: `Admin performed bulk ${action} on ${ids.length} candidates.`,
       });
-
-      setSelectedApplicants([]);
-      alert(`Bulk ${action} completed successfully.`);
-    } catch (err) {
-      console.error("Bulk action error:", err);
-      alert("Bulk action failed.");
-    } finally {
-      setIsBulkProcessing(false);
+      showToast(`Bulk ${action} completed successfully.`);
+    } catch {
+      showToast("Bulk action failed.", "error");
     }
   };
 
   const handleBroadcast = async () => {
     if (!broadcastMessage.trim() || !broadcastTitle.trim()) {
-      alert("Please enter both title and message.");
+      showToast("Please enter both title and message.", "error");
       return;
     }
     setSendingBroadcast(true);
     try {
       if (editingNotificationId) {
-        // Update existing notification
         await updateDoc(doc(db, "notifications", editingNotificationId), {
           title: broadcastTitle,
           message: broadcastMessage,
           type: broadcastType,
-          timestamp: Timestamp.now(), // Update timestamp so it shows up as fresh/updated
-          actorId: adminSession.id
+          timestamp: Timestamp.now(),
+          actorId: adminSession?.id || "admin",
         });
-
-        // Log activity
         await addDoc(collection(db, "activity_logs"), {
           type: "BROADCAST_EDITED",
           targetId: "ALL_CADETS",
-          actorId: adminSession.id,
+          actorId: adminSession?.id || "admin",
           timestamp: Timestamp.now(),
-          details: `Admin updated broadcast message: ${broadcastTitle} - ${broadcastMessage.substring(0, 50)}...`
+          details: `Admin updated broadcast notice: ${broadcastTitle}`,
         });
-
         setBroadcastMessage("");
         setBroadcastTitle("");
         setEditingNotificationId(null);
-        alert("Broadcast notice updated successfully!");
+        showToast("Broadcast notice updated successfully!");
       } else {
-        // Create new notification
         await addDoc(collection(db, "notifications"), {
           title: broadcastTitle,
           message: broadcastMessage,
           type: broadcastType,
-          targetId: "ALL", // Every cadet sees this
+          targetId: "ALL",
           isRead: false,
           timestamp: Timestamp.now(),
-          actorId: adminSession.id
+          actorId: adminSession?.id || "admin",
         });
-
-        // Log activity
         await addDoc(collection(db, "activity_logs"), {
           type: "BROADCAST_SENT",
           targetId: "ALL_CADETS",
-          actorId: adminSession.id,
+          actorId: adminSession?.id || "admin",
           timestamp: Timestamp.now(),
-          details: `Admin sent a broadcast message: ${broadcastTitle} - ${broadcastMessage.substring(0, 50)}...`
+          details: `Admin sent broadcast notice: ${broadcastTitle}`,
         });
-
         setBroadcastMessage("");
         setBroadcastTitle("");
-        alert("Announcement sent to all cadets!");
+        showToast("Announcement sent to all cadets!");
       }
-    } catch (err) {
-      console.error("Broadcast error:", err);
-      alert("Failed to save broadcast notice.");
+    } catch {
+      showToast("Failed to save broadcast notice.", "error");
     } finally {
       setSendingBroadcast(false);
     }
   };
 
   const handleDeleteBroadcast = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this broadcast notice? This action cannot be undone.")) return;
     try {
       await deleteDoc(doc(db, "notifications", id));
-      // Log activity
       await addDoc(collection(db, "activity_logs"), {
         type: "BROADCAST_DELETED",
         targetId: "ALL_CADETS",
-        actorId: adminSession.id,
+        actorId: adminSession?.id || "admin",
         timestamp: Timestamp.now(),
-        details: `Admin deleted broadcast notice ID: ${id}`
+        details: `Admin deleted broadcast notice ID: ${id}`,
       });
-      alert("Broadcast notice deleted successfully.");
+      setConfirmDeleteBroadcastId(null);
       if (editingNotificationId === id) {
         setBroadcastTitle("");
         setBroadcastMessage("");
         setEditingNotificationId(null);
       }
-    } catch (err) {
-      console.error("Delete broadcast error:", err);
-      alert("Failed to delete broadcast notice.");
+      showToast("Broadcast notice deleted successfully.");
+    } catch {
+      showToast("Failed to delete broadcast notice.", "error");
     }
   };
 
-  const handleCancelEdit = () => {
-    setBroadcastTitle("");
-    setBroadcastMessage("");
-    setEditingNotificationId(null);
-  };
-
   const exportToExcel = () => {
-    const dataToExport = applicants.map(({ photo, ...rest }) => ({
+    const dataToExport = applicants.map(({ photo, password, passwordHash, ...rest }) => ({
       ...rest,
-      height: `${rest.heightFeet}'${rest.heightInches}" (${rest.heightFeet} feet ${rest.heightInches} inches)`,
-      createdAt: new Date(rest.createdAt).toLocaleString()
+      height: `${rest.heightFeet || 0}'${rest.heightInches || 0}"`,
+      createdAt: rest.createdAt ? new Date(rest.createdAt).toLocaleString() : "",
     }));
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Applicants");
-    XLSX.writeFile(workbook, `BNCC_Applicants_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(workbook, `BNCC_Applicants_${new Date().toISOString().split("T")[0]}.xlsx`);
+    showToast("Excel ফাইল ডাউনলোড শুরু হয়েছে।");
+  };
+
+  const exportJsonBackup = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      organization: "Cox's Bazar City College BNCC Platoon",
+      summary: {
+        applicants: applicants.length,
+        admins: admins.length,
+        notifications: notifications.length,
+      },
+      applicants: applicants.map(({ passwordHash, password, ...safe }) => safe),
+      notifications,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `BNCC_Full_Backup_${new Date().toISOString().split("T")[0]}.json`;
+    link.click();
+    showToast("পূর্ণাঙ্গ JSON ব্যাকআপ ডাউনলোড সম্পন্ন হয়েছে।");
   };
 
   const downloadPhotosZip = async () => {
     const zip = new JSZip();
     applicants.forEach((app) => {
-      if (app.photo) {
+      if (app.photo && app.photo.includes(",")) {
         const base64Data = app.photo.split(",")[1];
         zip.file(`${app.id}.jpg`, base64Data, { base64: true });
       }
@@ -543,18 +752,6 @@ export function AdminDashboard() {
     link.download = "Applicant_Photos.zip";
     link.click();
   };
-
-  const filteredApplicants = applicants.filter(app => {
-    const fullName = `${app.fullNameEnglish || ""} ${app.fullNameBangla || ""}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
-                          (app.classRoll || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (app.emisId || "").toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || app.status === statusFilter;
-    const matchesBncc = bnccFilter === "All" || 
-                        (bnccFilter === "Previous" && app.previousBNCC === true) ||
-                        (bnccFilter === "NonPrevious" && !app.previousBNCC);
-    return matchesSearch && matchesStatus && matchesBncc;
-  });
 
   const runAiInsights = async () => {
     if (applicants.length === 0) return;
@@ -567,1199 +764,1016 @@ export function AdminDashboard() {
   const runApplicantSummary = async (app: any) => {
     setLoadingSummaryId(app.id);
     const summary = await getApplicantSummary(app);
-    setApplicantSummaries(prev => ({ ...prev, [app.id]: summary }));
+    setApplicantSummaries((prev) => ({ ...prev, [app.id]: summary }));
     setLoadingSummaryId(null);
+  };
+
+  const toggleSettingFlag = async (
+    key: "examPortalOpen" | "enrollmentOpen" | "offlineFormOpen" | "noticeTickerEnabled",
+    nextVal: boolean
+  ) => {
+    setSavingWebsiteToggle(true);
+    try {
+      await saveSettings({
+        ...cmsSettings,
+        [key]: nextVal,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: adminSession?.name || adminSession?.username || "Main Admin",
+      });
+      showToast("সেটিংস সফলভাবে আপডেট করা হয়েছে।");
+    } catch {
+      showToast("সেটিংস আপডেট করতে সমস্যা হয়েছে।", "error");
+    } finally {
+      setSavingWebsiteToggle(false);
+    }
   };
 
   const stats = {
     total: applicants.length,
-    pending: applicants.filter(a => a.status === 'Pending').length,
-    approved: applicants.filter(a => a.status === 'Approved').length,
+    pending: applicants.filter((a) => a.status === "Pending").length,
+    approved: applicants.filter((a) => a.status === "Approved" || a.status === "Joined").length,
+    rejected: applicants.filter((a) => a.status === "Rejected").length,
   };
 
-  if (loading) return <div className="flex items-center justify-center h-screen text-slate-200 bg-bg-light font-bold">তথ্য লোড হচ্ছে...</div>;
+  const pendingResetsCount = passwordResets.filter((r) => r.status === "pending").length;
+  const activeMeta = ADMIN_MODULE_LABELS[activeModule];
 
-  if (error) {
+  if (loading && !adminSession) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-bg-light text-slate-200 p-4 text-center space-y-4">
-        <XCircle className="w-16 h-16 text-primary" />
-        <h2 className="text-xl font-bold">ত্রুটি ঘটেছে!</h2>
-        <p className="text-slate-400 max-w-md">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-6 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-        >
-          আবার চেষ্টা করুন
-        </button>
+      <div className="flex items-center justify-center min-h-[75vh] text-slate-200 bg-[#020B18] font-bold">
+        তথ্য লোড হচ্ছে...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-bg-light">
-      <div className="max-w-7xl mx-auto px-4 py-12 space-y-8">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-primary p-6 md:p-8 rounded-[2rem] text-white shadow-xl">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">অ্যাডমিন ড্যাশবোর্ড</h1>
-            <p className="text-white/70 text-sm">সকল আবেদনকারী এবং তাদের স্ট্যাটাস পরিচালনা করুন</p>
+    <div className="min-h-screen bg-[#020B18] text-slate-100 flex">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-6 right-6 z-[95] px-5 py-3.5 rounded-xl shadow-2xl border text-xs font-bold flex items-center gap-3 ${
+            toastMessage.type === "error"
+              ? "bg-rose-950/95 border-rose-500/40 text-rose-100"
+              : "bg-emerald-950/95 border-emerald-500/40 text-emerald-100"
+          }`}
+        >
+          <span>{toastMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            aria-label="Close notification"
+            className="text-white/70 hover:text-white cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Persistent Hierarchical Sidebar */}
+      <AdminSidebar
+        activeModule={activeModule}
+        onSelectModule={handleSelectModule}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
+        adminName={adminSession?.name || "Main Admin"}
+        adminRole={adminSession?.role || "super_admin"}
+        pendingApplicantsCount={stats.pending}
+        pendingResetsCount={pendingResetsCount}
+        canViewLogs={Boolean(adminSession?.permissions?.canViewLogs || adminSession?.role === "super_admin")}
+        isSuperAdmin={adminSession?.role === "super_admin"}
+        onLogout={handleLogout}
+      />
+
+      {/* Main Content Shell */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Top Module Header */}
+        <header className="sticky top-16 z-20 bg-[#031024]/95 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label="Open admin menu"
+              className="lg:hidden p-2 rounded-xl bg-white/10 text-white hover:bg-white/20 cursor-pointer"
+            >
+              <Menu size={18} />
+            </button>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#C5A059] truncate">
+                {activeMeta.group}
+              </p>
+              <h1 className="text-base sm:text-lg font-extrabold text-white truncate">
+                {activeMeta.title}
+              </h1>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+
+          <div className="flex items-center gap-2.5 shrink-0">
             <NotificationCenter notifications={notifications} />
             <button
-              onClick={exportToExcel}
-              disabled={!adminSession?.permissions?.canExport}
-              className={`flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg ${!adminSession?.permissions?.canExport ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+              type="button"
+              onClick={() => handleSelectModule("suite-exam")}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/15 rounded-xl text-xs font-semibold text-slate-200 cursor-pointer"
             >
-              <FileSpreadsheet className="w-4 h-4" /> {adminSession?.permissions?.canExport ? "Excel এক্সপোর্ট" : <Lock size={14} />}
+              <Award size={14} className="text-[#C5A059]" />
+              <span>Exam Portal: {cmsSettings.examPortalOpen !== false ? "ON" : "OFF"}</span>
             </button>
             <button
-              onClick={downloadPhotosZip}
-              disabled={!adminSession?.permissions?.canExport}
-              className={`flex items-center gap-2 px-5 py-2.5 bg-accent text-white rounded-xl text-sm font-bold hover:bg-accent/90 transition-all shadow-lg ${!adminSession?.permissions?.canExport ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-            >
-              <Archive className="w-4 h-4" /> {adminSession?.permissions?.canExport ? "ফটো জিপ (ZIP)" : <Lock size={14} />}
-            </button>
-            <button
+              type="button"
               onClick={() => navigate("/messenger")}
-              disabled={!adminSession?.permissions?.canChat}
-              className={`flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white border border-white/20 rounded-xl text-sm font-bold hover:bg-white/20 ${!adminSession?.permissions?.canChat ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+              disabled={!adminSession?.permissions?.canChat && adminSession?.role !== "super_admin"}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/15 rounded-xl text-xs font-semibold text-slate-200 cursor-pointer disabled:opacity-40"
             >
-              <MessageSquare className="w-4 h-4" /> {adminSession?.permissions?.canChat ? "Messenger" : <Lock size={14} />}
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white border border-white/20 rounded-xl text-sm font-bold hover:bg-white/20"
-            >
-              <LogOut className="w-4 h-4" /> লগআউট
+              <MessageSquare size={14} className="text-[#C5A059]" /> Messenger
             </button>
           </div>
-        </div>
+        </header>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "মোট আবেদন", value: stats.total, icon: Users, color: "text-slate-400", onClick: undefined, actionText: "" },
-          { label: "পেন্ডিং", value: stats.pending, icon: CheckCircle, color: "text-amber-500", onClick: undefined, actionText: "" },
-          { label: "অনুমোদিত", value: stats.approved, icon: CheckCircle, color: "text-primary", onClick: undefined, actionText: "" },
-          { 
-            label: "সেন্ট ব্রডকাস্ট", 
-            value: notifications.filter((n: any) => n.targetId === "ALL").length, 
-            icon: Megaphone, 
-            color: "text-accent", 
-            onClick: () => setActiveTab("broadcast"), 
-            actionText: "তৈরি করুন ↗" 
-          }
-        ].map((stat, i) => (
-          <div 
-            key={i} 
-            onClick={stat.onClick}
-            className={`glass-card p-6 rounded-2xl border border-white/5 shadow-2xl transition-all ${
-              stat.onClick ? "cursor-pointer hover:border-accent/40 hover:bg-white/[0.02] active:scale-95" : ""
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <stat.icon className={`w-5 h-5 ${stat.color}`} />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                {stat.actionText || "Stats"}
-              </span>
-            </div>
-            <p className="text-2xl font-black text-white">{stat.value}</p>
-            <p className="text-xs font-bold text-slate-400">{stat.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-white/5 pb-1 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth gap-1 md:gap-4">
-        <button
-          onClick={() => setActiveTab("applicants")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-            activeTab === "applicants" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Users size={18} />
-            Applicants
-          </div>
-          {activeTab === "applicants" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-        </button>
-        <button
-          onClick={() => setActiveTab("profileApprovals")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-            activeTab === "profileApprovals" ? "text-amber-400" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={18} className="text-amber-400" />
-            Profile Approvals
-          </div>
-          {activeTab === "profileApprovals" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-amber-400 rounded-t-full" />}
-        </button>
-        <button
-          onClick={() => setActiveTab("broadcast")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-            activeTab === "broadcast" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Megaphone size={18} />
-            Broadcast
-          </div>
-          {activeTab === "broadcast" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-        </button>
-        <button
-          onClick={() => setActiveTab("logs")}
-          disabled={!adminSession?.permissions?.canViewLogs}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-            activeTab === "logs" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-          } ${!adminSession?.permissions?.canViewLogs ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-        >
-          <div className="flex items-center gap-2">
-            <History size={18} />
-            Activity Logs
-            {!adminSession?.permissions?.canViewLogs && <Lock size={12} className="text-red-500" />}
-          </div>
-          {activeTab === "logs" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-        </button>
-        {adminSession?.role === "super_admin" && (
-          <>
-            <button
-              onClick={() => setActiveTab("admins")}
-              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-                activeTab === "admins" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Shield size={18} />
-                Manage Admins
-              </div>
-              {activeTab === "admins" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-            </button>
-            <button
-              onClick={() => setActiveTab("circular")}
-              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-                activeTab === "circular" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <FileText size={18} className="text-primary" />
-                Manage Circular
-              </div>
-              {activeTab === "circular" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-            </button>
-            <button
-              onClick={() => setActiveTab("guide")}
-              className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-                activeTab === "guide" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <HelpCircle size={18} className="text-primary" />
-                Guide Maker
-              </div>
-              {activeTab === "guide" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-            </button>
-          </>
-        )}
-        <button
-          onClick={() => setActiveTab("analytics")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-            activeTab === "analytics" ? "text-primary" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <TrendingUp size={18} />
-            Analytics
-          </div>
-          {activeTab === "analytics" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full" />}
-        </button>
-        <button
-          onClick={() => setActiveTab("passwordResets")}
-          className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all relative shrink-0 ${
-            activeTab === "passwordResets" ? "text-red-400" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Key size={18} className={activeTab === "passwordResets" ? "text-red-400" : ""} />
-            Password Resets
-            {passwordResets.filter(r => r.status === "pending").length > 0 && (
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-            )}
-          </div>
-          {activeTab === "passwordResets" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-1 bg-rose-500 rounded-t-full" />}
-        </button>
-      </div>
-
-      {activeTab === "applicants" ? (
-        <>
-          <div className="space-y-6">
-            <BulkActions 
-              selectedCount={selectedApplicants.length}
-              onApprove={() => handleBulkAction('Approve')}
-              onReject={() => handleBulkAction('Reject')}
-              onDelete={() => handleBulkAction('Delete')}
-              onExport={exportToExcel}
-              onClear={() => setSelectedApplicants([])}
-              isProcessing={isBulkProcessing}
-            />
-            {/* AI Insights Section */}
-            <div className="glass-card p-6 rounded-[2rem] border border-white/5 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-6 opacity-5">
-                <BrainCircuit size={120} className="text-primary" />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="text-primary" size={20} />
-                    <h3 className="font-black text-primary uppercase tracking-widest text-[10px]">AI Recruitment Insights</h3>
-                  </div>
-                  {!aiInsights && (
-                    <button 
-                      onClick={runAiInsights}
-                      disabled={isAnalyzingInsights || applicants.length === 0}
-                      className="px-4 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase hover:bg-primary/20 transition-all disabled:opacity-50"
-                    >
-                      {isAnalyzingInsights ? "Analyzing..." : "Generate Insights"}
-                    </button>
-                  )}
-                </div>
-                
-                {aiInsights ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-slate-300 leading-relaxed italic">"{aiInsights}"</p>
-                    <button 
-                      onClick={() => setAiInsights("")}
-                      className="text-[10px] text-primary font-bold uppercase hover:underline"
-                    >
-                      Refresh Insights
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">Click the button to generate AI-powered recruitment insights based on current applicants.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-grow">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="নাম অথবা আইডি দিয়ে খুঁজুন..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-[#476075] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-white focus:border-primary outline-none transition-all shadow-xl"
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <select
-                  value={bnccFilter}
-                  onChange={(e) => setBnccFilter(e.target.value as any)}
-                  className="bg-[#8aa5ba] border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
-                >
-                  <option value="All">সকল অভিজ্ঞতা (All Applicants)</option>
-                  <option value="Previous">পূর্বের বিএনসিসি ক্যাডেট (BNCC Cadets)</option>
-                  <option value="NonPrevious">নতুন আবেদনকারী (Non-BNCC)</option>
-                </select>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-[#6e859f] border border-white/10 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest text-white focus:border-primary outline-none cursor-pointer shadow-xl appearance-none"
-                >
-                  <option value="All">সকল স্ট্যাটাস</option>
-                  <option value="Pending">পেন্ডিং</option>
-                  <option value="Approved">অনুমোদিত</option>
-                  <option value="Rejected">বাতিল</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="glass-card rounded-[2rem] overflow-hidden border border-white/5 shadow-2xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-900 text-white">
-                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-center">
-                        <input 
-                          type="checkbox" 
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedApplicants(filteredApplicants.map(a => a.id));
-                            else setSelectedApplicants([]);
-                          }}
-                          checked={selectedApplicants.length === filteredApplicants.length && filteredApplicants.length > 0}
-                          className="w-4 h-4 rounded border-white/10 bg-slate-800"
-                        />
-                      </th>
-                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">নথিভুক্ত ক্যাডেট</th>
-                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">শ্রেণি ও রোল</th>
-                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">স্ট্যাটাস</th>
-                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-center">BMI</th>
-                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-right">অ্যাকশন</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {filteredApplicants.map((app) => {
-                      const heightInMeters = (Number(app.heightFeet || 0) * 0.3048) + (Number(app.heightInches || 0) * 0.0254);
-                      const bmi = app.weight && heightInMeters > 0 ? (Number(app.weight) / (heightInMeters * heightInMeters)).toFixed(1) : null;
-                      const isBmiHealthy = bmi && Number(bmi) >= 18.5 && Number(bmi) <= 24.9;
-
-                      return (
-                        <tr key={app.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedApplicants.includes(app.id) ? 'bg-primary/5' : ''}`}>
-                          <td className="px-8 py-6 text-center">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedApplicants.includes(app.id)}
-                            onChange={() => toggleSelect(app.id)}
-                            className="w-4 h-4 rounded border-white/10 bg-slate-800 accent-primary"
-                          />
-                        </td>
-                        <td className="px-8 py-6">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-[1.2rem] bg-slate-800 overflow-hidden border border-white/10 shadow-lg group-hover:scale-105 transition-transform">
-                              {app.photo ? (
-                                <img src={app.photo} className="w-full h-full object-cover" alt="" />
-                              ) : (
-                                <Users className="w-full h-full p-3 text-slate-600" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-bold text-white text-sm">{app.fullNameEnglish || app.fullNameBangla}</p>
-                                <button 
-                                  onClick={() => runApplicantSummary(app)}
-                                  disabled={loadingSummaryId === app.id}
-                                  className="text-primary hover:text-primary/80 transition-colors"
-                                  title="AI Summary"
-                                >
-                                  <Sparkles className={`w-3 h-3 ${loadingSummaryId === app.id ? 'animate-pulse' : ''}`} />
-                                </button>
-                              </div>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{app.studentPhone || "No Mobile"}</p>
-                              {applicantSummaries[app.id] && (
-                                <motion.div 
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: "auto" }}
-                                  className="mt-2 p-2 bg-primary/5 border-l-2 border-primary rounded-r-lg max-w-xs"
-                                >
-                                  <p className="text-[9px] text-primary italic leading-tight">{applicantSummaries[app.id]}</p>
-                                </motion.div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-8 py-6">
-                          <p className="text-sm font-bold text-slate-200">{app.studyStatus}</p>
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Roll: {app.classRoll}</p>
-                          <div className="flex flex-col gap-1">
-                            {app.previousBNCC && (
-                              <span className="inline-block bg-rose-500/10 text-rose-400 text-[9px] font-bold px-2 py-0.5 rounded border border-rose-500/10 uppercase tracking-wide max-w-max">
-                                BNCC: {app.previousRank === "Other" ? app.previousRankOther : app.previousRank}
-                              </span>
-                            )}
-                            {app.coCurricularActivities && app.coCurricularActivities.length > 0 && (
-                              <span className="inline-block bg-orange-500/10 text-orange-400 text-[9px] font-bold px-2 py-0.5 rounded border border-orange-500/10 tracking-wide max-w-max" title={app.coCurricularActivities.join(", ")}>
-                                Co-Curricular ({app.coCurricularActivities.length})
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                          <td className="px-8 py-6">
-                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                              app.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                              app.status === 'Rejected' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                              'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                            }`}>
-                              {app.status}
-                            </span>
-                          </td>
-                          <td className="px-8 py-6 text-center">
-                            {bmi ? (
-                              <div className="flex flex-col items-center">
-                                <span className={`text-sm font-black ${isBmiHealthy ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                  {bmi}
-                                </span>
-                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">
-                                  {isBmiHealthy ? 'Healthy' : 'Check'}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-slate-600 text-xs">-</span>
-                            )}
-                          </td>
-                          <td className="px-8 py-6 text-right">
-                          <div className="flex items-center justify-end gap-2 group-hover:scale-100 transition-transform">
-                            {showPasswordId === app.id && (
-                              <div className="mr-2 px-3 py-1.5 bg-slate-900 border border-white/5 rounded-xl text-[10px] font-mono text-slate-400 animate-in fade-in slide-in-from-right-2">
-                                {app.password?.substring(0, 15)}...
-                              </div>
-                            )}
-                            <button
-                              onClick={() => handleAdminLoginAsUser(app)}
-                              disabled={!adminSession?.permissions?.canEdit}
-                              className={`p-2.5 hover:bg-white/5 text-slate-500 hover:text-white rounded-xl transition-all ${!adminSession?.permissions?.canEdit ? 'opacity-30 cursor-not-allowed' : ''}`}
-                              title="Login as User"
-                            >
-                              {adminSession?.permissions?.canEdit ? <ExternalLink className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
-                            </button>
-                            <button
-                              onClick={() => setShowPasswordId(showPasswordId === app.id ? null : app.id)}
-                              className={`p-2.5 rounded-xl transition-all ${
-                                showPasswordId === app.id ? 'text-primary bg-primary/10' : 'text-slate-500 hover:bg-white/5'
-                              }`}
-                              title="Verify Hash"
-                            >
-                              {showPasswordId === app.id ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                            </button>
-                            <button
-                              onClick={() => updateStatus(app.id, 'Approved')}
-                              className={`p-2.5 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-500 rounded-xl transition-all ${!adminSession?.permissions?.canApprove ? 'opacity-30 cursor-not-allowed' : ''}`}
-                              disabled={!adminSession?.permissions?.canApprove}
-                              title="Approve"
-                            >
-                              {adminSession?.permissions?.canApprove ? <CheckCircle className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
-                            </button>
-                            <button
-                              onClick={() => setShowPasswordReset(app.id)}
-                              className={`p-2.5 hover:bg-amber-500/10 text-slate-500 hover:text-amber-500 rounded-xl transition-all ${!adminSession?.permissions?.canResetPW ? 'opacity-30 cursor-not-allowed' : ''}`}
-                              disabled={!adminSession?.permissions?.canResetPW}
-                              title="Reset PW"
-                            >
-                              {adminSession?.permissions?.canResetPW ? <Key className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
-                            </button>
-                            <button
-                              onClick={() => deleteApplicant(app.id)}
-                              className={`p-2.5 hover:bg-red-500/10 text-slate-500 hover:text-red-500 rounded-xl transition-all ${!adminSession?.permissions?.canDelete ? 'opacity-30 cursor-not-allowed' : ''}`}
-                              disabled={!adminSession?.permissions?.canDelete}
-                              title="Delete"
-                            >
-                              {adminSession?.permissions?.canDelete ? <Trash2 className="w-5 h-5" /> : <Lock className="w-5 h-5 text-red-500/50" />}
-                            </button>
-                          </div>
-                        </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            {filteredApplicants.length === 0 && (
-              <div className="p-12 text-center">
-                <Users className="w-12 h-12 text-black/10 mx-auto mb-4" />
-                <p className="text-black/30">কোনো আবেদনকারী পাওয়া যায়নি।</p>
-              </div>
-            )}
-          </div>
-        </>
-      ) : activeTab === "analytics" ? (
-        <div className="space-y-8 pb-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Applicant Distribution by Status */}
-            <div className="glass-card p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-              <div className="flex items-center gap-2 mb-8">
-                <PieChartIcon className="text-primary" size={20} />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">Status Distribution</h3>
-              </div>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Pending', value: stats.pending },
-                        { name: 'Approved', value: stats.approved },
-                        { name: 'Rejected', value: applicants.length - stats.pending - stats.approved }
-                      ]}
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {[
-                        <Cell key="cell-0" fill="#f59e0b" />, // amber-500
-                        <Cell key="cell-1" fill="#10b981" />, // emerald-500
-                        <Cell key="cell-2" fill="#ef4444" />  // red-500
-                      ]}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                      itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
-                    />
-                    <Legend verticalAlign="bottom" height={36} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Applicant Distribution by Gender */}
-            <div className="glass-card p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-              <div className="flex items-center gap-2 mb-8">
-                <Users className="text-primary" size={20} />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">Gender Distribution</h3>
-              </div>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={[
-                    { name: 'Male', count: applicants.filter(a => a.gender === 'Male').length },
-                    { name: 'Female', count: applicants.filter(a => a.gender === 'Female').length },
-                    { name: 'Other', count: applicants.filter(a => a.gender === 'Other' || a.gender === 'Others').length }
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} fontWeight="bold" />
-                    <YAxis stroke="#94a3b8" fontSize={10} fontWeight="bold" />
-                    <Tooltip 
-                      cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                      contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                    />
-                    <Bar dataKey="count" fill="#4ade80" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Blood Group Analytics */}
-            <div className="md:col-span-2 glass-card p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-              <div className="flex items-center gap-2 mb-8">
-                <Activity className="text-primary" size={20} />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">Blood Group Availability</h3>
-              </div>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(bg => ({
-                    group: bg,
-                    count: applicants.filter(a => a.bloodGroup === bg).length
-                  }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="group" stroke="#94a3b8" fontSize={10} fontWeight="bold" />
-                    <YAxis stroke="#94a3b8" fontSize={10} fontWeight="bold" />
-                    <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} />
-                    <Bar dataKey="count" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : activeTab === "broadcast" ? (
-        <div className="max-w-3xl mx-auto space-y-8 pb-12">
-          <div className="glass-card p-10 rounded-[3rem] border border-white/5 shadow-2xl space-y-8 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5">
-              <Megaphone size={120} className="text-primary" />
-            </div>
-            
-            <div className="relative z-10 text-center space-y-2">
-              <div className="w-20 h-20 bg-primary/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <Bell className="text-primary" size={40} />
-              </div>
-              <h2 className="text-3xl font-black text-white uppercase tracking-tighter">
-                {editingNotificationId ? "Edit Broadcast Notice" : "Broadcast Notice"}
-              </h2>
-              <p className="text-slate-500 font-bold text-xs uppercase tracking-[0.2em]">
-                {editingNotificationId ? "Modify published notice for all devices" : "Send announcement to all registered cadets"}
-              </p>
-            </div>
-
-            <div className="space-y-6 relative z-10">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-3">Notice Title</label>
-                <input 
-                  type="text"
-                  value={broadcastTitle}
-                  onChange={(e) => setBroadcastTitle(e.target.value)}
-                  placeholder="e.g. Mandatory Training Session"
-                  className="w-full bg-slate-900 border border-white/10 rounded-2xl px-8 py-5 text-slate-200 outline-none focus:border-primary transition-all shadow-2xl"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-3">Message Content</label>
-                <textarea 
-                  value={broadcastMessage}
-                  onChange={(e) => setBroadcastMessage(e.target.value)}
-                  placeholder="Write your official notice here..."
-                  className="w-full bg-slate-900 border border-white/10 rounded-[2rem] px-8 py-6 text-slate-200 outline-none focus:border-primary transition-all min-h-[160px] shadow-2xl resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
+        {/* Workspace Viewport */}
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
+          {/* MODULE 1: OVERVIEW */}
+          {activeModule === "overview" && (
+            <div className="space-y-6">
+              {/* Top KPI Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { id: 'Announcement', label: 'General', color: 'bg-blue-500', icon: Info },
-                  { id: 'Alert', label: 'Urgent', color: 'bg-amber-500', icon: AlertCircle },
-                  { id: 'Message', label: 'Note', color: 'bg-green-500', icon: MessageSquare }
-                ].map((type) => (
+                  {
+                    label: "Total Applicants",
+                    value: stats.total,
+                    hint: "Online enrollment ledger",
+                    action: () => handleSelectModule("suite-admission"),
+                  },
+                  {
+                    label: "Pending Review",
+                    value: stats.pending,
+                    hint: "Awaiting board verification",
+                    action: () => handleSelectModule("suite-admission"),
+                  },
+                  {
+                    label: "Approved Cadets",
+                    value: stats.approved,
+                    hint: "Eligible for QR cards",
+                    action: () => handleSelectModule("suite-qr"),
+                  },
+                  {
+                    label: "Published Broadcasts",
+                    value: notifications.filter((n) => n.targetId === "ALL").length,
+                    hint: "Cadet notice center",
+                    action: () => handleSelectModule("notifications"),
+                  },
+                ].map((stat, idx) => (
                   <button
-                    key={type.id}
-                    onClick={() => setBroadcastType(type.id)}
-                    className={`flex items-center justify-center gap-2 p-4 rounded-2xl border transition-all ${
-                      broadcastType === type.id 
-                        ? `bg-slate-900 border-white/20 text-white shadow-xl` 
-                        : `bg-slate-900/50 border-white/5 text-slate-500 opacity-60`
-                    }`}
+                    key={idx}
+                    type="button"
+                    onClick={stat.action}
+                    className="text-left bg-[#061830] hover:bg-[#092040] border border-white/10 rounded-2xl p-5 space-y-1 transition-colors cursor-pointer"
                   >
-                    <type.icon size={16} className={broadcastType === type.id ? `text-white` : `text-slate-600`} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">{type.label}</span>
+                    <p className="text-xs font-semibold text-slate-400">{stat.label}</p>
+                    <p className="text-3xl font-black font-mono tabular-nums text-white">
+                      {stat.value}
+                    </p>
+                    <p className="text-[11px] text-[#C5A059]">{stat.hint}</p>
                   </button>
                 ))}
               </div>
 
-              <div className="flex gap-4">
-                {editingNotificationId && (
-                  <button
-                    onClick={handleCancelEdit}
-                    className="flex-1 py-5 bg-slate-800 text-slate-300 font-black uppercase tracking-[0.2em] text-xs rounded-2xl hover:bg-slate-700 transition-all border border-white/5"
-                  >
-                    Cancel Edit
-                  </button>
-                )}
-                <button
-                  onClick={handleBroadcast}
-                  disabled={sendingBroadcast || !broadcastMessage.trim() || !broadcastTitle.trim()}
-                  className={`py-5 text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl flex items-center justify-center gap-3 transition-all disabled:opacity-50 group shadow-2xl ${
-                    editingNotificationId 
-                      ? "flex-1 bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30" 
-                      : "w-full bg-primary hover:bg-primary/90 shadow-primary/30"
-                  }`}
-                >
-                  {sendingBroadcast ? (
-                    <Loader2 className="animate-spin" size={20} />
-                  ) : editingNotificationId ? (
-                    <CheckCircle size={20} className="group-hover:scale-110 transition-transform" />
-                  ) : (
-                    <Megaphone size={20} className="group-hover:rotate-12 transition-transform" />
-                  )}
-                  {editingNotificationId ? "Update Notice" : "Send Broadcast Message"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="glass-card p-8 rounded-3xl border border-white/5 flex items-start gap-4">
-            <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shrink-0 border border-white/5">
-              <Shield className="text-primary" size={20} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-[10px] font-black uppercase text-white tracking-widest">Protocol Notice</h4>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Broadcast messages are sent instantly and will appear in the candidate's personal notification center. All transmissions are logged in the system audit trail.
-              </p>
-            </div>
-          </div>
-
-          {/* Published Notices Section */}
-          <div className="glass-card p-10 rounded-[3rem] border border-white/5 shadow-2xl space-y-6 relative overflow-hidden">
-            <div className="flex items-center justify-between border-b border-white/5 pb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                  <Megaphone className="text-primary" size={20} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Active Broadcasts</h3>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Manage published announcements</p>
-                </div>
-              </div>
-              <div className="text-[10px] bg-slate-800 text-slate-400 font-black px-3 py-1.5 rounded-full uppercase tracking-widest border border-white/5">
-                Total: {notifications.filter((n: any) => n.targetId === "ALL").length}
-              </div>
-            </div>
-
-            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
-              {notifications.filter((n: any) => n.targetId === "ALL").length === 0 ? (
-                <div className="text-center py-12 space-y-3">
-                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto text-slate-600">
-                    <Megaphone size={32} />
+              {/* Centralized Exam & Admission Suite Directory Cards */}
+              <div className="bg-[#061830] border border-[#C5A059]/30 rounded-2xl p-5 md:p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <FolderKanban size={18} className="text-[#C5A059]" />
+                    <h2 className="text-sm font-black uppercase tracking-wider text-white">
+                      EXAM & ADMISSION SUITE — Centralized Control Folder
+                    </h2>
                   </div>
-                  <p className="text-xs font-black text-slate-500 uppercase tracking-widest">No Broadcast Notices Found</p>
+                  <span className="text-xs text-slate-400">Unified Single-Session Access</span>
                 </div>
-              ) : (
-                notifications.filter((n: any) => n.targetId === "ALL").map((notif: any) => {
-                  let badgeColor = "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
-                  let Icon = Info;
-                  if (notif.type === "Alert") {
-                    badgeColor = "bg-rose-500/10 text-rose-400 border-rose-500/20";
-                    Icon = AlertCircle;
-                  } else if (notif.type === "Message") {
-                    badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-                    Icon = MessageSquare;
-                  }
 
-                  return (
-                    <div 
-                      key={notif.id}
-                      className={`p-6 bg-slate-900/50 rounded-2xl border border-white/5 space-y-4 hover:border-white/10 transition-all ${
-                        editingNotificationId === notif.id ? "border-primary/50 bg-primary/5 animate-pulse" : ""
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-[#020B18] border border-white/10 rounded-xl p-5 flex flex-col justify-between space-y-4">
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-mono text-[#C5A059]">01. EXAM PORTAL</p>
+                      <h3 className="text-base font-bold text-white">Exam Control & Visibility</h3>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Toggle public Exam Portal visibility, manage Question Bank, exam lifecycle states, answer scripts & leaderboards.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectModule("suite-exam")}
+                      className="w-full py-2.5 bg-[#C5A059] hover:bg-[#d4b068] text-[#002147] rounded-xl text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      Open Exam Portal <ArrowRight size={14} />
+                    </button>
+                  </div>
+
+                  <div className="bg-[#020B18] border border-white/10 rounded-xl p-5 flex flex-col justify-between space-y-4">
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-mono text-emerald-400">02. ADMISSION PORTAL</p>
+                      <h3 className="text-base font-bold text-white">Admission Management</h3>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Online & offline applicants, open/close admission forms, physical BMI verification, circulars, guides & merit list.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectModule("suite-admission")}
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      Open Admission Portal <ArrowRight size={14} />
+                    </button>
+                  </div>
+
+                  <div className="bg-[#020B18] border border-white/10 rounded-xl p-5 flex flex-col justify-between space-y-4">
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-mono text-cyan-400">03. ADMISSION QR PORTAL</p>
+                      <h3 className="text-base font-bold text-white">QR Generator & Verifier</h3>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Generate Application/Candidate/Admit QRs, revoke or rotate QR tokens, scan cards live, and export attendance Excel.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectModule("suite-qr")}
+                      className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      Open QR Portal <ArrowRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Analytics Charts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-[#061830] p-6 rounded-2xl border border-white/10">
+                  <div className="flex items-center gap-2 mb-5">
+                    <PieChartIcon className="text-[#C5A059]" size={18} />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                      Applicant Status Distribution
+                    </h3>
+                  </div>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: "Pending", value: stats.pending },
+                            { name: "Approved", value: stats.approved },
+                            { name: "Rejected", value: stats.rejected },
+                          ]}
+                          innerRadius={55}
+                          outerRadius={78}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          <Cell fill="#f59e0b" />
+                          <Cell fill="#10b981" />
+                          <Cell fill="#ef4444" />
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#020B18",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            borderRadius: "10px",
+                          }}
+                        />
+                        <Legend verticalAlign="bottom" height={32} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-[#061830] p-6 rounded-2xl border border-white/10">
+                  <div className="flex items-center gap-2 mb-5">
+                    <Activity className="text-[#C5A059]" size={18} />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                      Blood Group Readiness
+                    </h3>
+                  </div>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((bg) => ({
+                          group: bg,
+                          count: applicants.filter((a) => a.bloodGroup === bg).length,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="group" stroke="#94a3b8" fontSize={11} />
+                        <YAxis stroke="#94a3b8" fontSize={11} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#020B18",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            borderRadius: "10px",
+                          }}
+                        />
+                        <Bar dataKey="count" fill="#C5A059" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODULE 2: WEBSITE MANAGEMENT */}
+          {activeModule === "website" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  {
+                    key: "examPortalOpen" as const,
+                    title: "Public Exam Portal (/exam)",
+                    desc: "Show/hide Exam Portal in public navigation and allow/block candidate access.",
+                    val: cmsSettings.examPortalOpen !== false,
+                  },
+                  {
+                    key: "enrollmentOpen" as const,
+                    title: "Online Admission Portal (/enroll)",
+                    desc: "Allow prospective cadets to submit new online enrollment applications.",
+                    val: cmsSettings.enrollmentOpen !== false,
+                  },
+                  {
+                    key: "offlineFormOpen" as const,
+                    title: "Offline Application Form (/offline-application)",
+                    desc: "Allow public printing and Legal PDF download of the offline enrollment form.",
+                    val: cmsSettings.offlineFormOpen !== false,
+                  },
+                  {
+                    key: "noticeTickerEnabled" as const,
+                    title: "Homepage Live Notice Ticker",
+                    desc: "Display scrolling official notice ribbon at top of the public portal.",
+                    val: cmsSettings.noticeTickerEnabled !== false,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.key}
+                    className="bg-[#061830] border border-white/10 rounded-2xl p-5 flex items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-white">{item.title}</h3>
+                      <p className="text-xs text-slate-400">{item.desc}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingWebsiteToggle}
+                      onClick={() => void toggleSettingFlag(item.key, !item.val)}
+                      className={`px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                        item.val ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1.5 flex-grow">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full border ${badgeColor} flex items-center gap-1`}>
-                              <Icon size={10} />
-                              {notif.type}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-bold">
-                              {notif.timestamp?.toDate 
-                                ? notif.timestamp.toDate().toLocaleString() 
-                                : new Date(notif.timestamp).toLocaleString()}
-                            </span>
-                          </div>
-                          <h4 className="text-sm font-black text-white leading-snug">{notif.title}</h4>
-                        </div>
-                        
-                        {/* Edit / Delete Buttons */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() => {
-                              setEditingNotificationId(notif.id);
-                              setBroadcastTitle(notif.title);
-                              setBroadcastMessage(notif.message);
-                              setBroadcastType(notif.type);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
-                            title="Edit Notice"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBroadcast(notif.id)}
-                            className="p-2 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white rounded-xl transition-all border border-rose-500/10"
-                            title="Delete Notice"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{notif.message}</p>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      ) : activeTab === "profileApprovals" ? (
-        <div className="pb-12">
-          <PendingProfileApprovals adminSession={adminSession} />
-        </div>
-      ) : activeTab === "circular" ? (
-        <div className="pb-12 h-full">
-          <AICircularManager 
-            adminSession={adminSession} 
-            onLogActivity={async (type: string, details: string) => {
-              try {
-                await addDoc(collection(db, "activity_logs"), {
-                  type,
-                  details,
-                  actorId: adminSession?.username || "super_admin",
-                  targetId: "CIRCULAR_SYSTEM",
-                  timestamp: Timestamp.now()
-                });
-              } catch (e) {
-                console.error("Activity Log Save Incident:", e);
-              }
-            }} 
-          />
-        </div>
-      ) : activeTab === "guide" ? (
-        <div className="pb-12 h-full">
-          <AIGuideManager 
-            adminSession={adminSession} 
-            onLogActivity={async (type: string, details: string) => {
-              try {
-                await addDoc(collection(db, "activity_logs"), {
-                  type,
-                  details,
-                  actorId: adminSession?.username || "super_admin",
-                  targetId: "GUIDE_SYSTEM",
-                  timestamp: Timestamp.now()
-                });
-              } catch (e) {
-                console.error("Activity Log Save Incident:", e);
-              }
-            }} 
-          />
-        </div>
-      ) : activeTab === "passwordResets" ? (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <ShieldAlert className="text-rose-500 animate-pulse" />
-                পাসওয়ার্ড রিসেট সিকিউরিটি এলার্টস
-              </h3>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Live Identity Verification & Reset Tracking</p>
-            </div>
-            
-            <div className="text-xs font-bold text-slate-500">
-              Total Requests: <span className="text-rose-500">{passwordResets.length}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {passwordResets.length > 0 ? (
-              passwordResets.map((reset: any) => (
-                <div 
-                  key={reset.id} 
-                  className={`bg-white border rounded-3xl p-6 shadow-sm overflow-hidden flex flex-col justify-between relative ${
-                    reset.status === "pending" ? "border-rose-200 shadow-rose-100/50" : "border-slate-100"
-                  }`}
-                >
-                  {/* Status Indicator */}
-                  <div className="absolute top-4 right-4 z-10">
-                    <span className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-full border ${
-                      reset.status === "pending" 
-                        ? "bg-rose-500/10 text-rose-600 border-rose-200" 
-                        : "bg-emerald-500/10 text-emerald-600 border-emerald-200"
-                    }`}>
-                      {reset.status === "pending" ? "Pending Approval / Active Reset" : "Completed / Resolved"}
-                    </span>
+                      <Power size={13} />
+                      {item.val ? "ENABLED" : "DISABLED"}
+                    </button>
                   </div>
+                ))}
+              </div>
 
-                  <div className="space-y-4">
-                    {/* Live Snapshot frame */}
-                    <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-100">
-                      {reset.photo ? (
-                        <img 
-                          src={reset.photo} 
-                          alt="Live verification snapshot" 
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover scale-x-[-1]"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-400">
-                          <Camera className="w-10 h-10 mb-2 animate-pulse" />
-                          <p className="text-[10px] font-bold uppercase">No Image Captured</p>
-                        </div>
-                      )}
-                      
-                      {/* Watermark timestamp */}
-                      <div className="absolute bottom-2 left-2 right-2 bg-slate-950/70 py-1.5 px-3 rounded-lg backdrop-blur-sm flex justify-between text-[8px] font-mono font-black text-rose-400 uppercase tracking-widest">
-                        <span>LIVE ATTEMPT</span>
-                        <span>{reset.createdAt?.toDate ? reset.createdAt.toDate().toLocaleTimeString() : "N/A"}</span>
-                      </div>
-                    </div>
+              <div className="bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Public Pages & Quick Shortcuts</h3>
+                    <p className="text-xs text-slate-400">Open live public endpoints or jump to Content Management</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectModule("content")}
+                    className="px-4 py-2 bg-[#C5A059] text-[#002147] rounded-xl text-xs font-black cursor-pointer"
+                  >
+                    Open CMS Editor
+                  </button>
+                </div>
 
-                    {/* Applicant Identity list */}
-                    <div className="space-y-3.5 pt-1">
-                      <div>
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Candidate Info</span>
-                        <h4 className="text-base font-black text-slate-800 tracking-tight leading-tight">{reset.name}</h4>
-                        <p className="text-xs font-mono font-bold text-slate-500 mt-1">ID: {reset.applicantId}</p>
-                      </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  {[
+                    { label: "Homepage", path: "/" },
+                    { label: "Online Enroll", path: "/enroll" },
+                    { label: "Offline Form", path: "/offline-application" },
+                    { label: "Exam Portal", path: "/exam" },
+                    { label: "QR Verifier", path: "/qr-scan" },
+                    { label: "Notice Board", path: "/notices" },
+                    { label: "Gallery", path: "/gallery" },
+                    { label: "Contact Page", path: "/contact" },
+                  ].map((route) => (
+                    <Link
+                      key={route.path}
+                      to={route.path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl flex items-center justify-between text-slate-200 font-semibold"
+                    >
+                      <span>{route.label}</span>
+                      <ExternalLink size={13} className="text-[#C5A059]" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
-                      <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3">
-                        <div>
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Contact No</span>
-                          <span className="text-xs font-bold text-slate-700 font-mono select-all">{reset.mobile}</span>
-                        </div>
-                        <div>
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Date & Time</span>
-                          <span className="text-xs font-bold text-slate-600">
-                            {reset.createdAt?.toDate ? reset.createdAt.toDate().toLocaleDateString() : "N/A"}
-                          </span>
-                        </div>
-                      </div>
+          {/* MODULE 3: CONTENT MANAGEMENT */}
+          {activeModule === "content" && <CMSControlCenter />}
 
-                      {/* Security Geolocation & IP */}
-                      <div className="bg-slate-50 p-4 border border-slate-100 rounded-2xl space-y-3">
-                        <div className="flex items-center gap-2.5">
-                          <Globe className="w-4 h-4 text-teal-500" />
-                          <div>
-                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">IP Address</span>
-                            <span className="text-xs font-bold text-slate-700 font-mono tracking-wider">{reset.ipAddress || "N/A"}</span>
-                          </div>
-                        </div>
+          {/* MODULE 4: USER & ADMIN MANAGEMENT */}
+          {activeModule === "users" && (
+            <div className="space-y-8">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-white">Admin Roles & Access Control</h2>
+                  <p className="text-xs text-slate-400">Manage sub-admins, QR inspectors, and granular permissions</p>
+                </div>
+                {adminSession?.role === "super_admin" && (
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleGenerateQrAdmin}
+                      disabled={creatingAdmin}
+                      className="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {creatingAdmin ? <Loader2 size={14} className="animate-spin" /> : <QrCode size={14} />}
+                      Generate QR Admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddAdmin(true)}
+                      className="px-4 py-2.5 bg-[#C5A059] hover:bg-[#d4b068] text-[#002147] rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <UserPlus size={14} /> Add Admin
+                    </button>
+                  </div>
+                )}
+              </div>
 
-                        <div className="flex items-center gap-2.5">
-                          <MapPin className="w-4 h-4 text-rose-500" />
-                          <div className="flex-grow flex items-center justify-between">
-                            <div>
-                              <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">Geo coordinates</span>
-                              <span className="text-xs font-mono font-bold text-slate-700 leading-none block">
-                                {reset.latitude && reset.longitude 
-                                  ? `${reset.latitude.toFixed(4)}, ${reset.longitude.toFixed(4)}` 
-                                  : "Blocked / Not Shared"}
+              <div className="bg-[#061830] border border-white/10 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-[#020B18] text-slate-400 border-b border-white/10">
+                        <th className="py-3.5 px-4 font-bold uppercase">Admin Name</th>
+                        <th className="py-3.5 px-4 font-bold uppercase">Username</th>
+                        <th className="py-3.5 px-4 font-bold uppercase">Role</th>
+                        <th className="py-3.5 px-4 font-bold uppercase">Created</th>
+                        <th className="py-3.5 px-4 font-bold uppercase text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      <tr className="bg-white/[0.02]">
+                        <td className="py-3.5 px-4 font-bold text-white">Super Admin (Primary)</td>
+                        <td className="py-3.5 px-4 font-mono text-slate-300">admin</td>
+                        <td className="py-3.5 px-4 font-bold text-emerald-400">SUPER_ADMIN</td>
+                        <td className="py-3.5 px-4 text-slate-400">Permanent</td>
+                        <td className="py-3.5 px-4 text-right space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedQrAdmin({
+                                id: "super_admin",
+                                username: "admin",
+                                name: "Super Admin",
+                                role: "super_admin",
+                              });
+                              setIsQrModalOpen(true);
+                            }}
+                            className="p-2 rounded-lg bg-white/5 hover:bg-white/15 text-[#C5A059] cursor-pointer"
+                            title="Generate Admin Login QR"
+                          >
+                            <QrCode size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                      {admins.map((adm) => (
+                        <tr key={adm.id} className="hover:bg-white/[0.03]">
+                          <td className="py-3.5 px-4 font-bold text-white">{adm.name}</td>
+                          <td className="py-3.5 px-4 font-mono text-slate-300">{adm.username}</td>
+                          <td className="py-3.5 px-4 font-bold text-[#C5A059]">
+                            {adm.role ? adm.role.replace("_", " ").toUpperCase() : "ADMIN"}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400 font-mono">
+                            {adm.createdAt?.toDate
+                              ? adm.createdAt.toDate().toLocaleDateString()
+                              : "N/A"}
+                          </td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedQrAdmin({
+                                  id: adm.id,
+                                  username: adm.username,
+                                  name: adm.name,
+                                  role: adm.role || "admin",
+                                });
+                                setIsQrModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-[#C5A059] cursor-pointer"
+                              title="QR Login Token"
+                            >
+                              <QrCode size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingAdminId(adm.id);
+                                setEditPermissions(
+                                  adm.permissions || {
+                                    canAdd: false,
+                                    canEdit: true,
+                                    canDelete: false,
+                                    canViewLogs: true,
+                                    canResetPW: false,
+                                    canApprove: true,
+                                    canExport: false,
+                                    canChat: true,
+                                  }
+                                );
+                              }}
+                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-200 cursor-pointer"
+                              title="Edit Permissions"
+                            >
+                              <Settings size={14} />
+                            </button>
+                            {confirmDeleteAdminId === adm.id ? (
+                              <span className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteAdmin(adm.id)}
+                                  className="px-2 py-1 bg-rose-600 text-white rounded text-[10px] font-bold cursor-pointer"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteAdminId(null)}
+                                  className="p-1 text-slate-400 cursor-pointer"
+                                >
+                                  <X size={13} />
+                                </button>
                               </span>
-                            </div>
-                            {reset.latitude && reset.longitude && (
-                              <a 
-                                href={`https://www.google.com/maps/search/?api=1&query=${reset.latitude},${reset.longitude}`} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="text-[9px] font-black uppercase text-rose-500 hover:text-rose-600 border border-rose-200 hover:bg-rose-50 rounded-lg px-2 py-1 flex items-center gap-1 transition-all"
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteAdminId(adm.id)}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white cursor-pointer"
+                                title="Remove Admin"
                               >
-                                Google Map <ExternalLink size={8} />
-                              </a>
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-white">Cadet Profile Change Approvals</h3>
+                <PendingProfileApprovals adminSession={adminSession} />
+              </div>
+            </div>
+          )}
+
+          {/* MODULE 5: MEDIA MANAGEMENT */}
+          {activeModule === "media" && (
+            <MediaManager
+              applicants={applicants}
+              uploadedBy={adminSession?.username || adminSession?.name || "admin"}
+              onNotify={showToast}
+            />
+          )}
+
+          {/* MODULE 6: SUITE 01 — EXAM PORTAL */}
+          {activeModule === "suite-exam" && (
+            <ExamPortalWorkspace
+              actorId={adminSession?.id || adminSession?.username || "admin"}
+              actorName={adminSession?.name || "Main Admin"}
+              isSuperAdmin={adminSession?.role === "super_admin"}
+              onNotify={showToast}
+            />
+          )}
+
+          {/* MODULE 7: SUITE 02 — ADMISSION MANAGEMENT PORTAL */}
+          {activeModule === "suite-admission" && (
+            <AdmissionPortalWorkspace
+              applicants={applicants}
+              adminSession={adminSession}
+              onUpdateStatus={updateStatus}
+              onToggleActivation={toggleAccountActivation}
+              onDeleteApplicant={deleteApplicant}
+              onBulkAction={handleBulkAction}
+              onOpenPasswordReset={(id) => setShowPasswordReset(id)}
+              onLoginAsUser={handleAdminLoginAsUser}
+              onExportExcel={exportToExcel}
+              onExportJson={exportJsonBackup}
+              onDownloadPhotosZip={downloadPhotosZip}
+              onRunAiInsights={runAiInsights}
+              aiInsights={aiInsights}
+              onClearAiInsights={() => setAiInsights("")}
+              isAnalyzingInsights={isAnalyzingInsights}
+              onRunApplicantSummary={runApplicantSummary}
+              applicantSummaries={applicantSummaries}
+              loadingSummaryId={loadingSummaryId}
+              onNotify={showToast}
+            />
+          )}
+
+          {/* MODULE 8: SUITE 03 — ADMISSION QR PORTAL */}
+          {activeModule === "suite-qr" && (
+            <AdmissionQrWorkspace
+              applicants={applicants}
+              adminSession={adminSession}
+              onNotify={showToast}
+            />
+          )}
+
+          {/* MODULE 9: NOTIFICATIONS & INQUIRIES */}
+          {activeModule === "notifications" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-6 bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Megaphone size={18} className="text-[#C5A059]" />
+                  {editingNotificationId ? "Edit Broadcast Notice" : "Create Broadcast Notice"}
+                </h2>
+                <div className="space-y-3 text-xs">
+                  <input
+                    type="text"
+                    value={broadcastTitle}
+                    onChange={(e) => setBroadcastTitle(e.target.value)}
+                    placeholder="Notice title (e.g., Mandatory Parade Practice)"
+                    className="w-full bg-[#020B18] border border-white/15 rounded-xl px-4 py-3 text-white outline-none focus:border-[#C5A059]"
+                  />
+                  <textarea
+                    rows={5}
+                    value={broadcastMessage}
+                    onChange={(e) => setBroadcastMessage(e.target.value)}
+                    placeholder="Write official announcement..."
+                    className="w-full bg-[#020B18] border border-white/15 rounded-xl px-4 py-3 text-white outline-none focus:border-[#C5A059] resize-none"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {["Announcement", "Alert", "Message"].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setBroadcastType(type)}
+                        className={`px-3.5 py-2 rounded-xl font-bold cursor-pointer ${
+                          broadcastType === type
+                            ? "bg-[#C5A059] text-[#002147]"
+                            : "bg-[#020B18] text-slate-300 border border-white/15"
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    {editingNotificationId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingNotificationId(null);
+                          setBroadcastTitle("");
+                          setBroadcastMessage("");
+                        }}
+                        className="px-4 py-2.5 bg-white/10 text-white rounded-xl font-bold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={sendingBroadcast || !broadcastTitle.trim() || !broadcastMessage.trim()}
+                      onClick={() => void handleBroadcast()}
+                      className="flex-1 py-2.5 bg-[#C5A059] hover:bg-[#d4b068] text-[#002147] rounded-xl font-black cursor-pointer disabled:opacity-50"
+                    >
+                      {sendingBroadcast
+                        ? "Saving..."
+                        : editingNotificationId
+                        ? "Update Notice"
+                        : "Send Broadcast to All Cadets"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Published List */}
+                <div className="pt-4 border-t border-white/10 space-y-3 max-h-[380px] overflow-y-auto">
+                  {notifications
+                    .filter((n) => n.targetId === "ALL")
+                    .map((notif) => (
+                      <div
+                        key={notif.id}
+                        className="p-4 bg-[#020B18] border border-white/10 rounded-xl space-y-1.5 text-xs"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-bold text-white">{notif.title}</p>
+                            <p className="text-[11px] text-slate-400">
+                              {notif.type} ·{" "}
+                              {notif.timestamp?.toDate
+                                ? notif.timestamp.toDate().toLocaleString()
+                                : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingNotificationId(notif.id);
+                                setBroadcastTitle(notif.title);
+                                setBroadcastMessage(notif.message);
+                                setBroadcastType(notif.type);
+                              }}
+                              className="p-1.5 text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <Edit size={13} />
+                            </button>
+                            {confirmDeleteBroadcastId === notif.id ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteBroadcast(notif.id)}
+                                className="px-2 py-1 bg-rose-600 text-white rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                Confirm
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBroadcastId(notif.id)}
+                                className="p-1.5 text-rose-400 hover:text-rose-300 cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             )}
                           </div>
                         </div>
+                        <p className="text-slate-300">{notif.message}</p>
                       </div>
-                    </div>
-                  </div>
-
-                  {reset.status === "pending" && (
-                    <div className="mt-5 pt-4 border-t border-slate-100 flex gap-3">
-                      <button 
-                        onClick={async () => {
-                          try {
-                            if (!confirm("Are you sure you want to dismiss this security alert?")) return;
-                            await deleteDoc(doc(db, "password_resets", reset.id));
-                          } catch (e) {
-                            console.error("Dismiss reset log error:", e);
-                          }
-                        }}
-                        className="flex-1 py-3 border border-slate-100 hover:bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all"
-                      >
-                        Dismiss Alert
-                      </button>
-                      <button 
-                        onClick={async () => {
-                          try {
-                            await updateDoc(doc(db, "password_resets", reset.id), {
-                              status: "resolved",
-                              resolvedAt: Timestamp.now()
-                            });
-                          } catch (e) {
-                            console.error("Resolve reset error:", e);
-                          }
-                        }}
-                        className="flex-grow py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer text-center transition-all"
-                      >
-                        Mark as resolved
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full py-16 text-center space-y-4 bg-white border border-slate-100 rounded-[2.5rem]">
-                <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
-                  <Key size={32} />
-                </div>
-                <div>
-                  <h4 className="text-base font-black text-slate-800">কোনো পাসওয়ার্ড রিসেট অনুরোধ নেই </h4>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">No Real-time Security Alerts Registered</p>
+                    ))}
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-      ) : activeTab === "admins" ? (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Shield className="text-primary" />
-            এডমিন ম্যানেজার
-          </h3>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Administrative User Access Control</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleGenerateQrAdmin}
-            disabled={creatingAdmin}
-            className="flex items-center gap-2 px-6 py-3 bg-rose-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-600/20 disabled:opacity-50 cursor-pointer"
-          >
-            {creatingAdmin ? <Loader2 className="animate-spin w-4 h-4" /> : <QrCode className="w-4 h-4" />} QR এডমিন তৈরি করুন (System-Gen)
-          </button>
-          <button
-            onClick={() => setShowAddAdmin(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" /> নতুন এডমিন যোগ করুন
-          </button>
-        </div>
-      </div>
 
-      <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-900 text-white">
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">এডমিনের নাম</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">ইউজারনেম</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">রোল (Role)</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest">তৈরির তারিখ</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-right">অ্যাকশন</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {/* Static Super Admin Row */}
-              <tr className="bg-slate-50/30">
-                <td className="px-8 py-6 font-bold text-slate-800">Super Admin</td>
-                <td className="px-8 py-6 font-mono text-xs text-slate-500">admin</td>
-                <td className="px-8 py-6">
-                  <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
-                    SUPER_ADMIN
-                  </span>
-                </td>
-                <td className="px-8 py-6 text-xs text-slate-500 font-bold uppercase">Permanent</td>
-                <td className="px-8 py-6 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedQrAdmin({
-                          id: "super_admin",
-                          username: "admin",
-                          name: "Super Admin",
-                          role: "super_admin"
-                        });
-                        setIsQrModalOpen(true);
-                      }}
-                      className="p-2.5 hover:bg-slate-50 text-slate-400 hover:text-primary rounded-xl transition-all animate-pulse"
-                      title="অ্যাডমিন QR কোড জেনারেটর"
-                    >
-                      <QrCode className="w-5 h-5 text-rose-500" />
-                    </button>
-                    <Shield className="w-5 h-5 text-emerald-500 inline-block" />
-                  </div>
-                </td>
-              </tr>
-              {admins.map((admin) => (
-                <tr key={admin.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-3 font-bold text-slate-800">
-                      {admin.name}
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className="text-slate-500 font-mono text-xs">{admin.username}</span>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-primary/20 bg-primary/5 text-primary">
-                      {admin.role ? admin.role.replace("_", " ").toUpperCase() : "ADMIN"}
-                    </span>
-                  </td>
-                  <td className="px-8 py-6 text-xs text-slate-500">
-                    {admin.createdAt?.toDate ? admin.createdAt.toDate().toLocaleDateString() : new Date(admin.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-8 py-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedQrAdmin({
-                            id: admin.id,
-                            username: admin.username,
-                            name: admin.name,
-                            role: admin.role || "sub_admin"
-                          });
-                          setIsQrModalOpen(true);
-                        }}
-                        className="p-2.5 hover:bg-slate-50 text-slate-400 hover:text-rose-500 rounded-xl transition-all"
-                        title="অ্যাডমিন QR কোড জেনারেটর"
-                      >
-                        <QrCode size={18} className="text-rose-500" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingAdminId(admin.id);
-                          setEditPermissions(admin.permissions || {
-                            canAdd: false,
-                            canEdit: true,
-                            canDelete: false,
-                            canViewLogs: true,
-                            canResetPW: false,
-                            canApprove: true,
-                            canExport: false,
-                            canChat: true
-                          });
-                        }}
-                        className="p-2.5 hover:bg-slate-50 text-slate-400 hover:text-primary rounded-xl transition-all"
-                        title="Edit Permissions"
-                      >
-                        <Settings size={18} />
-                      </button>
-                      <button
-                        onClick={() => deleteAdmin(admin.id)}
-                        className="p-2.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
-                        title="Delete Admin"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <div className="space-y-6">
-      <AuditLogs logs={logs.map(l => ({
-        id: l.id,
-        type: l.type,
-        details: l.details,
-        timestamp: l.timestamp?.toDate ? l.timestamp.toDate().toISOString() : new Date().toISOString(),
-        actorName: l.actorId,
-        severity: (l.type.includes("DELETE") || l.type.includes("REJECT") || l.type.includes("ERROR")) ? "error" : "info"
-      }))} />
-    </div>
-  )}
-
-      {/* Password Reset Modal */}
-      <AnimatePresence>
-        {showPasswordReset && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowPasswordReset(null)}
-              className="absolute inset-0 bg-bg-light/90 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md glass-card p-8 rounded-[2.5rem] space-y-6 shadow-2xl"
-            >
-              <div className="text-center space-y-2">
-                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Key className="text-primary" size={28} />
+              {/* Public Contact Inquiries */}
+              <div className="lg:col-span-6 bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Mail size={18} className="text-[#C5A059]" />
+                    Public Contact Inquiries (/contact)
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => void loadContactInquiries()}
+                    disabled={loadingInquiries}
+                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw size={13} className={loadingInquiries ? "animate-spin" : ""} /> Refresh
+                  </button>
                 </div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Security Reset</h3>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {showPasswordReset}</p>
+
+                {inquiries.length === 0 ? (
+                  <p className="py-12 text-center text-xs text-slate-400">
+                    No contact form submissions recorded in the current server session yet.
+                  </p>
+                ) : (
+                  <div className="space-y-3 max-h-[560px] overflow-y-auto">
+                    {inquiries.map((inq) => (
+                      <div
+                        key={inq.id}
+                        className="p-4 bg-[#020B18] border border-white/10 rounded-xl space-y-1.5 text-xs"
+                      >
+                        <div className="flex items-center justify-between text-[11px] text-[#C5A059] font-mono">
+                          <span>{inq.id}</span>
+                          <span className="text-slate-400">
+                            {new Date(inq.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="font-bold text-white">{inq.subject}</p>
+                        <p className="text-slate-300">{inq.message}</p>
+                        <p className="text-[11px] text-slate-400 pt-1 border-t border-white/10">
+                          {inq.name} · {inq.phone} {inq.email ? `· ${inq.email}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* MODULE 10: ACTIVITY LOGS */}
+          {activeModule === "logs" && (
+            <AuditLogs
+              logs={logs.map((l) => ({
+                id: l.id,
+                type: l.type,
+                details: l.details,
+                timestamp: l.timestamp?.toDate
+                  ? l.timestamp.toDate().toISOString()
+                  : new Date().toISOString(),
+                actorName: l.actorId,
+                severity:
+                  l.type?.includes("DELETE") ||
+                  l.type?.includes("REJECT") ||
+                  l.type?.includes("REVOKE")
+                    ? "error"
+                    : "info",
+              }))}
+            />
+          )}
+
+          {/* MODULE 11: SETTINGS & BACKUPS */}
+          {activeModule === "settings" && (
+            <div className="bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-5">
+              <div>
+                <h2 className="text-base font-bold text-white">Portal Settings & Full Data Backups</h2>
+                <p className="text-xs text-slate-400">
+                  Institutional configuration and full JSON/Excel export tools
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button
+                  type="button"
+                  onClick={exportToExcel}
+                  className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
+                >
+                  <FileSpreadsheet size={18} className="text-[#C5A059]" />
+                  <p className="text-sm font-bold text-white">Export Applicants (.xlsx)</p>
+                  <p className="text-xs text-slate-400">Download full spreadsheet ledger</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={exportJsonBackup}
+                  className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
+                >
+                  <Download size={18} className="text-[#C5A059]" />
+                  <p className="text-sm font-bold text-white">Full JSON Snapshot</p>
+                  <p className="text-xs text-slate-400">Applicants & broadcast notifications</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadPhotosZip()}
+                  className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
+                >
+                  <Archive size={18} className="text-[#C5A059]" />
+                  <p className="text-sm font-bold text-white">Candidate Photos ZIP</p>
+                  <p className="text-xs text-slate-400">Bundle all applicant portraits</p>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* MODULE 12: SECURITY & PASSWORD RESETS */}
+          {activeModule === "security" && (
+            <div className="space-y-6">
+              <div className="bg-[#061830] border border-white/10 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h2 className="text-sm font-bold text-white">Admin Session & Security Status</h2>
+                  <p className="text-xs text-slate-400">
+                    Session: {adminSession?.username} ({adminSession?.role})
+                    {firebaseUser?.email ? ` · ${firebaseUser.email}` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5">
+                    <CheckCircle size={14} /> Active Session
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">New Password Key</label>
-                  <input 
-                    type="text" 
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-surface border border-white/10 rounded-2xl px-6 py-4 text-sm text-white outline-none focus:border-primary shadow-xl"
-                    placeholder="Set temporary password"
-                  />
-                </div>
+                <h3 className="text-sm font-bold text-white">Password Reset Security Alerts</h3>
+                {passwordResets.length === 0 ? (
+                  <div className="bg-[#061830] border border-white/10 rounded-2xl p-12 text-center text-xs text-slate-400">
+                    No active password reset verification requests.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {passwordResets.map((reset: any) => (
+                      <div
+                        key={reset.id}
+                        className="bg-[#061830] border border-white/10 rounded-2xl p-5 space-y-3 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white">{reset.name}</span>
+                          <span
+                            className={`font-bold ${
+                              reset.status === "pending" ? "text-rose-400" : "text-emerald-400"
+                            }`}
+                          >
+                            {reset.status === "pending" ? "Pending" : "Resolved"}
+                          </span>
+                        </div>
+                        <p className="font-mono text-slate-400">
+                          ID: {reset.applicantId} · {reset.mobile}
+                        </p>
+                        {reset.photo && (
+                          <img
+                            src={reset.photo}
+                            alt="Security snapshot"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-36 object-cover rounded-xl bg-black"
+                          />
+                        )}
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          IP: {reset.ipAddress || "N/A"}
+                          {reset.latitude && reset.longitude && (
+                            <>
+                              {" · "}
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${reset.latitude},${reset.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[#C5A059] underline"
+                              >
+                                Map Location
+                              </a>
+                            </>
+                          )}
+                        </p>
+                        {reset.status === "pending" && (
+                          <div className="flex gap-2 pt-2 border-t border-white/10">
+                            {confirmDismissResetId === reset.id ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await deleteDoc(doc(db, "password_resets", reset.id));
+                                  setConfirmDismissResetId(null);
+                                }}
+                                className="flex-1 py-2 bg-rose-600 text-white rounded-xl font-bold cursor-pointer"
+                              >
+                                Confirm Dismiss
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDismissResetId(reset.id)}
+                                className="flex-1 py-2 bg-white/10 text-slate-200 rounded-xl font-bold cursor-pointer"
+                              >
+                                Dismiss
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await updateDoc(doc(db, "password_resets", reset.id), {
+                                  status: "resolved",
+                                  resolvedAt: Timestamp.now(),
+                                });
+                              }}
+                              className="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-bold cursor-pointer"
+                            >
+                              Mark Resolved
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+            </div>
+          )}
+        </div>
+      </div>
 
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setShowPasswordReset(null)}
-                  className="flex-1 py-4 bg-white/5 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleResetPassword}
-                  disabled={resetting || !newPassword}
-                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
-                >
-                  {resetting ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Update Now"}
-                </button>
-              </div>
-            </motion.div>
+      {/* Password Reset Modal */}
+      {showPasswordReset && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-[#061830] border border-white/15 p-6 rounded-2xl space-y-5 shadow-2xl">
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold text-white">Reset Cadet Password</h3>
+              <p className="text-xs font-mono text-slate-400">ID: {showPasswordReset}</p>
+            </div>
+            <input
+              type="text"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new temporary password"
+              className="w-full bg-[#020B18] border border-white/15 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-[#C5A059]"
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPasswordReset(null)}
+                className="flex-1 py-2.5 bg-white/10 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={resetting || !newPassword}
+                onClick={() => void handleResetPassword()}
+                className="flex-1 py-2.5 bg-[#C5A059] text-[#002147] rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
+              >
+                {resetting ? "Updating..." : "Update Password"}
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
-      {/* Admin QR Code Modal */}
+      {/* Admin QR Modal */}
       {selectedQrAdmin && (
         <AdminQrCodeModal
           isOpen={isQrModalOpen}
@@ -1772,238 +1786,131 @@ export function AdminDashboard() {
       )}
 
       {/* Add Admin Modal */}
-      <AnimatePresence>
-        {showAddAdmin && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowAddAdmin(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-white p-10 rounded-[2.5rem] space-y-8 shadow-2xl border border-white"
-            >
-              <div className="text-center space-y-3">
-                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
-                  <UserPlus className="text-primary" size={32} />
-                </div>
-                <h3 className="text-2xl font-bold text-slate-800">নতুন এডমিন যুক্ত করুন</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">Add Administrative Sub-user</p>
+      {showAddAdmin && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-[#061830] border border-white/15 p-6 rounded-2xl space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-white">Create Sub-Admin</h3>
+            <div className="space-y-3 text-xs">
+              <input
+                type="text"
+                value={adminName}
+                onChange={(e) => setAdminName(e.target.value)}
+                placeholder="Full Name"
+                className="w-full bg-[#020B18] border border-white/15 rounded-xl px-4 py-2.5 text-white"
+              />
+              <input
+                type="text"
+                value={adminUsername}
+                onChange={(e) => setAdminUsername(e.target.value)}
+                placeholder="Username"
+                className="w-full bg-[#020B18] border border-white/15 rounded-xl px-4 py-2.5 text-white"
+              />
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full bg-[#020B18] border border-white/15 rounded-xl px-4 py-2.5 text-white"
+              />
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {Object.keys(adminPermissions).map((k) => (
+                  <label key={k} className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(adminPermissions as any)[k]}
+                      onChange={(e) =>
+                        setAdminPermissions((p) => ({ ...p, [k]: e.target.checked }))
+                      }
+                    />
+                    <span>{k}</span>
+                  </label>
+                ))}
               </div>
-
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">পুরো নাম</label>
-                  <input 
-                    type="text" 
-                    value={adminName}
-                    onChange={(e) => setAdminName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm text-slate-800 outline-none focus:border-primary transition-all"
-                    placeholder="নাম লিখুন"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">ইউজারনেম (Username)</label>
-                  <input 
-                    type="text" 
-                    value={adminUsername}
-                    onChange={(e) => setAdminUsername(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm text-slate-800 outline-none focus:border-primary transition-all"
-                    placeholder="username (লগইন এ ব্যবহৃত হবে)"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">পাসওয়ার্ড</label>
-                  <input 
-                    type="password" 
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm text-slate-800 outline-none focus:border-primary transition-all"
-                    placeholder="নিরাপদ পাসওয়ার্ড দিন"
-                  />
-                </div>
-
-                <div className="pt-2 space-y-3">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">কাজের অনুমতি (Permissions)</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { key: 'canAdd', label: 'ডাটা যোগ' },
-                      { key: 'canEdit', label: 'ডাটা এডিট' },
-                      { key: 'canDelete', label: 'ডাটা ডিলিট' },
-                      { key: 'canViewLogs', label: 'লগ দেখা' },
-                      { key: 'canResetPW', label: 'পাসওয়ার্ড রিসেট' },
-                      { key: 'canApprove', label: 'অনুমোদন (Approve)' },
-                      { key: 'canExport', label: 'এক্সপোর্ট (Excel/ZIP)' },
-                      { key: 'canChat', label: 'মেসেঞ্জার অ্যাক্সেস' }
-                    ].map((pref) => (
-                      <label key={pref.key} className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all">
-                        <input 
-                          type="checkbox" 
-                          checked={(adminPermissions as any)[pref.key]}
-                          onChange={(e) => setAdminPermissions(prev => ({ ...prev, [pref.key]: e.target.checked }))}
-                          className="w-4 h-4 rounded text-primary focus:ring-primary"
-                        />
-                        <span className="text-[11px] font-bold text-slate-700">{pref.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setShowAddAdmin(false)}
-                  className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-100"
-                >
-                  বাতিল
-                </button>
-                <button 
-                  onClick={handleCreateAdmin}
-                  disabled={creatingAdmin || !adminName || !adminUsername || !adminPassword}
-                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
-                >
-                  {creatingAdmin ? <Loader2 className="animate-spin mx-auto" size={18} /> : "তৈরি করুন"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Edit Permissions Modal */}
-      <AnimatePresence>
-        {editingAdminId && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEditingAdminId(null)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-white p-10 rounded-[2.5rem] space-y-8 shadow-2xl border border-white"
-            >
-              <div className="text-center space-y-3">
-                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
-                  <Settings className="text-primary" size={32} />
-                </div>
-                <h3 className="text-2xl font-bold text-slate-800">পারমিশন পরিবর্তন করুন</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">Modify Access Level</p>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">কাজের অনুমতি পরিবর্তন (Dynamic Control)</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { key: 'canAdd', label: 'ডাটা যোগ', icon: <UserPlus size={14} /> },
-                    { key: 'canEdit', label: 'ডাটা এডিট', icon: <Edit size={14} /> },
-                    { key: 'canDelete', label: 'ডাটা ডিলিট', icon: <Trash2 size={14} /> },
-                    { key: 'canViewLogs', label: 'লগ দেখা', icon: <History size={14} /> },
-                    { key: 'canResetPW', label: 'পাসওয়ার্ড রিসেট', icon: <Key size={14} /> },
-                    { key: 'canApprove', label: 'অনুমোদন', icon: <CheckCircle size={14} /> },
-                    { key: 'canExport', label: 'এক্সপোর্ট', icon: <Download size={14} /> },
-                    { key: 'canChat', label: 'মেসেঞ্জার', icon: <MessageSquare size={14} /> }
-                  ].map((pref) => (
-                    <label key={pref.key} className={`flex items-center gap-2 p-3 rounded-xl border transition-all cursor-pointer ${
-                      editPermissions?.[pref.key] ? 'bg-primary/5 border-primary/20 text-primary' : 'bg-slate-50 border-slate-100 text-slate-500'
-                    }`}>
-                      <input 
-                        type="checkbox" 
-                        checked={editPermissions?.[pref.key]}
-                        onChange={(e) => setEditPermissions((prev: any) => ({ ...prev, [pref.key]: e.target.checked }))}
-                        className="w-4 h-4 rounded text-primary focus:ring-primary"
-                      />
-                      <div className="flex items-center gap-1.5">
-                        {pref.icon}
-                        <span className="text-[11px] font-bold">{pref.label}</span>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setEditingAdminId(null)}
-                  className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-100"
-                >
-                  বাতিল
-                </button>
-                <button 
-                  onClick={handleUpdatePermissions}
-                  disabled={updatingPermissions}
-                  className="flex-1 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
-                >
-                  {updatingPermissions ? <Loader2 className="animate-spin mx-auto" size={18} /> : "আপডেট করুন"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Generated QR Admin Credentials Display Modal */}
-      <AnimatePresence>
-        {generatedCredentials && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setGeneratedCredentials(null)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-white p-10 rounded-[2.5rem] space-y-6 shadow-2xl border border-white z-10"
-            >
-              <div className="text-center space-y-3">
-                <div className="w-16 h-16 bg-rose-105 text-rose-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner bg-rose-100">
-                  <ShieldCheck size={32} />
-                </div>
-                <h3 className="text-2xl font-bold text-slate-800 font-display">QR এডমিন তৈরি হয়েছে!</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">System-Generated Credentials</p>
-              </div>
-
-              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Username</p>
-                  <p className="text-sm font-black text-slate-800 font-mono tracking-wider select-all">{generatedCredentials.username}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Password</p>
-                  <p className="text-sm font-black text-rose-600 font-mono tracking-wider select-all">{generatedCredentials.password}</p>
-                </div>
-              </div>
-
-              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
-                  পাসওয়ার্ডটি কপি করে সুক্ষিত রাখুন। এই পাসওয়ার্ড এবং ইউজারনেম দিয়ে ডিরেক্ট লগইন করে QR স্ক্যানার এবং আজকের এটেনডেন্স ম্যানেজ প্যানেল ব্যবহার করা যাবে।
-                </p>
-              </div>
-
-              <button 
-                onClick={() => setGeneratedCredentials(null)}
-                className="w-full py-4 bg-primary text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary/95 transition-all shadow-xl shadow-primary/20 cursor-pointer"
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddAdmin(false)}
+                className="flex-1 py-2.5 bg-white/10 text-white rounded-xl text-xs font-bold cursor-pointer"
               >
-                পড়া শেষ / বন্ধ করুন
+                Cancel
               </button>
-            </motion.div>
+              <button
+                type="button"
+                disabled={creatingAdmin || !adminName || !adminUsername || !adminPassword}
+                onClick={() => void handleCreateAdmin()}
+                className="flex-1 py-2.5 bg-[#C5A059] text-[#002147] rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
+              >
+                {creatingAdmin ? "Creating..." : "Create Admin"}
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {/* Edit Admin Permissions Modal */}
+      {editingAdminId && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-[#061830] border border-white/15 p-6 rounded-2xl space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-white">Edit Admin Permissions</h3>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {Object.keys(editPermissions || {}).map((k) => (
+                <label key={k} className="flex items-center gap-2 text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editPermissions?.[k])}
+                    onChange={(e) =>
+                      setEditPermissions((p: any) => ({ ...p, [k]: e.target.checked }))
+                    }
+                  />
+                  <span>{k}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingAdminId(null)}
+                className="flex-1 py-2.5 bg-white/10 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updatingPermissions}
+                onClick={() => void handleUpdatePermissions()}
+                className="flex-1 py-2.5 bg-[#C5A059] text-[#002147] rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
+              >
+                {updatingPermissions ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generated QR Admin Credentials Modal */}
+      {generatedCredentials && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-[#061830] border border-[#C5A059]/40 p-6 rounded-2xl space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-white">QR Admin Credentials Generated</h3>
+            <div className="bg-[#020B18] p-4 rounded-xl border border-white/10 space-y-2 text-xs font-mono">
+              <p className="text-slate-400">
+                Username: <strong className="text-white select-all">{generatedCredentials.username}</strong>
+              </p>
+              <p className="text-slate-400">
+                Password: <strong className="text-[#C5A059] select-all">{generatedCredentials.password}</strong>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setGeneratedCredentials(null)}
+              className="w-full py-2.5 bg-[#C5A059] text-[#002147] rounded-xl text-xs font-black cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
 }

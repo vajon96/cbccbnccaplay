@@ -125,8 +125,11 @@ export function Admin2Dashboard() {
     navigate("/admin2");
   };
 
+  const [exportNotice, setExportNotice] = useState("");
+
   const exportAttendance = async () => {
     setExporting(true);
+    setExportNotice("");
     try {
       const q = query(collection(db, "applicants"), where("attendanceStatus", "==", "Present"));
       const querySnapshot = await getDocs(q);
@@ -143,7 +146,7 @@ export function Admin2Dashboard() {
       });
 
       if (attendanceData.length === 0) {
-        alert("কোনো উপস্থিত শিক্ষার্থী পাওয়া যায়নি।");
+        setExportNotice("কোনো উপস্থিত শিক্ষার্থী পাওয়া যায়নি।");
         return;
       }
 
@@ -163,7 +166,7 @@ export function Admin2Dashboard() {
       XLSX.writeFile(workbook, `BNCC_Attendance_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (error) {
       console.error("Export error:", error);
-      alert("এক্সপোর্ট করতে সমস্যা হয়েছে।");
+      setExportNotice("এক্সপোর্ট করতে সমস্যা হয়েছে।");
     } finally {
       setExporting(false);
     }
@@ -174,6 +177,11 @@ export function Admin2Dashboard() {
   return (
     <div className="min-h-screen bg-sand py-12 px-4">
       <div className="max-w-4xl mx-auto space-y-8">
+        {exportNotice && (
+          <div role="status" className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-sm font-semibold">
+            {exportNotice}
+          </div>
+        )}
         {/* Header */}
         <div className="flex flex-col lg:flex-row items-center justify-between gap-6 bg-primary p-6 md:p-8 rounded-[2rem] text-white shadow-xl text-center lg:text-left">
           <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -278,7 +286,7 @@ export function Admin2Dashboard() {
                   <div className="flex flex-col items-center text-center space-y-6">
                     <div className="relative">
                       <div className="w-32 h-32 rounded-3xl overflow-hidden border-4 border-primary shadow-lg">
-                        {scannedApplicant.photo ? (
+                        {scannedApplicant.photo && scannedApplicant.photo.trim() !== "" ? (
                           <img src={scannedApplicant.photo} className="w-full h-full object-cover" alt="" />
                         ) : (
                           <div className="w-full h-full bg-sand/20 flex items-center justify-center">

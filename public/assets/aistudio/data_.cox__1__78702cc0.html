@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BNCC Cadet Information | Cox's Bazar City College</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Nirmala UI', 'Kalpurush', Arial, sans-serif;
+        }
+        
+        :root {
+            --primary: #006a4e;
+            --secondary: #d4af37;
+            --light: #f5f5f5;
+            --dark: #333;
+            --gray: #7f8c8d;
+        }
+        
+        body {
+            background-color: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+        }
+        
+        /* Header Styles */
+        header {
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px 0;
+        }
+        
+        .header-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+        
+        .logo-container {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .logo-container img {
+            height: 60px;
+            transition: transform 0.3s ease;
+        }
+        
+        .logo-container img:hover {
+            transform: scale(1.05);
+        }
+        
+        .download-btn {
+            background-color: var(--primary);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .download-btn:hover {
+            background-color: #00563e;
+        }
+        
+        /* Banner Styles */
+        .banner {
+            background: linear-gradient(135deg, var(--primary) 0%, #004d39 100%);
+            color: white;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .banner h2 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+        
+        .banner p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        /* Navigation Styles */
+        nav {
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .nav-header {
+            display: none;
+            padding: 15px 20px;
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .nav-link {
+            padding: 15px 20px;
+            text-decoration: none;
+            color: var(--dark);
+            font-weight: 500;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            color: var(--primary);
+        }
+        
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background-color: var(--primary);
+        }
+        
+        /* Main Content Styles */
+        main {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .welcome-section h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+        
+        .logo-animation {
+            position: relative;
+            height: 300px;
+            margin: 30px auto;
+            width: 300px;
+        }
+        
+        .center-logo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            z-index: 2;
+            animation: pulse 3s infinite;
+        }
+        
+        .orbit {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            animation: rotate 20s linear infinite;
+        }
+        
+        .orbit img {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+        }
+        
+        .orbit img:nth-child(1) {
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .orbit img:nth-child(2) {
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+        }
+        
+        .orbit img:nth-child(3) {
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .orbit img:nth-child(4) {
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        /* Table Styles */
+        .table-container {
+            overflow-x: auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 40px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+        
+        th {
+            background-color: var(--primary);
+            color: white;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        tr:hover {
+            background-color: #f0f7f4;
+        }
+        
+        .gpa-cell {
+            font-weight: 600;
+        }
+        
+        .science {
+            border-left: 4px solid #3498db;
+        }
+        
+        .humanities {
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .business {
+            border-left: 4px solid #f39c12;
+        }
+        
+        .bmt {
+            border-left: 4px solid #9b59b6;
+        }
+        
+        .honors {
+            border-left: 4px solid #1abc9c;
+        }
+        
+        .no-data {
+            color: var(--gray);
+            font-style: italic;
+        }
+        
+        /* Footer Styles */
+        footer {
+            background-color: var(--primary);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+            margin-top: 50px;
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            text-align: left;
+        }
+        
+        .footer-section h3 {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        
+        .footer-section p, .footer-section a {
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 10px;
+            display: block;
+            text-decoration: none;
+        }
+        
+        .footer-section a:hover {
+            color: white;
+        }
+        
+        .social-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .social-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            transition: background-color 0.3s ease;
+        }
+        
+        .social-links a:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .copyright {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            .header-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .nav-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .nav-container {
+                flex-direction: column;
+                display: none;
+            }
+            
+            .nav-container.active {
+                display: flex;
+            }
+            
+            .nav-link {
+                border-bottom: 1px solid #f0f0f0;
+            }
+            
+            .banner h2 {
+                font-size: 1.8rem;
+            }
+            
+            .banner p {
+                font-size: 1rem;
+            }
+            
+            .logo-animation {
+                width: 250px;
+                height: 250px;
+            }
+            
+            th, td {
+                padding: 10px 8px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo-container">
+                <a href="https://cbcc.edu.bd/">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="Cox's Bazar City College Logo">
+                </a>
+                <a href="https://bncc.info/">
+                    <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                </a>
+            </div>
+            <a href="Cox's Bazar City College BNCC Platoon (Army Wing).apk" class="download-btn">
+                <i class="fas fa-download"></i> Download App
+            </a>
+        </div>
+    </header>
+
+    <div class="banner">
+        <h2>Cox's Bazar City College BNCC Platoon (Army Wing)</h2>
+        <p>Developing Discipline, Leadership, and Patriotism</p>
+    </div>
+
+    <nav>
+        <div class="nav-header">
+            <button class="menu-toggle" aria-label="Toggle navigation menu">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        
+        <div class="nav-container">
+            <a class="nav-link active" href="index.html">Home</a>
+            <a class="nav-link" href="about.html">About Us</a>
+            <a class="nav-link" href="activities.html">Activities</a>
+            <a class="nav-link" href="cadets.html">Cadets</a>
+            <a class="nav-link" href="gallery.html">Gallery</a>
+            <a class="nav-link" href="contact.html">Contact</a>
+            <a class="nav-link" href="hall-of-incharges.html">Hall of In-Charges</a>
+            <a class="nav-link" href="how-to-become-cadet.html">How to Join</a>
+            <a class="nav-link" href="become-cadet.html">Apply Now</a>
+        </div>
+    </nav>
+
+    <main>
+        <section class="welcome-section">
+            <h2>BNCC Cadet Information</h2>
+            
+            <div class="logo-animation">
+                <img src="https://i.ibb.co/pr5HjFn0/logo3.png" alt="Center Logo" class="center-logo">
+                <div class="orbit">
+                    <img src="https://i.ibb.co/WNyRtBcF/center-logo.png" alt="Cox's Bazar City College Logo">
+                    <img src="https://i.ibb.co/9kZJrrKB/logo1.png" alt="BNCC Logo">
+                    <img src="https://i.ibb.co/99QHMxhX/logo2.png" alt="Logo 3">
+                    <img src="https://i.ibb.co/Z63c0BXN/logo4.png" alt="Logo 4">
+                </div>
+            </div>
+        </section>
+
+        <section class="cadets-section">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ক্র.</th>
+                            <th>নাম</th>
+                            <th>বিভাগ</th>
+                            <th>GPA / ফলাফল</th>
+                            <th>উচ্চতা</th>
+                            <th>সহশিক্ষা কার্যক্রম</th>
+                            <th>ওজন</th>
+                            <th>ক্যাডেট নাম্বার</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="science">
+                            <td>1</td>
+                            <td>আবরার শফি আদিব</td>
+                            <td>বিজ্ঞান</td>
+                            <td class="gpa-cell">SSC 4.67</td>
+                            <td>৫.৮ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>70 কেজি</td>
+                            <td>25154351</td>
+                        </tr>
+                        <tr class="science">
+                            <td>2</td>
+                            <td>সাদ বিন ওমর</td>
+                            <td>বিজ্ঞান</td>
+                            <td class="gpa-cell">SSC 4.44</td>
+                            <td>৫.৬ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>55 কেজি</td>
+                            <td>25154352</td>
+                        </tr>
+                        <tr class="science">
+                            <td>3</td>
+                            <td>মোহাম্মদ আমান</td>
+                            <td>বিজ্ঞান</td>
+                            <td class="gpa-cell">SSC 4.11</td>
+                            <td>৫.৬ ফুট</td>
+                            <td>বক্তৃতা</td>
+                            <td>60 কেজি</td>
+                            <td>25154353</td>
+                        </tr>
+                        <tr class="bmt">
+                            <td>4</td>
+                            <td>মোহাম্মদ সাকিব</td>
+                            <td>BMT</td>
+                            <td class="gpa-cell">SSC 4.06</td>
+                            <td>৫.৬ ফুট</td>
+                            <td>Volleyball</td>
+                            <td>55 কেজি</td>
+                            <td>25154354</td>
+                        </tr>
+                        <tr>
+                            <td>5</td>
+                            <td>মোহাম্মদ ফাহিম</td>
+                            <td class="no-data">মানবিক</td>
+                            <td class="gpa-cell">SSC 3.94</td>
+                            <td>৫.৬ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>50 কেজি</td>
+                            <td>25154355</td>
+                        </tr>
+                        <tr class="humanities">
+                            <td>6</td>
+                            <td>তউসিদ সিদ্দিক আয়ান</td>
+                            <td>মানবিক</td>
+                            <td class="gpa-cell">SSC 3.28</td>
+                            <td>৫.৮ ফুট</td>
+                            <td>Volleyball</td>
+                            <td>48 কেজি</td>
+                            <td>25154356</td>
+                        </tr>
+                        <tr class="science">
+                            <td>7</td>
+                            <td>মাইনুল হাসেম দীপ্ত</td>
+                            <td>বিজ্ঞান</td>
+                            <td class="gpa-cell">SSC 3.33</td>
+                            <td>৫.৬ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>49 কেজি</td>
+                            <td>25154357</td>
+                        </tr>
+                        <tr class="humanities">
+                            <td>8</td>
+                            <td>সাইদুল বশর সামির</td>
+                            <td>মানবিক</td>
+                            <td class="gpa-cell">SSC 3.17</td>
+                            <td>৫.৯ ফুট</td>
+                            <td>Volleyball</td>
+                            <td>57 কেজি</td>
+                            <td>25154358</td>
+                        </tr>
+                        <tr class="business">
+                            <td>9</td>
+                            <td>মোহাম্মদ ইব্রাহিম</td>
+                            <td>ব্যবসায় শিক্ষা</td>
+                            <td class="gpa-cell">SSC 3.06</td>
+                            <td>৫.৬ ফুট</td>
+                            <td>Football</td>
+                            <td>50 কেজি</td>
+                            <td>25154359</td>
+                        </tr>
+                        <tr class="bmt">
+                            <td>10</td>
+                            <td>মোহাম্মদ সাদেক</td>
+                            <td>BMT</td>
+                            <td class="gpa-cell">SSC 3.06</td>
+                            <td>৫.৭ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>61 কেজি</td>
+                            <td>25154360</td>
+                        </tr>
+                        <tr class="business">
+                            <td>11</td>
+                            <td>আলিফ রাফাজ ছিদ্দিকী</td>
+                            <td>ব্যবসায়</td>
+                            <td class="gpa-cell">SSC 2.56</td>
+                            <td>৫.৬ ফুট</td>
+                            <td>আযান, কেরাত</td>
+                            <td>55 কেজি</td>
+                            <td>25154361</td>
+                        </tr>
+                        <tr class="honors">
+                            <td>12</td>
+                            <td>ইফতেহার উদ্দিন</td>
+                            <td>অনার্স ১ম বর্ষ</td>
+                            <td class="gpa-cell">SSC 4.00, HSC 3.58</td>
+                            <td>৫.৬ ফুট</td>
+                            <td>Volleyball</td>
+                            <td>56 কেজি</td>
+                            <td>25154362</td>
+                        </tr>
+                        <tr class="bmt">
+                            <td>13</td>
+                            <td>ফারহানা বেগম</td>
+                            <td>BMT</td>
+                            <td class="gpa-cell">SSC 3.44</td>
+                            <td>৫.৩ ফুট</td>
+                            <td>ব্যাডমিন্টন</td>
+                            <td>46 কেজি</td>
+                            <td>25154363</td>
+                        </tr>
+                        <tr class="humanities">
+                            <td>14</td>
+                            <td>উম্মে তাওফিকা আলম</td>
+                            <td>মানবিক</td>
+                            <td class="gpa-cell">SSC 3.56</td>
+                            <td>৫.০ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>50 কেজি</td>
+                            <td>25154364</td>
+                        </tr>
+                        <tr class="honors">
+                            <td>15</td>
+                            <td>ছালেহা সুলতানা একা</td>
+                            <td>অনার্স ১ম বর্ষ</td>
+                            <td class="gpa-cell">HSC 3.17, SSC 3.67</td>
+                            <td>৫.২ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>58 কেজি</td>
+                            <td>25154365</td>
+                        </tr>
+                        <tr class="humanities">
+                            <td>16</td>
+                            <td>ফাতেমা আক্তার</td>
+                            <td>মানবিক</td>
+                            <td class="gpa-cell">SSC 3.17</td>
+                            <td>৫.১ ফুট</td>
+                            <td class="no-data">—</td>
+                            <td>45 কেজি</td>
+                            <td>25154366</td>
+                        </tr>
+                        <tr class="humanities">
+                            <td>17</td>
+                            <td>তানিশা রহমান</td>
+                            <td>মানবিক</td>
+                            <td class="gpa-cell">SSC 3.78</td>
+                            <td>৫.৪ ফুট</td>
+                            <td>গান</td>
+                            <td>46 কেজি</td>
+                            <td>25154367</td>
+                        </tr>
+                        <tr class="business">
+                            <td>18</td>
+                            <td>অন্বেষা বড়ুয়া</td>
+                            <td>ব্যবসা শিক্ষা</td>
+                            <td class="gpa-cell">SSC 3.83</td>
+                            <td>৫.৩ ফুট</td>
+                            <td>গান, নাচ, আবৃত্তি</td>
+                            <td>40 কেজি</td>
+                            <td>25154368</td>
+                        </tr>
+                        <tr class="humanities">
+                            <td>19</td>
+                            <td>নুসরাত ছমিম</td>
+                            <td>মানবিক</td>
+                            <td class="gpa-cell">SSC 3.94</td>
+                            <td>৫.২ ফুট</td>
+                            <td>গান, আবৃত্তি, কেরাত</td>
+                            <td>47 কেজি</td>
+                            <td>25154369</td>
+                        </tr>
+                        <tr class="honors">
+                            <td>20</td>
+                            <td>ইরফাতুল জান্নাত কাকলি</td>
+                            <td>অনার্স ১ম বর্ষ</td>
+                            <td class="gpa-cell">HSC 3.33, SSC 4.22</td>
+                            <td>৫.৩ ফুট</td>
+                            <td>নৃত্য</td>
+                            <td>52 কেজি</td>
+                            <td>25154370</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>Contact Us</h3>
+                <p><i class="fas fa-map-marker-alt"></i> Cox's Bazar City College, Kolatoli, Cox's Bazar</p>
+                <p><i class="fas fa-phone"></i> +880 1234-567890</p>
+                <p><i class="fas fa-envelope"></i> bncc@cbcc.edu.bd</p>
+            </div>
+            
+            <div class="footer-section">
+                <h3>Quick Links</h3>
+                <a href="index.html">Home</a>
+                <a href="about.html">About BNCC</a>
+                <a href="activities.html">Activities</a>
+                <a href="become-cadet.html">Join BNCC</a>
+            </div>
+            
+            <div class="footer-section">
+                <h3>Follow Us</h3>
+                <div class="social-links">
+                    <a href="#"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                    <a href="#"><i class="fab fa-youtube"></i></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="copyright">
+            <p>&copy; 2023 Cox's Bazar City College BNCC Platoon (Army Wing). All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        document.querySelector('.menu-toggle').addEventListener('click', function() {
+            document.querySelector('.nav-container').classList.toggle('active');
+        });
+        
+        // Add active class to current page in navigation
+        const currentPage = window.location.pathname.split('/').pop();
+        const navLinks = document.querySelectorAll('.nav-link');
+        
+        navLinks.forEach(link => {
+            if (link.getAttribute('href') === currentPage) {
+                link.classList.add('active');
+            } else {
+                link.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>

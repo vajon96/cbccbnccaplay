@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="navyBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#002147" />
+      <stop offset="100%" stop-color="#00152e" />
+    </linearGradient>
+    <linearGradient id="goldTrim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dfc07c" />
+      <stop offset="100%" stop-color="#b58d3d" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#navyBg)" />
+  <path d="M256 64 L408 118 V246 C408 352 342 426 256 456 C170 426 104 352 104 246 V118 Z" fill="none" stroke="url(#goldTrim)" stroke-width="18" stroke-linejoin="round" />
+  <path d="M256 96 L380 140 V244 C380 332 326 394 256 420 C186 394 132 332 132 244 V140 Z" fill="#002b5c" stroke="#c5a059" stroke-width="6" />
+  <polygon points="256,144 274,194 328,194 284,225 300,276 256,245 212,276 228,225 184,194 238,194" fill="url(#goldTrim)" />
+  <text x="256" y="346" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="52" letter-spacing="4">BNCC</text>
+  <text x="256" y="382" text-anchor="middle" fill="#dfc07c" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="22" letter-spacing="3">CBCC 15 BN</text>
+</svg>

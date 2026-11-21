@@ -1,5 +1,5 @@
 import { 
-  db, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, 
+  auth, db, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, 
   query, where, orderBy, limit, Timestamp, writeBatch, handleFirestoreError, OperationType 
 } from "../firebase";
 import { 
@@ -7,6 +7,70 @@ import {
   ExamAttempt, ExamResult, ExamSetting, ExamActivityLog, RandomQuestionRule, AttemptStatus,
   EvaluationStatus, ManualQuestionEvaluation, MarksHistoryEntry, AnswerScriptAuditLog
 } from "../types";
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    // Ignore token fetch errors and rely on session cookie
+  }
+  return headers;
+}
+
+export function stripQuestionKeys(q: QuestionBankItem): QuestionBankItem {
+  const { correctAnswer: _c, acceptedAnswers: _a, expectedAnswer: _e, explanation: _ex, ...safeQ } = q as any;
+  return safeQ as QuestionBankItem;
+}
+
+async function sealExamKeysToVault(
+  examId: string,
+  questions: QuestionBankItem[],
+  negativePenalty: number = 0,
+  passMarks: number = 0
+): Promise<string | undefined> {
+  const payload = questions.map(q => ({
+    id: q.id,
+    questionType: q.questionType || "mcq",
+    correctAnswer: q.correctAnswer ?? "",
+    acceptedAnswers: q.acceptedAnswers || [],
+    marks: q.marks || 1,
+  }));
+
+  let sealedPayload: string | undefined;
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch("/api/exam/keys", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify({ examId, questions: payload, negativePenalty, passMarks }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      sealedPayload = data?.sealedPayload;
+    }
+  } catch (err) {
+    console.warn("Could not seal exam keys on server vault:", err);
+  }
+
+  try {
+    await setDoc(doc(db, "exam_answer_keys", examId), {
+      examId,
+      sealedPayload: sealedPayload || "",
+      keysCount: payload.length,
+      negativePenalty,
+      passMarks,
+      keys: payload,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn("Could not persist exam_answer_keys doc:", err);
+  }
+
+  return sealedPayload;
+}
 
 // ============================================================================
 // QUESTION BANK SERVICES
@@ -463,7 +527,7 @@ export async function seedDefaultQuestionsIfEmpty(actorId: string = "system"): P
 // EXAM MANAGEMENT SERVICES
 // ============================================================================
 
-export async function fetchExams(statusFilter?: ExamStatus): Promise<ExamModel[]> {
+export async function fetchExams(statusFilter?: ExamStatus | ExamStatus[]): Promise<ExamModel[]> {
   try {
     const ref = collection(db, "exams");
     const q = query(ref, orderBy("createdAt", "desc"));
@@ -474,7 +538,11 @@ export async function fetchExams(statusFilter?: ExamStatus): Promise<ExamModel[]
     } as ExamModel));
 
     if (statusFilter) {
-      items = items.filter(e => e.status === statusFilter);
+      if (Array.isArray(statusFilter)) {
+        items = items.filter(e => statusFilter.includes(e.status));
+      } else {
+        items = items.filter(e => e.status === statusFilter);
+      }
     }
     return items;
   } catch (error) {
@@ -502,7 +570,7 @@ export async function createExam(examData: Omit<ExamModel, "id" | "createdAt" | 
     const docRef = doc(collection(db, "exams"));
     const now = new Date().toISOString();
     
-    // Resolve question snapshots
+    // Resolve question snapshots from question_bank
     let snapshots: QuestionBankItem[] = [];
     if (examData.questionSelectionMode === "manual" && examData.selectedQuestionIds && examData.selectedQuestionIds.length > 0) {
       const allQ = await fetchQuestions();
@@ -515,11 +583,23 @@ export async function createExam(examData: Omit<ExamModel, "id" | "createdAt" | 
       ? snapshots.reduce((acc, curr) => acc + (curr.marks || 1), 0)
       : (examData.totalMarks || 100);
 
+    const negativePenalty = (examData.negativeMarking?.enabled && examData.negativeMarking.marksPerWrongAnswer > 0)
+      ? examData.negativeMarking.marksPerWrongAnswer
+      : 0;
+
+    // Seal answer keys into admin-only exam_answer_keys + server AES-256-GCM envelope
+    const sealedKeyEnvelope = snapshots.length > 0
+      ? await sealExamKeysToVault(docRef.id, snapshots, negativePenalty, examData.passMarks || 0)
+      : undefined;
+
+    const sanitizedSnapshots = snapshots.map(stripQuestionKeys);
+
     const newExam: ExamModel = {
       ...examData,
       id: docRef.id,
       totalMarks: calculatedTotalMarks,
-      questionSnapshots: snapshots,
+      questionSnapshots: sanitizedSnapshots,
+      ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
       createdAt: now,
       updatedAt: now
     };
@@ -554,15 +634,35 @@ export async function updateExam(id: string, updates: Partial<ExamModel>, actorI
       snapshots = allQ.filter(q => updates.selectedQuestionIds?.includes(q.id));
     } else if (updates.questionSelectionMode === "random" && updates.randomRules) {
       snapshots = await generateRandomQuestionSet(updates.randomRules);
+    } else if (snapshots.length > 0) {
+      try {
+        const allQ = await fetchQuestions();
+        const bankMap = new Map(allQ.map(q => [q.id, q]));
+        snapshots = snapshots.map(q => bankMap.get(q.id) || q);
+      } catch {
+        // Keep snapshots if question_bank read skipped
+      }
     }
 
     const calculatedTotalMarks = snapshots.length > 0 
       ? snapshots.reduce((acc, curr) => acc + (curr.marks || 1), 0)
       : (updates.totalMarks || existing.totalMarks);
 
-    const updatedData = {
+    const negConfig = updates.negativeMarking ?? existing.negativeMarking;
+    const negativePenalty = (negConfig?.enabled && negConfig.marksPerWrongAnswer > 0)
+      ? negConfig.marksPerWrongAnswer
+      : 0;
+    const passMarks = updates.passMarks ?? existing.passMarks ?? 0;
+
+    let sealedKeyEnvelope = existing.sealedKeyEnvelope;
+    if (snapshots.length > 0 && snapshots.some(q => q.correctAnswer !== undefined)) {
+      sealedKeyEnvelope = await sealExamKeysToVault(id, snapshots, negativePenalty, passMarks) || sealedKeyEnvelope;
+    }
+
+    const updatedData: any = {
       ...updates,
-      questionSnapshots: snapshots,
+      questionSnapshots: snapshots.map(stripQuestionKeys),
+      ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
       totalMarks: calculatedTotalMarks,
       updatedAt: new Date().toISOString()
     };
@@ -595,8 +695,21 @@ export async function publishExam(id: string, actorId: string = "admin"): Promis
       throw new Error("Exam has no selected questions. Please add questions before publishing.");
     }
 
+    // Ensure answer keys are sealed in exam_answer_keys and stripped from public questionSnapshots
+    const allQ = await fetchQuestions();
+    const bankMap = new Map(allQ.map(q => [q.id, q]));
+    const fullQuestions = exam.questionSnapshots.map(q => bankMap.get(q.id) || q);
+    const negativePenalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
+      ? exam.negativeMarking.marksPerWrongAnswer
+      : 0;
+    const sealedKeyEnvelope =
+      (await sealExamKeysToVault(id, fullQuestions, negativePenalty, exam.passMarks || 0)) ||
+      exam.sealedKeyEnvelope;
+
     await updateDoc(doc(db, "exams", id), {
       status: "published",
+      questionSnapshots: fullQuestions.map(stripQuestionKeys),
+      ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
       updatedAt: new Date().toISOString()
     });
 
@@ -694,25 +807,34 @@ export async function startExamAttempt(params: {
       throw new Error("পরীক্ষাটি বর্তমানে সক্রিয় নয় (Exam is not active).");
     }
 
-    // Check existing attempts for this candidate
+    const authUid = auth.currentUser?.uid || userId;
     const attemptsRef = collection(db, "exam_attempts");
-    const q = query(
-      attemptsRef, 
-      where("examId", "==", examId), 
-      where("userId", "==", userId)
-    );
-    const snap = await getDocs(q);
-    const existingAttempts = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamAttempt));
+
+    // Query existing attempts scoped by ownerUid (matches Firestore security rules without needing composite index)
+    let existingAttempts: ExamAttempt[] = [];
+    try {
+      const q = auth.currentUser?.uid
+        ? query(attemptsRef, where("ownerUid", "==", authUid))
+        : query(attemptsRef, where("userId", "==", userId));
+      const snap = await getDocs(q);
+      existingAttempts = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as ExamAttempt))
+        .filter(a => a.examId === examId);
+    } catch {
+      existingAttempts = [];
+    }
 
     // Check if there is an in_progress attempt
     const inProgress = existingAttempts.find(a => a.status === "in_progress");
     if (inProgress) {
-      // Return active in-progress attempt for interruption recovery!
+      // Return active in-progress attempt for interruption recovery
       return inProgress;
     }
 
     // Check attempt limit
-    const completedCount = existingAttempts.filter(a => a.status === "submitted" || a.status === "auto_submitted" || a.status === "expired").length;
+    const completedCount = existingAttempts.filter(
+      a => a.status === "submitted" || a.status === "auto_submitted" || a.status === "expired"
+    ).length;
     if (exam.maxAttempts > 0 && completedCount >= exam.maxAttempts) {
       throw new Error(`আপনার সর্বোচ্চ Attempt (${exam.maxAttempts} টি) পূর্ণ হয়ে গেছে।`);
     }
@@ -720,29 +842,20 @@ export async function startExamAttempt(params: {
     // Prepare question set snapshot
     let questions = exam.questionSnapshots || [];
     if (questions.length === 0) {
-      // Fallback 1: load questions from selection
       if (exam.selectedQuestionIds && exam.selectedQuestionIds.length > 0) {
         const allQ = await fetchQuestions();
         questions = allQ.filter(q => exam.selectedQuestionIds?.includes(q.id));
-      } 
-      
-      // Fallback 2: load from random rules if still 0
+      }
       if (questions.length === 0 && exam.randomRules && exam.randomRules.length > 0) {
         questions = await generateRandomQuestionSet(exam.randomRules);
       }
-
-      // Fallback 3: if still 0 questions, fetch all active questions or seed defaults
-      if (questions.length === 0) {
-        let allActive = await fetchQuestions({ isActiveOnly: true });
-        if (allActive.length === 0) {
-          await seedDefaultQuestionsIfEmpty(userId);
-          allActive = await fetchQuestions({ isActiveOnly: true });
-        }
-        questions = allActive;
-      }
     }
 
-    // Ensure every question object explicitly normalizes `question` text and `options`
+    if (questions.length === 0) {
+      throw new Error("পরীক্ষায় কোনো প্রশ্ন যুক্ত করা হয়নি। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।");
+    }
+
+    // Normalize question text and options
     const normalizedQuestions = questions.map(q => {
       const qText = (q as any).question || (q as any).questionText || (q as any).question_text || (q as any).text || (q as any).title || (q as any).content || (q as any).name || "Question text unavailable";
       return {
@@ -757,11 +870,8 @@ export async function startExamAttempt(params: {
       finalQuestions = finalQuestions.sort(() => 0.5 - Math.random());
     }
 
-    // Create candidate-safe question snapshot (REMOVE correct answer keys from candidate snapshot!)
-    const candidateSafeSnapshot = finalQuestions.map(q => {
-      const { correctAnswer, acceptedAnswers, expectedAnswer, explanation, ...safeQ } = q;
-      return safeQ as QuestionBankItem;
-    });
+    // Create candidate-safe question snapshot (never include answer keys!)
+    const candidateSafeSnapshot = finalQuestions.map(stripQuestionKeys);
 
     const docRef = doc(collection(db, "exam_attempts"));
     const now = new Date().toISOString();
@@ -772,6 +882,7 @@ export async function startExamAttempt(params: {
       examTitle: exam.title,
       candidateId,
       userId,
+      ownerUid: authUid,
       registrationNumber,
       candidateName: candidateName || "Candidate",
       candidatePhoto: candidatePhoto || "",
@@ -843,9 +954,14 @@ export async function getAttemptById(attemptId: string): Promise<ExamAttempt | n
 export async function getUserAttempts(userId: string): Promise<ExamAttempt[]> {
   try {
     const ref = collection(db, "exam_attempts");
-    const q = query(ref, where("userId", "==", userId));
+    const authUid = auth.currentUser?.uid;
+    const q = authUid
+      ? query(ref, where("ownerUid", "==", authUid))
+      : query(ref, where("userId", "==", userId));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamAttempt));
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as ExamAttempt))
+      .sort((a, b) => new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime());
   } catch (error) {
     console.error("Error getting user attempts:", error);
     return [];
@@ -853,7 +969,7 @@ export async function getUserAttempts(userId: string): Promise<ExamAttempt[]> {
 }
 
 // ============================================================================
-// TRUSTED SERVER-SIDE EVALUATION & SCORING
+// AUTHORITATIVE SERVER-SIDE EVALUATION & SCORING
 // ============================================================================
 
 export async function submitExamAttempt(attemptId: string, autoSubmitted = false): Promise<ExamResult> {
@@ -862,7 +978,6 @@ export async function submitExamAttempt(attemptId: string, autoSubmitted = false
     if (!attempt) throw new Error("Attempt not found");
 
     if (attempt.status === "submitted" || attempt.status === "auto_submitted" || attempt.status === "expired") {
-      // Already evaluated, return existing result if available
       const existingResult = await getResultByAttemptId(attemptId);
       if (existingResult) return existingResult;
     }
@@ -870,91 +985,110 @@ export async function submitExamAttempt(attemptId: string, autoSubmitted = false
     const exam = await getExamById(attempt.examId);
     if (!exam) throw new Error("Associated exam not found");
 
-    // Retrieve authoritative questions with correct answers from Question Bank or exam.questionSnapshots
-    const allQuestions = await fetchQuestions();
-    const questionMap = new Map<string, QuestionBankItem>();
-    
-    // First map from exam snapshots
-    if (exam.questionSnapshots) {
-      exam.questionSnapshots.forEach(q => questionMap.set(q.id, q));
-    }
-    // Override/enrich with full Question Bank item to ensure correct answer is available
-    allQuestions.forEach(q => {
-      if (questionMap.has(q.id) || attempt.questionSnapshot?.some(qs => qs.id === q.id)) {
-        questionMap.set(q.id, q);
-      }
-    });
-
+    const ownerUid = attempt.ownerUid || auth.currentUser?.uid || attempt.userId;
     const candidateSnapshot = attempt.questionSnapshot || [];
     const answersMap = attempt.answers || {};
 
+    let finalScore = 0;
+    let totalMarks = exam.totalMarks || candidateSnapshot.reduce((acc, q) => acc + (q.marks || 1), 0);
+    let percentage = 0;
+    let isPassed = false;
     let correctCount = 0;
     let wrongCount = 0;
     let unansweredCount = 0;
-    let earnedScore = 0;
+    let resultSignature: string | undefined;
+    let gradingStatus = "graded";
 
-    const penalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
-      ? exam.negativeMarking.marksPerWrongAnswer
-      : 0;
-
-    candidateSnapshot.forEach(qItem => {
-      const fullQ = questionMap.get(qItem.id);
-      const userAnsObj = answersMap[qItem.id];
-      const qMarks = qItem.marks || fullQ?.marks || 1;
-
-      if (!userAnsObj || userAnsObj.selectedAnswer === undefined || userAnsObj.selectedAnswer === null || userAnsObj.selectedAnswer === "") {
-        unansweredCount++;
-        return;
-      }
-
-      const given = userAnsObj.selectedAnswer;
-      const key = fullQ?.correctAnswer || qItem.correctAnswer;
-      const accepted = fullQ?.acceptedAnswers || [];
-
-      let isCorrect = false;
-
-      if (qItem.questionType === "mcq" || qItem.questionType === "true_false") {
-        if (typeof given === "string" && typeof key === "string") {
-          isCorrect = given.trim().toUpperCase() === key.trim().toUpperCase();
-        }
-      } else {
-        // String normalized comparison for fill_gaps, tag_question, changing_sentence, short_question
-        const normGiven = typeof given === "string" ? given.trim().toLowerCase() : "";
-        const normKey = typeof key === "string" ? key.trim().toLowerCase() : "";
-        const normAccepted = accepted.map(a => a.trim().toLowerCase());
-
-        if (normGiven === normKey || normAccepted.includes(normGiven)) {
-          isCorrect = true;
-        }
-      }
-
-      if (isCorrect) {
-        correctCount++;
-        earnedScore += qMarks;
-      } else {
-        wrongCount++;
-        if (penalty > 0) {
-          earnedScore -= penalty;
-        }
-      }
+    // Primary path: Grade authoritatively via Node.js AES-256-GCM Answer Key Vault (/api/exam/submit)
+    const headers = await getAuthHeaders();
+    const serverRes = await fetch("/api/exam/submit", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify({
+        examId: exam.id,
+        attemptId,
+        answers: answersMap,
+        sealedPayload: exam.sealedKeyEnvelope || undefined,
+      }),
     });
 
-    const finalScore = Math.max(0, Number(earnedScore.toFixed(2)));
-    const totalMarks = exam.totalMarks || candidateSnapshot.reduce((acc, q) => acc + (q.marks || 1), 0);
-    const percentage = totalMarks > 0 ? Number(((finalScore / totalMarks) * 100).toFixed(2)) : 0;
-    const isPassed = finalScore >= (exam.passMarks || 0);
+    if (serverRes.ok) {
+      const graded = await serverRes.json();
+      finalScore = Number(graded.obtainedMarks) || 0;
+      totalMarks = Number(graded.totalMarks) || totalMarks;
+      percentage = Number(graded.percentage) || 0;
+      isPassed = Boolean(graded.isPassed);
+      correctCount = Number(graded.correctCount) || 0;
+      wrongCount = Number(graded.wrongCount) || 0;
+      unansweredCount = Number(graded.unansweredCount) || 0;
+      resultSignature = graded.resultSignature;
+      gradingStatus = graded.gradingStatus || "graded";
+    } else {
+      // Admin-only fallback for legacy pre-vault exams (candidates cannot read question_bank)
+      const allQuestions = await fetchQuestions();
+      if (allQuestions.length === 0) {
+        const errBody = await serverRes.json().catch(() => ({}));
+        throw new Error(errBody?.error || "Server grading failed. Please retry submitting.");
+      }
+
+      const questionMap = new Map<string, QuestionBankItem>();
+      allQuestions.forEach(q => questionMap.set(q.id, q));
+      let earnedScore = 0;
+      const penalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
+        ? exam.negativeMarking.marksPerWrongAnswer
+        : 0;
+
+      candidateSnapshot.forEach(qItem => {
+        const fullQ = questionMap.get(qItem.id);
+        const userAnsObj = answersMap[qItem.id];
+        const qMarks = qItem.marks || fullQ?.marks || 1;
+        if (!userAnsObj || userAnsObj.selectedAnswer === undefined || userAnsObj.selectedAnswer === null || userAnsObj.selectedAnswer === "") {
+          unansweredCount++;
+          return;
+        }
+        const given = userAnsObj.selectedAnswer;
+        const key = fullQ?.correctAnswer;
+        const accepted = fullQ?.acceptedAnswers || [];
+        let isCorrect = false;
+        if (qItem.questionType === "mcq" || qItem.questionType === "true_false") {
+          if (typeof given === "string" && typeof key === "string") {
+            isCorrect = given.trim().toUpperCase() === key.trim().toUpperCase();
+          }
+        } else {
+          const normGiven = typeof given === "string" ? given.trim().toLowerCase() : "";
+          const normKey = typeof key === "string" ? key.trim().toLowerCase() : "";
+          const normAccepted = accepted.map(a => a.trim().toLowerCase());
+          if (normGiven === normKey || normAccepted.includes(normGiven)) {
+            isCorrect = true;
+          }
+        }
+        if (isCorrect) {
+          correctCount++;
+          earnedScore += qMarks;
+        } else {
+          wrongCount++;
+          if (penalty > 0) earnedScore -= penalty;
+        }
+      });
+
+      finalScore = Math.max(0, Number(earnedScore.toFixed(2)));
+      percentage = totalMarks > 0 ? Number(((finalScore / totalMarks) * 100).toFixed(2)) : 0;
+      isPassed = finalScore >= (exam.passMarks || 0);
+    }
 
     const now = new Date().toISOString();
-
-    // Calculate time taken in seconds
     const startTime = new Date(attempt.startedAt).getTime();
     const endTime = new Date(now).getTime();
     const timeTakenSeconds = Math.max(0, Math.round((endTime - startTime) / 1000));
 
-    // Update attempt record
-    const updatedAttemptStatus: AttemptStatus = autoSubmitted ? "auto_submitted" : "submitted";
+    // Persist status "submitted" so Firestore candidate update rule passes cleanly
     await updateDoc(doc(db, "exam_attempts", attemptId), {
-      status: updatedAttemptStatus,
+      ownerUid,
+      status: "submitted" as AttemptStatus,
+      isAutoSubmitted: autoSubmitted,
+      gradingStatus,
+      ...(resultSignature ? { resultSignature } : {}),
       submittedAt: now,
       score: finalScore,
       percentage,
@@ -965,7 +1099,6 @@ export async function submitExamAttempt(attemptId: string, autoSubmitted = false
       updatedAt: now
     });
 
-    // Create result record
     const resultDocRef = doc(collection(db, "exam_results"));
     const examResult: ExamResult = {
       id: resultDocRef.id,
@@ -974,6 +1107,7 @@ export async function submitExamAttempt(attemptId: string, autoSubmitted = false
       attemptId,
       candidateId: attempt.candidateId,
       userId: attempt.userId,
+      ownerUid,
       registrationNumber: attempt.registrationNumber,
       candidateName: attempt.candidateName || "Candidate",
       candidatePhoto: attempt.candidatePhoto || "",
@@ -986,6 +1120,8 @@ export async function submitExamAttempt(attemptId: string, autoSubmitted = false
       wrongCount,
       unansweredCount,
       timeTakenSeconds,
+      gradingStatus,
+      ...(resultSignature ? { resultSignature } : {}),
       submittedAt: now
     };
 
@@ -1602,6 +1738,7 @@ export async function recalculateAttemptResult(attemptId: string, actorId: strin
       attemptId,
       candidateId: attempt.candidateId,
       userId: attempt.userId,
+      ownerUid: attempt.ownerUid || auth.currentUser?.uid || attempt.userId,
       registrationNumber: attempt.registrationNumber,
       candidateName: attempt.candidateName || "Candidate",
       candidatePhoto: attempt.candidatePhoto || "",

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BNCC Attestation Certificate Generator | Enhanced & AI-Assisted</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Roboto:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <style>
+        /* --- BRANDING & VARIABLES --- */
+        :root {
+            --bncc-navy: #0D47A1; 
+            --bncc-red: #C62828;
+            --bncc-gold: #FFC107;
+            
+            /* A4 Landscape: 297mm x 210mm */
+            --margin-in-mm: 50.8mm; /* 2 inches = 50.8mm */
+            
+            /* Calculated Content Size: A4 - (2 * 2 inches) */
+            /* INCREASED SIZE by ~20% */
+            --content-width: 215.4mm; /* 297mm - 81.6mm (Approx. 1.6 inch margin left) */
+            --content-height: 128.4mm; /* 210mm - 81.6mm */
+            
+            /* The actual margin will be 40.8mm (1.6 inches) if these sizes are used */
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* --- FONTS & TYPOGRAPHY --- */
+        .font-header { font-family: 'Cinzel', serif; }
+        .font-body { font-family: 'Playfair Display', serif; }
+        .text-xlg { font-size: 1.35rem; } /* Slightly larger body text */
+        .text-3xl-lg { font-size: 1.95rem; } /* Larger title */
+
+        /* --- CERTIFICATE CONTAINER (FIXED SIZE) --- */
+        #certificate-container {
+            width: var(--content-width);
+            height: var(--content-height);
+            background: white;
+            position: relative;
+            box-sizing: border-box;
+            overflow: hidden;
+            
+            /* **THICKER BORDER** (Enhanced) */
+            border: 8px solid var(--bncc-navy); 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            
+            /* Inner Gold Accent Border (More Visible) */
+            outline: 3px solid var(--bncc-gold);
+            outline-offset: -12px; 
+        }
+        
+        .inner-border {
+            position: absolute;
+            top: 4mm;
+            left: 4mm;
+            right: 4mm;
+            bottom: 4mm;
+            border: 2px solid var(--bncc-navy);
+            box-sizing: border-box;
+        }
+
+        /* --- WATERMARK --- */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.10; /* More subtle */
+            width: 90%; 
+            height: 90%;
+            object-fit: contain;
+            user-select: none;
+        }
+
+        /* --- AI ASSISTANT UI --- */
+        #ai-toggle-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            cursor: pointer;
+        }
+
+        #ai-chat-box {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 300px;
+            height: 400px;
+            z-index: 99;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: none;
+        }
+
+
+        /* --- PRINT CSS (CRITICAL FOR 2-INCH MARGIN) --- */
+        @media print {
+            /* Force the 2-inch margin */
+            @page {
+                size: A4 landscape;
+                margin: 2in; /* 50.8mm */
+            }
+            body {
+                margin: 0;
+                padding: 0;
+                background: white;
+            }
+            /* Hide UI elements for print */
+            nav, .control-panel, footer, .no-print, #ai-toggle-btn, #ai-chat-box {
+                display: none !important;
+            }
+            /* Calculate container size to center it with 2in margins */
+            #certificate-container {
+                width: 195.4mm; /* A4 width - 4in margin */
+                height: 108.4mm; /* A4 height - 4in margin */
+                transform: none !important; 
+                margin: 0;
+            }
+            /* The image addImage function in JS will handle the custom 1.6in margin */
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <nav class="bg-white border-b border-gray-200 shadow-sm z-50 sticky top-0 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <img src="https://i.ibb.co/6y4661J/Bncc-logo.png" class="h-10 w-auto object-contain" alt="BNCC Logo">
+                    <span class="font-bold text-xl text-gray-800 tracking-tight">BNCC Certificate System <span class="text-blue-700">PRO</span></span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-[1920px] mx-auto w-full p-4 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <aside class="lg:col-span-3 space-y-6 control-panel">
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6 sticky top-24">
+                <h2 class="text-lg font-bold text-gray-800 border-b pb-3 mb-4">Configuration ⚙️</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Select Cadet</label>
+                        <select id="cadet-select" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Date Issued</label>
+                        <input type="date" id="date-input" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500">
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-100 space-y-3">
+                        <button id="pdf-btn" class="w-full bg-[--bncc-navy] hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 group">
+                            <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Download High-Res PDF (Enhanced Margin) 📥
+                        </button>
+                        
+                        <button onclick="window.print()" class="w-full bg-white border-2 border-gray-200 text-gray-700 font-bold py-2.5 px-4 rounded-lg hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                            Print Document (2-in Margin) 🖨️
+                        </button>
+                    </div>
+
+                    <div id="status-msg" class="hidden text-xs text-center font-medium p-2 rounded bg-blue-50 text-blue-700 animate-pulse">
+                        Generating High-Res PDF... Please wait.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-xs text-yellow-800">
+                <strong>💡 Note:</strong> The content size is now larger (1.6 inch effective margin). The PDF will be created with this larger size.
+            </div>
+        </aside>
+
+        <section class="lg:col-span-9 bg-gray-200 rounded-xl border border-gray-300 relative overflow-hidden flex flex-col items-center justify-start pt-10 min-h-[600px] certificate-wrapper">
+            
+            <div class="absolute top-4 right-4 bg-white/80 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-gray-500 shadow-sm z-10 no-print">
+                Preview Scaled for Screen Fit
+            </div>
+
+            <div id="preview-wrapper" class="preview-scale-wrapper">
+                
+                <div id="certificate-container">
+                    
+                    <div class="inner-border"></div>
+                    
+                    <img src="https://i.ibb.co/6y4661J/Bncc-logo.png" alt="BNCC Watermark" class="watermark" />
+
+                    <div class="relative z-10 h-full flex flex-col justify-between p-10">
+                        
+                        <div class="flex justify-between items-center border-b-2 border-[--bncc-navy] pb-4 mb-3">
+                            <img src="https://i.ibb.co/6y4661J/Bncc-logo.png" alt="College Logo Placeholder" class="w-20 h-20 object-contain">
+                            
+                            <div class="flex-1 text-center mt-0 px-4">
+                                <h1 class="font-header text-3xl-lg font-black text-[--bncc-navy] tracking-wider uppercase leading-tight mb-1">BANGLADESH NATIONAL CADET CORPS</h1>
+                                <h2 class="font-header text-base font-bold text-gray-900 leading-snug">Cox's Bazar City College Platoon</h2>
+                                <h3 class="text-sm font-bold text-[--bncc-red] tracking-widest uppercase mt-1">Army Wing | 15th BNCC Battalion</h3>
+                            </div>
+
+                            <div class="w-20 h-20 border border-gray-300 flex items-center justify-center text-xs text-gray-400">UNIT SEAL</div>
+                        </div>
+
+                        <div class="text-center py-2">
+                            <h2 class="font-header text-3xl font-black text-[--bncc-red] inline-block border-b-2 border-double border-[--bncc-red] pb-1 px-4">
+                                ATTESTATION CERTIFICATE
+                            </h2>
+                        </div>
+
+                        <div class="flex-grow px-2 relative pt-3">
+                            
+                            <div class="float-right ml-6 mb-3 w-[90px] h-[110px] border-[4px] border-[--bncc-navy] p-[1px] bg-white shadow-lg">
+                                <img id="cadet-photo" src="" alt="Cadet Photo" class="w-full h-full object-cover">
+                            </div>
+
+                            <div class="font-body text-xlg leading-relaxed text-justify text-gray-900">
+                                <p class="mb-4 first-letter:text-4xl first-letter:font-bold first-letter:float-left first-letter:mr-2 first-letter:text-[--bncc-navy]">
+                                    This is to certify that <strong class="text-[--bncc-navy] font-extrabold uppercase">Cadet <span id="cadet-name">NAME HERE</span></strong>, 
+                                    Cadet No. <strong class="text-[--bncc-red] border-b border-dotted border-gray-500" id="cadet-id">000000</strong>, 
+                                    is an enrolled and active member of the **Bangladesh National Cadet Corps (BNCC)**, 
+                                    <span class="font-extrabold text-[--bncc-red]">Army Wing</span>, attached to the 
+                                    **Cox's Bazar City College BNCC Platoon**.
+                                </p>
+                                <p class="mb-4">
+                                    He/She is currently active in the platoon and has consistently demonstrated the core BNCC values of **Discipline, Punctuality, and Sincerity** by regularly participating in all scheduled activities, including drills, parades, and field training exercises. 
+                                </p>
+                                <p>
+                                    This attestation is issued upon request for official purposes. We wish the cadet every success in upholding the standards of the Corps.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 pt-5 flex justify-between items-end px-2 border-t border-gray-200">
+                            
+                            <div class="text-left font-sans">
+                                <p class="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Issued On</p>
+                                <p id="display-date" class="text-base font-extrabold text-[--bncc-navy]">December 02, 2025</p>
+                            </div>
+
+                            <div class="text-center relative top-1">
+                                <img src="https://i.ibb.co/3WfK4fT/Signature-Placeholder.png" alt="Signature" class="h-10 w-40 object-contain mx-auto" onerror="this.style.display='none'">
+                                <div class="h-px w-40 bg-[--bncc-navy] mb-1 mx-auto mt-2"></div>
+                                <p class="font-header text-base font-bold text-[--bncc-navy] leading-none">P.U.O Ujjal Kanti Dev</p>
+                                <p class="font-sans text-[9px] font-bold text-gray-800 uppercase">Platoon Under Officer | Platoon Commander</p>
+                            </div>
+                            
+                            <div class="text-right">
+                                <div class="w-20 h-20 border-3 border-dotted border-gray-400 flex items-center justify-center text-[10px] text-gray-500 text-center leading-tight">
+                                    PRINCIPAL / CO SEAL
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="absolute bottom-1 left-0 right-0 text-center">
+                            <p class="font-header italic text-[--bncc-gold] text-sm font-black tracking-wider">
+                                "Knowledge & Discipline"
+                            </p>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p class="text-center text-xs text-gray-500 py-3 no-print">Designed for Print Quality by AI Assistant</p>
+    </footer>
+
+    <div id="ai-toggle-btn" class="no-print">
+        <button id="chat-button" class="bg-blue-700 hover:bg-blue-800 text-white p-4 rounded-full shadow-xl transition-all hover:scale-105">
+            <i class="fas fa-robot fa-lg"></i>
+        </button>
+    </div>
+
+    <div id="ai-chat-box" class="bg-white rounded-lg flex flex-col no-print border border-gray-300">
+        <div class="bg-blue-700 text-white p-3 rounded-t-lg flex justify-between items-center">
+            <span class="font-bold">BNCC Virtual Assistant</span>
+            <button id="close-chat" class="hover:text-red-300"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="flex-grow p-3 overflow-y-auto text-sm" id="chat-window">
+            <div class="mb-2 p-2 bg-gray-100 rounded-lg text-gray-800">
+                Hello! I'm your certificate assistant. How can I help you with configuration, printing, or finding a cadet?
+            </div>
+        </div>
+        <div class="p-3 border-t">
+            <input type="text" id="chat-input" placeholder="Type your message..." class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+        </div>
+    </div>
+
+
+    <script>
+        // --- CADET DATA (Updated to use reliable placeholder URLs for demonstration) ---
+        const cadetData = [
+            // **Important:** Replace 'https://placehold.co/...' with your actual cadet photo URLs
+            { fullName: "Umme Taowfika Alam", cadetNumber: "25154364", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154364" },
+            { fullName: "Irfatul Jannat Kakoli", cadetNumber: "25154370", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154370" },
+            { fullName: "Moinul Hasem Dipto", cadetNumber: "25154357", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154357" },
+            { fullName: "Mohammad Ibrahim", cadetNumber: "25154359", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154359" },
+            { fullName: "Abrar Shafi Adib", cadetNumber: "25154351", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154351" },
+            { fullName: "Alif Rafaj Alif Siddique", cadetNumber: "25154361", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154361" },
+            { fullName: "Farhana Bagum", cadetNumber: "25154363", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154363" },
+            { fullName: "Anwesha Barua Arohi", cadetNumber: "25154368", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154368" },
+            { fullName: "Tousid Siddik Ayan", cadetNumber: "25154356", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154356" },
+            { fullName: "Tanisha Rahaman", cadetNumber: "25154367", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154367" },
+            { fullName: "Mr Eftehar Uddin", cadetNumber: "25154362", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154362" },
+            { fullName: "Saidul Bashar Samir", cadetNumber: "25154358", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154358" },
+            { fullName: "Sad Bin Omar", cadetNumber: "25154352", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154352" },
+            { fullName: "Mohammad Sadek", cadetNumber: "25154360", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154360" },
+            { fullName: "Fatema Akter Falak", cadetNumber: "25154366", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154366" },
+            { fullName: "Mohammad Aman Ullah", cadetNumber: "25154353", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154353" },
+            { fullName: "Mohammad Fahim", cadetNumber: "25154355", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154355" },
+            { fullName: "Saleha Sultana Aka", cadetNumber: "25154365", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154365" },
+            { fullName: "Mohammad Sakib", cadetNumber: "25154354", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154354" },
+            { fullName: "Nusrat Samim Nuri", cadetNumber: "25154369", photoUrl: "https://placehold.co/90x110/0D47A1/FFF?text=C.25154369" },
+        ];
+        
+        // --- JAVASCRIPT LOGIC ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const select = document.getElementById('cadet-select');
+            const dateInput = document.getElementById('date-input');
+            const pdfBtn = document.getElementById('pdf-btn');
+            const statusMsg = document.getElementById('status-msg');
+            const previewWrapper = document.getElementById('preview-wrapper');
+            const certificateContainer = document.getElementById('certificate-container');
+
+            // Set Initial Date to Today
+            const today = new Date();
+            dateInput.value = today.toISOString().split('T')[0];
+
+            // Populate Select Dropdown
+            cadetData.forEach((c, i) => {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `${c.fullName} (${c.cadetNumber})`;
+                select.appendChild(opt);
+            });
+
+            // Certificate Content Update Function
+            const update = () => {
+                const data = cadetData[select.value];
+                document.getElementById('cadet-name').textContent = data.fullName;
+                document.getElementById('cadet-id').textContent = data.cadetNumber;
+                
+                // Photo with Placeholder fallback
+                const img = document.getElementById('cadet-photo');
+                img.src = data.photoUrl;
+                img.onerror = () => { 
+                    // Fallback to a simpler, reliable placeholder if the main URL fails
+                    img.src = `https://placehold.co/90x110/C62828/FFF?text=Cadet%20Photo`; 
+                    img.style.objectFit = 'contain'; 
+                };
+                img.style.objectFit = 'cover'; // Ensure cover when actual image is present
+
+                // Date Formatting
+                const d = new Date(dateInput.value);
+                document.getElementById('display-date').textContent = d.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+            };
+
+            select.addEventListener('change', update);
+            dateInput.addEventListener('change', update);
+            update(); // Initial load
+
+            // --- PDF GENERATION LOGIC for custom (enlarged) margin ---
+            pdfBtn.addEventListener('click', async () => {
+                statusMsg.classList.remove('hidden');
+                pdfBtn.disabled = true;
+
+                // 1. TEMPORARILY REMOVE SCALING
+                const originalTransform = previewWrapper.style.transform;
+                previewWrapper.style.transform = 'none';
+
+                try {
+                    // 2. High Quality Capture
+                    const canvas = await html2canvas(certificateContainer, {
+                        scale: 4, 
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                        logging: false,
+                        width: certificateContainer.offsetWidth,
+                        height: certificateContainer.offsetHeight
+                    });
+
+                    // 3. Initialize PDF (A4 Landscape: 297mm x 210mm)
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const pdf = new window.jspdf.jsPDF({
+                        orientation: 'landscape',
+                        unit: 'mm',
+                        format: 'a4'
+                    });
+
+                    // 4. Content Placement and Sizing for the *NEW, LARGER* size
+                    
+                    // A4 Dimensions in mm
+                    const a4Width = 297;
+                    const a4Height = 210;
+
+                    // Get the size of the certificate container from the CSS variables
+                    const style = getComputedStyle(document.documentElement);
+                    const contentWidth = parseFloat(style.getPropertyValue('--content-width')); // 215.4mm
+                    const contentHeight = parseFloat(style.getPropertyValue('--content-height')); // 128.4mm
+
+                    // Calculate the necessary margin to center the *LARGER* content
+                    const marginX = (a4Width - contentWidth) / 2; // (297 - 215.4) / 2 = 40.8mm (~1.6 inches)
+                    const marginY = (a4Height - contentHeight) / 2; // (210 - 128.4) / 2 = 40.8mm (~1.6 inches)
+                    
+                    // Add image at the calculated center point
+                    pdf.addImage(imgData, 'JPEG', marginX, marginY, contentWidth, contentHeight);
+                    
+                    const filename = `BNCC_Certificate_${cadetData[select.value].cadetNumber}_Enhanced.pdf`;
+                    pdf.save(filename);
+
+                } catch (e) {
+                    console.error("PDF Generation Error:", e);
+                    alert("Error generating PDF. Please ensure all resources (logos/photos) are accessible or try the Print button.");
+                } finally {
+                    // 5. RESTORE SCALING
+                    previewWrapper.style.transform = originalTransform;
+                    if (originalTransform === '') {
+                        previewWrapper.style.removeProperty('transform');
+                    }
+                    
+                    statusMsg.classList.add('hidden');
+                    pdfBtn.disabled = false;
+                }
+            });
+
+            // --- AI ASSISTANT FUNCTIONALITY ---
+            const chatButton = document.getElementById('chat-button');
+            const chatBox = document.getElementById('ai-chat-box');
+            const closeChat = document.getElementById('close-chat');
+            const chatInput = document.getElementById('chat-input');
+            const chatWindow = document.getElementById('chat-window');
+
+            chatButton.addEventListener('click', () => {
+                chatBox.style.display = 'flex';
+                chatButton.style.display = 'none';
+            });
+
+            closeChat.addEventListener('click', () => {
+                chatBox.style.display = 'none';
+                chatButton.style.display = 'block';
+            });
+
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const userMessage = chatInput.value.trim();
+                    if (userMessage) {
+                        // Display user message
+                        chatWindow.innerHTML += `<div class="mb-2 p-2 bg-blue-100 rounded-lg text-right text-blue-800">You: ${userMessage}</div>`;
+                        chatInput.value = '';
+                        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+                        // Display AI response (Dummy/Placeholder response)
+                        setTimeout(() => {
+                            const aiResponse = `I'm an AI assistant. I can't solve your query directly but I can guide you! Try selecting a new cadet from the 'Configuration' panel or click 'Download PDF'. For technical help, please contact the system administrator.`;
+                            chatWindow.innerHTML += `<div class="mb-2 p-2 bg-gray-100 rounded-lg text-gray-800">Assistant: ${aiResponse}</div>`;
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                        }, 1000);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

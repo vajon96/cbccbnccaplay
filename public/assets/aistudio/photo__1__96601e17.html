@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📸 Gallery | Cox's Bazar City College BNCC Platoon</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Modern Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Define a professional color palette */
+            --primary-color: #004b8d; /* Deep Blue, represents authority/trust */
+            --secondary-color: #e53935; /* Red, for highlights/action (BNCC) */
+            --text-color: #212529;
+            --light-text: #f8f9fa;
+            --bg-light: #f4f7f9; /* Off-white/light gray for background */
+            --bg-dark: #1f2937; /* Dark background for footer */
+            --shadow-light: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --transition-speed: 0.3s;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-light);
+            scroll-behavior: smooth;
+        }
+
+        /* Utility Class for Centering Content */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Header Styles */
+        header {
+            background-color: white;
+            box-shadow: var(--shadow-light);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-container {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .logo-container img {
+            height: 45px; /* Slightly smaller for a cleaner look */
+            width: auto;
+            border-radius: 4px; /* Slight rounding for a modern touch */
+        }
+
+        .download-btn {
+            background-color: var(--secondary-color);
+            color: var(--light-text);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color var(--transition-speed);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .download-btn:hover {
+            background-color: #c62828; /* Slightly darker red on hover */
+        }
+
+        /* Banner Styles (Hero Section) */
+        .banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #0066cc 100%);
+            color: var(--light-text);
+            text-align: center;
+            padding: 4rem 2rem;
+            box-shadow: inset 0 -5px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .banner h2 {
+            font-size: 2.8rem;
+            margin-bottom: 0.75rem;
+            font-weight: 700;
+        }
+
+        .banner p {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        /* Navigation Styles */
+        nav {
+            background-color: var(--primary-color);
+            border-bottom: 3px solid var(--secondary-color);
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            color: var(--light-text);
+            text-decoration: none;
+            padding: 1rem 1.25rem;
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+            font-weight: 500;
+            text-transform: capitalize;
+            border-bottom: 3px solid transparent;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-bottom-color: var(--secondary-color);
+        }
+        
+        .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-bottom-color: var(--secondary-color);
+            font-weight: 600;
+        }
+
+        /* Gallery Styles */
+        .gallery-container {
+            padding: 3rem 0;
+        }
+
+        .gallery-title {
+            text-align: center;
+            margin-bottom: 3rem;
+            font-size: 3rem;
+            color: var(--primary-color);
+            font-weight: 800;
+            position: relative;
+        }
+
+        .gallery-title::after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 4px;
+            background-color: var(--secondary-color);
+            margin: 10px auto 0;
+            border-radius: 2px;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem; /* Increased gap for better spacing */
+        }
+
+        .gallery-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .gallery-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+
+        .image-container {
+            width: 100%;
+            height: 280px; /* Standardized height */
+            overflow: hidden;
+        }
+
+        .gallery-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.6s ease-in-out;
+        }
+
+        .gallery-card:hover .gallery-image {
+            transform: scale(1.08);
+        }
+
+        .card-content {
+            padding: 1rem;
+            flex-grow: 1; /* Allows card content to take available space */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .download-button {
+            display: block;
+            width: 100%;
+            background-color: var(--primary-color);
+            color: var(--light-text);
+            border: none;
+            padding: 0.85rem;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color var(--transition-speed), transform 0.1s;
+            text-align: center;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .download-button:hover {
+            background-color: #003366;
+            transform: translateY(-1px);
+        }
+
+        /* Footer Styles */
+        footer {
+            background-color: var(--bg-dark);
+            color: var(--light-text);
+            padding: 4rem 2rem 2rem;
+            margin-top: 3rem;
+        }
+
+        .footer-content {
+            text-align: center;
+        }
+
+        .footer-content p {
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        
+        .footer-content p:first-child {
+            font-weight: 600;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .social-links a {
+            color: var(--light-text);
+            background-color: var(--primary-color);
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 1.25rem;
+            transition: background-color var(--transition-speed), transform var(--transition-speed);
+        }
+
+        .social-links a:hover {
+            background-color: var(--secondary-color);
+            transform: scale(1.1);
+        }
+
+        .copyright {
+            margin-top: 2.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+
+        /* Responsive Styles - Adjusted to new grid system */
+        @media (max-width: 992px) {
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .banner h2 {
+                font-size: 2.2rem;
+            }
+            .banner p {
+                font-size: 1.1rem;
+            }
+            .nav-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .nav-link {
+                width: 100%;
+                text-align: center;
+            }
+            .header-container {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            .download-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .container {
+                padding: 0 1rem;
+            }
+            .gallery-title {
+                font-size: 2.5rem;
+            }
+        }
+
+        /* --- Custom Styles for Password Protection --- */
+        #content-wrapper {
+            display: none; /* Initially hide the main content */
+            min-height: 100vh; /* Ensure content takes full height when visible */
+            display: flex; /* Adjust existing body styles if needed */
+            flex-direction: column;
+        }
+        
+        /* Ensure footer is at the bottom when content is short */
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Full-screen overlay for password prompt */
+        #password-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: var(--light-text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+
+        #password-form-box {
+            background-color: var(--bg-dark);
+            padding: 2rem 3rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            border: 3px solid var(--secondary-color);
+        }
+
+        #password-form-box h2 {
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+            color: var(--secondary-color);
+        }
+
+        #password-form-box p {
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+            opacity: 0.8;
+        }
+
+        #password-input {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border: 2px solid var(--primary-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            color: var(--text-color);
+        }
+
+        #submit-password-btn {
+            background-color: var(--primary-color);
+            color: var(--light-text);
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color var(--transition-speed);
+            width: 100%;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+        }
+
+        #submit-password-btn:hover {
+            background-color: #003366;
+        }
+        
+        /* Make sure the main content fills available space when visible */
+        header, .banner, nav, main {
+            /* These should now be contained within #content-wrapper */
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="password-overlay">
+        <div id="password-form-box">
+            <h2>গ্যালারিতে প্রবেশ</h2>
+            <p>এই পেজটি শুধুমাত্র অনুমোদিত ব্যবহারকারীদের জন্য। অনুগ্রহ করে পাসওয়ার্ড দিন।</p>
+            <form id="password-form">
+                <input type="password" id="password-input" placeholder="পাসওয়ার্ড লিখুন" required>
+                <button type="submit" id="submit-password-btn">প্রবেশ করুন</button>
+                <p style="font-size: 0.9rem; margin-top: 1rem; color: #aaa;"></p>
+            </form>
+            <p id="error-message" style="color: var(--secondary-color); margin-top: 1rem; display: none;">পাসওয়ার্ড ভুল হয়েছে। আবার চেষ্টা করুন।</p>
+        </div>
+    </div>
+    
+    <div id="content-wrapper">
+        <header>
+            <div class="header-container container">
+                <div class="logo-container">
+                    <a href="https://cbcc.edu.bd/" target="_blank">
+                        <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="Cox's Bazar City College Logo">
+                    </a>
+                    <a href="https://bncc.info/" target="_blank">
+                        <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                    </a>
+                </div>
+                <a href="Cox's Bazar City College BNCC Platoon (Army Wing).apk" class="download-btn" download>
+                    <i class="fas fa-mobile-alt"></i> Get Our App
+                </a>
+            </div>
+        </header>
+
+        <div class="banner">
+            <h2>Cox's Bazar City College BNCC Platoon (Army Wing)</h2>
+            <p>Developing Discipline, Leadership, and Patriotism</p>
+        </div>
+
+        <nav>
+            <div class="nav-container container">
+                <a class="nav-link" href="https://cbccbncc.netlify.app/index.html">Home</a>
+                <a class="nav-link" href="https://cbccbncc.netlify.app/about.html">About Us</a>
+                <a class="nav-link" href="https://cbccbncc.netlify.app/activities.html">Activities</a>
+                <a class="nav-link" href="https://cbccbncc.netlify.app/cadets.html">Cadets</a>
+                <a class="nav-link active" href="https://cbccbncc.netlify.app/gallery.html">Gallery</a>
+                <a class="nav-link" href="https://cbccbncc.netlify.app/contact.html">Contact</a>
+                <a class="nav-link" href="https://cbccbncc.netlify.app/hall-of-incharges.html">In-Charges</a>
+                <a class="nav-link" href="https://cbccbncc.netlify.app/how-to-become-cadet.html">How to Join</a>
+                <a class="nav-link" href="https://cbccbncc.netlify.app/become-cadet.html">Apply Now</a>
+            </div>
+        </nav>
+
+        <main class="gallery-container">
+            <div class="container">
+                <h1 class="gallery-title">📸 Photo Gallery</h1>
+                <div class="gallery-grid" id="galleryGrid">
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="footer-content container">
+                <p>Cox's Bazar City College BNCC Platoon (Army Wing)</p>
+                <p>Ready to Serve, Ready to Lead</p>
+                
+                <div class="social-links">
+                    <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="#" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+                </div>
+                
+                <div class="copyright">
+                    <p>&copy; 2025 Cox's Bazar City College BNCC Platoon. All Rights Reserved.</p>
+                    <p>Designed with discipline and dedication.</p>
+                </div>
+            </div>
+        </footer>
+    </div> <script>
+        // আপনার অনুরোধ অনুযায়ী পাসওয়ার্ড
+        const CORRECT_PASSWORD = "cadet202531"; 
+
+        // Main content and overlay elements
+        const contentWrapper = document.getElementById('content-wrapper');
+        const passwordOverlay = document.getElementById('password-overlay');
+        const passwordForm = document.getElementById('password-form');
+        const passwordInput = document.getElementById('password-input');
+        const errorMessage = document.getElementById('error-message');
+        
+        // Function to handle password submission
+        passwordForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent form submission and page reload
+            
+            const enteredPassword = passwordInput.value.trim();
+            
+            if (enteredPassword === CORRECT_PASSWORD) {
+                // Correct password: Hide overlay and show content
+                passwordOverlay.style.display = 'none';
+                contentWrapper.style.display = 'flex'; // Use flex to restore layout (header, main, footer)
+                errorMessage.style.display = 'none';
+                initGallery(); // Initialize the gallery content
+            } else {
+                // Incorrect password: Show error message
+                errorMessage.style.display = 'block';
+                passwordInput.value = ''; // Clear the input field
+                passwordInput.focus();
+            }
+        });
+
+
+        // *** IMPORTANT: These images must be in the same directory as the HTML file on your web server. ***
+        const images = [
+            "2025 (1).jpg",
+            "2025 (2).jpg",
+            "2025 (3).jpg",
+            "2025 (4).jpg",
+            "2025 (5).jpg",
+            "2025 (6).jpg",
+            "2025 (7).jpg",
+            "2025 (8).jpg",
+          
+        ];
+
+        // Function to create a gallery card
+        function createGalleryCard(imageUrl) {
+            const card = document.createElement('div');
+            card.className = 'gallery-card';
+            
+            const imageContainer = document.createElement('div');
+            imageContainer.className = 'image-container';
+            
+            const image = document.createElement('img');
+            image.src = imageUrl;
+            image.alt = 'Gallery Image';
+            image.className = 'gallery-image';
+            
+            const cardContent = document.createElement('div');
+            cardContent.className = 'card-content';
+            
+            const downloadButton = document.createElement('button');
+            downloadButton.className = 'download-button';
+            downloadButton.innerHTML = '<i class="fas fa-download"></i> Download Photo';
+            
+            // Fixed download functionality using the dedicated downloadImage function
+            downloadButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                downloadImage(imageUrl);
+            });
+            
+            imageContainer.appendChild(image);
+            cardContent.appendChild(downloadButton);
+            card.appendChild(imageContainer);
+            card.appendChild(cardContent);
+            
+            return card;
+        }
+
+        // 🌟 FIX: Function to download an image using Fetch and Blob
+        // This is the part that enables reliable downloads on a web server (HTTP/HTTPS)
+        async function downloadImage(imageUrl) {
+            try {
+                // Fetch the image data
+                const response = await fetch(imageUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const blob = await response.blob();
+                
+                // Create a local URL for the blob data
+                const blobUrl = URL.createObjectURL(blob);
+
+                // Create a temporary anchor element
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                
+                // Extract filename from the URL/path for the download name
+                const filename = imageUrl.split('/').pop() || 'bncc_image.png';
+
+                link.download = filename;
+                
+                // Append to body, click, and remove
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Release the blob URL after the download is initiated
+                URL.revokeObjectURL(blobUrl);
+
+            } catch (error) {
+                console.error('Download failed:', error);
+                alert('Sorry, the image download failed. This often happens if the file is missing or the page is opened directly from your computer (file://). Please use a web server (http://) to run this page.');
+            }
+        }
+
+        // Initialize the gallery
+        function initGallery() {
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) { // Check if element exists before manipulating
+                 galleryGrid.innerHTML = '';
+            
+                images.forEach(imageUrl => {
+                    const card = createGalleryCard(imageUrl);
+                    galleryGrid.appendChild(card);
+                });
+            }
+           
+        }
+
+        // On page load, only focus on the password input. Gallery init is called after successful login.
+        document.addEventListener('DOMContentLoaded', function() {
+             passwordInput.focus();
+        });
+    </script>
+</body>
+</html>

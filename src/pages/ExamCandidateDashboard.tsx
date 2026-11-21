@@ -4,8 +4,8 @@ import {
   Award, Play, CheckCircle2, Clock, 
   FileText, User, ChevronRight, RefreshCw, AlertCircle 
 } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { getSession } from "../lib/auth";
 import { fetchExams, getUserAttempts, getResultByAttemptId } from "../services/examService";
 import { ExamModel, ExamAttempt, ExamResult } from "../types";
@@ -32,17 +32,31 @@ export function ExamCandidateDashboard() {
     const loadCandidateData = async () => {
       setLoading(true);
       try {
-        // Load candidate doc
-        const snap = await getDoc(doc(db, "applicants", session.id));
-        if (snap.exists()) {
-          setCandidateProfile(snap.data());
+        // Load candidate doc safely (prefer ownerUid match so rules always succeed)
+        try {
+          if (auth.currentUser?.uid) {
+            const appSnap = await getDocs(
+              query(collection(db, "applicants"), where("ownerUid", "==", auth.currentUser.uid))
+            );
+            if (!appSnap.empty) {
+              setCandidateProfile(appSnap.docs[0].data());
+            } else {
+              const snap = await getDoc(doc(db, "applicants", session.id));
+              if (snap.exists()) setCandidateProfile(snap.data());
+            }
+          } else {
+            const snap = await getDoc(doc(db, "applicants", session.id));
+            if (snap.exists()) setCandidateProfile(snap.data());
+          }
+        } catch {
+          // Non-blocking profile fetch
         }
 
-        // Load exams
-        const eList = await fetchExams("published");
+        // Load published & live exams
+        const eList = await fetchExams(["published", "live"]);
         setExams(eList);
 
-        // Load my attempts
+        // Load my attempts scoped to ownerUid
         const attempts = await getUserAttempts(session.id);
         setMyAttempts(attempts);
 
@@ -55,7 +69,6 @@ export function ExamCandidateDashboard() {
           }
         }
         setMyResultsMap(resMap);
-
       } catch (err) {
         console.error("Error loading candidate dashboard:", err);
       } finally {
@@ -78,7 +91,7 @@ export function ExamCandidateDashboard() {
         <div className="bg-slate-900 border border-white/10 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row items-center gap-6 justify-between">
           <div className="flex items-center gap-5 w-full md:w-auto">
             <div className="w-20 h-20 rounded-2xl bg-slate-800 border-2 border-primary overflow-hidden shrink-0 flex items-center justify-center">
-              {candidateProfile?.passportPhoto ? (
+              {candidateProfile?.passportPhoto && candidateProfile.passportPhoto.trim() !== "" ? (
                 <img src={candidateProfile.passportPhoto} alt="Candidate" className="w-full h-full object-cover" />
               ) : (
                 <User size={36} className="text-slate-500" />
@@ -103,12 +116,12 @@ export function ExamCandidateDashboard() {
           <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 w-full md:w-auto flex items-center justify-around gap-6">
             <div className="text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Available Exams</span>
-              <span className="text-xl font-black text-primary">{exams.length}</span>
+              <span className="text-xl font-black text-primary tabular-nums">{exams.length}</span>
             </div>
             <div className="w-px h-8 bg-white/10" />
             <div className="text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Completed</span>
-              <span className="text-xl font-black text-emerald-400">
+              <span className="text-xl font-black text-emerald-400 tabular-nums">
                 {myAttempts.filter(a => a.status === "submitted" || a.status === "auto_submitted").length}
               </span>
             </div>
@@ -125,7 +138,7 @@ export function ExamCandidateDashboard() {
               <span>Active Online Examinations</span>
             </h2>
             <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-              Published Exams
+              Published &amp; Live Exams
             </span>
           </div>
 
@@ -152,10 +165,14 @@ export function ExamCandidateDashboard() {
                     
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
-                          {e.status}
+                        <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                          e.status === "live"
+                            ? "text-amber-300 bg-amber-500/15 border-amber-500/35"
+                            : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                        }`}>
+                          {e.status === "live" ? "Active / Live" : e.status}
                         </span>
-                        <span className="text-xs font-bold text-amber-400">
+                        <span className="text-xs font-bold text-amber-400 tabular-nums">
                           Total Marks: {e.totalMarks}
                         </span>
                       </div>

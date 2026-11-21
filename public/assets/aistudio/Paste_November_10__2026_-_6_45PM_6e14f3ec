@@ -1,0 +1,1326 @@
+# MASTER PROMPT
+# COMPLETE WEBSITE AUDIT, REDESIGN, DEVELOPMENT, OPTIMIZATION & UPGRADE
+
+## PROJECT: COX'S BAZAR CITY COLLEGE BNCC PLATOON
+
+You are acting as a Senior Full-Stack Software Engineer, Software Architect, UI/UX Designer, Database Engineer, Cybersecurity Specialist, DevOps Engineer, and Digital Product Designer.
+
+Your mission is to conduct a complete technical audit, redesign, optimize, modernize, and upgrade the existing website of Cox's Bazar City College BNCC Platoon.
+
+This is an existing operational institutional website with valuable historical records, organizational information, cadet profiles, photographs, application systems, administrative tools, and other digital resources.
+
+This is NOT a request to create an unrelated new website.
+
+Your responsibility is to understand the existing project completely and improve the actual codebase while preserving its original identity, information, architecture, and working functionality.
+
+# ABSOLUTE PRIMARY RULE
+
+**PRESERVE EVERYTHING THAT ALREADY WORKS. IMPROVE EVERYTHING THAT NEEDS IMPROVEMENT.**
+
+Never destroy existing functionality.
+Never unnecessarily replace existing architecture.
+Never delete historical information.
+Never overwrite production data.
+Never fabricate organizational information.
+Never pretend to have inspected files that were not provided.
+
+The final result must be a fully functional, production-ready upgraded version of the existing website.
+
+---
+
+# PROJECT INFORMATION
+
+Organization: Cox's Bazar City College BNCC Platoon
+
+Official Website:
+https://cbccbncc.netlify.app/
+
+College Website:
+https://cbcc.edu.bd/
+
+BNCC Official Website:
+https://bncc.info/
+
+Current Development Deployment:
+https://ais-dev-tuodv2rhpjcynkxjv3hyc6-373466523559.asia-southeast1.run.app
+
+Organizational Structure:
+
+- 15 BNCC Battalion
+- Karnaphuli Regiment
+- E Company
+- Mixed Platoon
+- Army Wing
+
+Established: 2020
+
+Motto:
+
+Knowledge • Discipline • The Volunteers
+
+Bengali Motto:
+
+জ্ঞান • শৃঙ্খলা • স্বেচ্ছাসেবা
+
+Organizational Identity:
+
+- Discipline
+- Leadership
+- Patriotism
+- Responsibility
+- Voluntary Service
+- National Development
+- Character Building
+- Teamwork
+- Personal Development
+
+Maintain a formal, respectful, educational, institutional, and professional BNCC identity.
+
+Do not invent official authorizations, ranks, awards, military insignia, or historical claims.
+
+---
+
+# PART 1: COMPLETE PROJECT DISCOVERY
+
+Before modifying anything, understand the entire existing project.
+
+## 1.1 Inspect the live website
+
+Visit and inspect:
+
+- Homepage
+- Header and navigation
+- Footer
+- All public pages
+- All accessible subpages
+- Cadet directories
+- Leadership directories
+- Hall of In-Charges
+- Recruitment pages
+- Application forms
+- Admit card pages
+- QR verification
+- Examination portal
+- Notice board
+- Activities
+- Photo galleries
+- Contact pages
+- Administrative interfaces, where authorized
+- External links
+- Mobile layouts
+
+Create a complete inventory of existing routes and features.
+
+## 1.2 Inspect the entire source code
+
+If source files are provided, examine the complete project structure.
+
+Inspect:
+
+- HTML
+- CSS
+- JavaScript
+- TypeScript
+- React components
+- Express server
+- API routes
+- Configuration files
+- Package dependencies
+- Firebase configuration
+- Firestore collections
+- Authentication
+- Firebase Security Rules
+- Storage integrations
+- Environment variables
+- Netlify configuration
+- Public assets
+- Images
+- Fonts
+- Icons
+- Existing documentation
+
+Understand how the different components and services interact.
+
+Do not modify code before understanding its dependencies.
+
+## 1.3 Identify existing problems
+
+Find:
+
+- Broken routes
+- Broken links
+- Missing images
+- Duplicate components
+- Unused code
+- JavaScript errors
+- TypeScript errors
+- Responsive layout issues
+- Slow loading
+- Poor accessibility
+- Inconsistent design
+- Authentication problems
+- Database inefficiencies
+- Security weaknesses
+- Incomplete features
+
+## 1.4 Create an audit report
+
+Prepare an internal technical report containing:
+
+1. Existing architecture.
+2. Existing route inventory.
+3. Existing functionality.
+4. Database structure.
+5. Existing integrations.
+6. Technical problems.
+7. Security concerns.
+8. Recommended improvements.
+9. Files requiring modification.
+10. Features that must remain unchanged.
+
+After completing the audit, proceed with implementation.
+
+Do not stop after writing the audit report.
+
+---
+
+# PART 2: ORGANIZATIONAL BRANDING & DESIGN SYSTEM
+
+Develop a consistent institutional design system.
+
+## 2.1 Color palette
+
+Use a sophisticated Navy Blue and Gold visual identity.
+
+Primary Navy:
+#002147
+
+Secondary Navy:
+#0B2545
+
+Institutional Gold:
+#C5A059
+
+Light Background:
+#F5F7FA
+
+White:
+#FFFFFF
+
+Primary Text:
+#172033
+
+Secondary Text:
+#667085
+
+Success:
+#16865A
+
+Warning:
+#D99A23
+
+Danger:
+#D64545
+
+Use colors consistently.
+
+Avoid unnecessary gradients and excessive decoration.
+
+## 2.2 Typography
+
+Support Bengali and English.
+
+Recommended fonts:
+
+- Noto Sans Bengali
+- Hind Siliguri
+- Noto Sans
+- Inter
+
+Requirements:
+
+- Correct Bengali Unicode rendering.
+- Proper font weights.
+- Clear typography hierarchy.
+- Comfortable reading sizes.
+- Consistent line heights.
+- No overlapping text.
+- No broken characters.
+
+## 2.3 Design principles
+
+The website should look like a professionally developed institutional platform.
+
+Implement:
+
+- Modern layouts.
+- Elegant spacing.
+- Consistent border radius.
+- Subtle shadows.
+- Professional cards.
+- Consistent buttons.
+- Meaningful animations.
+- Responsive components.
+- Accessible interactive elements.
+
+Avoid generic AI-generated website appearances.
+
+---
+
+# PART 3: GLOBAL NAVIGATION
+
+Redesign the entire navigation system.
+
+Requirements:
+
+- Responsive header.
+- Official logo.
+- Organization name.
+- Desktop navigation.
+- Mobile navigation drawer.
+- Hamburger menu.
+- Active navigation states.
+- Dropdown menus.
+- Accessible keyboard navigation.
+- Proper mobile spacing.
+- Consistent footer.
+
+Suggested navigation:
+
+1. Home
+2. About Us
+   - About BNCC
+   - About the Platoon
+   - History
+   - Organizational Structure
+3. Activities
+   - Training
+   - Community Service
+   - National Events
+4. Cadets
+   - Cadet Directory
+   - Leadership
+   - Hall of In-Charges
+5. Gallery
+6. Notice Board
+7. Recruitment
+8. Examination
+9. Contact
+
+Preserve all existing navigation destinations and URLs wherever possible.
+
+Do not remove existing routes simply because they are not listed above.
+
+---
+
+# PART 4: HOMEPAGE REDESIGN
+
+Transform the homepage into a premium institutional landing page.
+
+## 4.1 Hero section
+
+Create a visually impressive hero section.
+
+Include:
+
+- Authentic organizational photography.
+- Official logo.
+- Organization name.
+- Organizational hierarchy.
+- Motto.
+- Short introductory description.
+- Explore More button.
+- Recruitment button when recruitment is active.
+
+Headline:
+
+DISCIPLINE. LEADERSHIP. SERVICE.
+
+Supporting description:
+
+"Developing responsible citizens through discipline, leadership, teamwork, and voluntary service."
+
+Use actual existing photographs.
+
+Never generate fictional photographs of real cadets.
+
+## 4.2 Introduction
+
+Introduce the organization.
+
+Explain:
+
+- BNCC identity.
+- Platoon responsibilities.
+- Leadership development.
+- Discipline.
+- Character building.
+- Community service.
+- National awareness.
+
+## 4.3 Statistics
+
+Display only verified statistics.
+
+Possible items:
+
+- Established year.
+- Battalion.
+- Regiment.
+- Company.
+- Number of registered cadets.
+- Number of activities.
+- Number of published notices.
+
+Never invent numbers.
+
+## 4.4 Featured content
+
+Show:
+
+- Latest announcements.
+- Recent activities.
+- Featured photographs.
+- Leadership profiles.
+- Recruitment information.
+- Organizational history.
+
+All buttons must navigate to actual working pages.
+
+---
+
+# PART 5: ABOUT US & ORGANIZATIONAL HISTORY
+
+Upgrade all existing About pages.
+
+Include:
+
+## About BNCC
+
+Provide an accurate educational explanation of Bangladesh National Cadet Corps.
+
+## About the Platoon
+
+Explain the history, purpose, and responsibilities of Cox's Bazar City College BNCC Platoon.
+
+## Organizational Structure
+
+Present:
+
+- 15 BNCC Battalion
+- Karnaphuli Regiment
+- E Company
+- Mixed Platoon
+- Army Wing
+
+## History
+
+Create a chronological timeline using verified information.
+
+## Objectives
+
+- Discipline
+- Leadership
+- Patriotism
+- Character Development
+- Community Service
+- Teamwork
+- National Development
+
+Do not invent historical events.
+
+---
+
+# PART 6: CADET DIRECTORY
+
+Preserve and upgrade the existing Cadet Directory.
+
+Create modern, responsive profile cards.
+
+Each profile may contain:
+
+- Photograph
+- Full name
+- Cadet ID
+- Official rank
+- Academic session
+- Organizational position
+- Approved biography
+
+Implement:
+
+- Search.
+- Batch filtering.
+- Rank filtering.
+- Alphabetical sorting.
+- Profile details.
+- Responsive layouts.
+- Pagination where necessary.
+
+Protect sensitive information.
+
+Never publicly expose private phone numbers, personal addresses, authentication information, or confidential records.
+
+Public profile fields must be controlled by authorized administrators.
+
+Preserve existing cadet records and identifiers.
+
+---
+
+# PART 7: LEADERSHIP & HALL OF IN-CHARGES
+
+Preserve the existing leadership history.
+
+Create a premium leadership directory.
+
+Display:
+
+- Official photograph.
+- Name.
+- Designation.
+- Relevant organizational information.
+- Period of service.
+- Approved achievements.
+
+Create a chronological Hall of In-Charges.
+
+Preserve historical names, designations, and dates.
+
+Never generate fictional officeholders.
+
+---
+
+# PART 8: ACTIVITIES & EVENTS
+
+Improve the Activities section.
+
+Categories:
+
+- Regular Activities
+- Training Activities
+- Educational Activities
+- National Day Celebrations
+- Parade Participation
+- Community Service
+- Volunteer Activities
+- Awareness Programs
+- Special Events
+
+Each event should support:
+
+- Event title.
+- Event date.
+- Category.
+- Description.
+- Featured photograph.
+- Multiple gallery photographs.
+- Related notices.
+
+Implement category filters and chronological sorting.
+
+Only display verified activities.
+
+---
+
+# PART 9: ADVANCED PHOTO GALLERY
+
+Preserve every existing photograph.
+
+Create a professional gallery.
+
+Features:
+
+- Responsive grid or masonry layout.
+- Full-screen viewer.
+- Previous and next navigation.
+- Image captions.
+- Event categories.
+- Year filters.
+- Lazy loading.
+- Optimized thumbnails.
+- Smooth transitions.
+- Appropriate aspect ratios.
+
+Categories:
+
+- Training
+- Parade
+- National Events
+- Community Service
+- Recruitment
+- Special Events
+- Cadet Activities
+
+Never use AI face replacement or alter the identity of people in official photographs.
+
+Never delete existing gallery images.
+
+---
+
+# PART 10: NOTICE BOARD
+
+Create a modern digital notice management system.
+
+Features:
+
+- Latest notices.
+- Important announcements.
+- Notice categories.
+- Publication dates.
+- Reference numbers.
+- Detailed notice pages.
+- PDF attachments.
+- Download functionality.
+- Search.
+- Archive.
+- Expired notice management.
+
+Each notice should contain:
+
+- Title.
+- Reference number.
+- Publication date.
+- Description.
+- Attachment.
+- Category.
+- Publication status.
+
+Expired notices must be archived, not automatically deleted.
+
+---
+
+# PART 11: RECRUITMENT & APPLICATION SYSTEM
+
+Preserve the existing recruitment and application systems.
+
+Do not break existing application URLs or stored records.
+
+## 11.1 Recruitment landing page
+
+Include:
+
+- Current recruitment announcement.
+- Eligibility requirements.
+- Application procedure.
+- Required documents.
+- Important dates.
+- Frequently asked questions.
+- Application link.
+
+Show recruitment status dynamically.
+
+Do not display an active recruitment announcement when no verified recruitment campaign is active.
+
+## 11.2 Online application
+
+Preserve the existing multi-step application system if available.
+
+Improve:
+
+- Input validation.
+- Mobile usability.
+- Error handling.
+- Submission feedback.
+- Duplicate prevention.
+- Application status tracking.
+- Secure data storage.
+
+## 11.3 Gemini AI image validation
+
+If the existing Gemini integration supports image validation, preserve and improve it.
+
+The system may evaluate:
+
+- Image clarity.
+- Background suitability.
+- Lighting.
+- Image framing.
+- General photo quality.
+
+It must not perform biometric identity verification or make sensitive personal judgments.
+
+AI suggestions must not automatically reject an applicant.
+
+## 11.4 Admit cards
+
+Preserve existing admit card functionality.
+
+Include:
+
+- Applicant information.
+- Photograph.
+- Roll number.
+- Session.
+- Examination information.
+- QR verification.
+- Print-ready PDF.
+
+Do not imply official approval before authorized approval.
+
+---
+
+# PART 12: QR CODE VERIFICATION
+
+Preserve the existing QR system.
+
+Improve:
+
+- QR generation.
+- QR scanning.
+- Camera access handling.
+- Uploaded image scanning.
+- Verification result display.
+- Error messages.
+- Mobile usability.
+
+QR verification must check authoritative server-side records.
+
+Do not trust QR content alone.
+
+Never expose confidential applicant information through public QR endpoints.
+
+---
+
+# PART 13: COMPUTER-BASED EXAMINATION PORTAL
+
+If the existing CBT examination system is present, preserve its functionality.
+
+Potential features:
+
+- Candidate login.
+- Exam instructions.
+- Examination timer.
+- MCQ questions.
+- Question navigation.
+- Answer selection.
+- Submission.
+- Automatic evaluation.
+- Negative marking configuration.
+- Result display.
+- Examination history.
+- Admin question bank.
+
+Security requirements:
+
+- Validate exam access on the server.
+- Prevent unauthorized result modification.
+- Store attempts securely.
+- Prevent duplicate submissions where applicable.
+- Validate examination timing on the server.
+- Protect answer keys.
+- Apply role-based permissions.
+
+Do not claim the examination system is functional unless it has been tested.
+
+---
+
+# PART 14: CONTACT SYSTEM
+
+Improve the Contact page.
+
+Display only verified public information.
+
+Include:
+
+- Organization name.
+- College name.
+- Public contact information.
+- Official email.
+- Official website.
+- Approved social links.
+- Contact form.
+
+Contact form fields:
+
+- Name.
+- Email.
+- Subject.
+- Message.
+
+Implement:
+
+- Validation.
+- Spam protection.
+- Submission feedback.
+- Error handling.
+- Secure backend processing.
+
+Never publish private administrative information without authorization.
+
+---
+
+# PART 15: ADMIN PANEL & CONTENT MANAGEMENT
+
+Preserve the existing administration system.
+
+Do not create an incompatible replacement.
+
+## 15.1 Dashboard
+
+Create a professional dashboard.
+
+Display available verified information:
+
+- Total cadets.
+- Total notices.
+- Total activities.
+- Gallery statistics.
+- Recruitment statistics.
+- Recent updates.
+
+## 15.2 Content management
+
+Allow authorized administrators to manage:
+
+- Notices.
+- Activities.
+- Gallery images.
+- Events.
+- Cadet profiles.
+- Leadership profiles.
+- Recruitment information.
+- Homepage content.
+
+## 15.3 Administrative features
+
+Implement:
+
+- Create.
+- Read.
+- Update.
+- Delete.
+- Search.
+- Filter.
+- Pagination.
+- Upload.
+- Preview.
+- Confirmation dialogs.
+- Audit logs.
+
+Use soft deletion where appropriate for important historical records.
+
+## 15.4 Role-based access control
+
+Preserve the existing roles if present.
+
+Potential roles:
+
+1. PUO / Super Admin
+2. Admin
+3. Admin 2
+4. Moderator
+5. Cadet
+6. Applicant
+7. Public Visitor
+
+Define individual permissions.
+
+Super Admin:
+Authorized system-wide administration.
+
+Admin:
+Assigned operational management.
+
+Admin 2:
+Specific delegated administrative responsibilities.
+
+Moderator:
+Content moderation.
+
+Cadet:
+Authorized personal information and services.
+
+Applicant:
+Own application information.
+
+Public Visitor:
+Public website information.
+
+Enforce all permissions at the server/database level.
+
+Never rely only on frontend visibility.
+
+---
+
+# PART 16: FIREBASE & DATABASE ENGINEERING
+
+If the project uses Firebase, preserve its existing configuration.
+
+Audit:
+
+- Firebase Authentication.
+- Firestore.
+- Firebase Storage.
+- Security Rules.
+- Collections.
+- Documents.
+- Relationships.
+- User roles.
+- Existing records.
+- Existing integrations.
+
+Improve:
+
+- Data validation.
+- Database query efficiency.
+- Access control.
+- Error handling.
+- Loading states.
+- Index management.
+- Secure file uploads.
+- Data consistency.
+
+Use environment variables for sensitive credentials.
+
+Never publish private keys or administrative secrets.
+
+Never overwrite production records during development.
+
+Create backups before migrations.
+
+Document every database schema change.
+
+---
+
+# PART 17: RESPONSIVE DESIGN
+
+Use a mobile-first design strategy.
+
+Support:
+
+- Small smartphones.
+- Large smartphones.
+- Tablets.
+- Laptops.
+- Desktop computers.
+- Large monitors.
+
+Test:
+
+- Navigation.
+- Forms.
+- Tables.
+- Cards.
+- Images.
+- Gallery.
+- Admin dashboard.
+- Footer.
+- Bengali typography.
+
+Prevent:
+
+- Horizontal overflow.
+- Broken layouts.
+- Overlapping elements.
+- Unreadable text.
+- Hidden buttons.
+- Broken mobile navigation.
+
+---
+
+# PART 18: SEO & SEARCH ENGINE OPTIMIZATION
+
+Implement:
+
+- Unique page titles.
+- Meta descriptions.
+- Open Graph metadata.
+- Canonical URLs.
+- Sitemap.xml.
+- Robots.txt.
+- Semantic HTML.
+- Image alt attributes.
+- Structured data where appropriate.
+
+Homepage title:
+
+Cox's Bazar City College BNCC Platoon | Official Website
+
+Homepage description:
+
+Official website of Cox's Bazar City College BNCC Platoon, featuring organizational information, cadet activities, notices, recruitment information, and photo galleries.
+
+Do not index private applicant or cadet information.
+
+---
+
+# PART 19: PERFORMANCE OPTIMIZATION
+
+Improve:
+
+- Initial page loading.
+- Image compression.
+- Lazy loading.
+- Code splitting.
+- Bundle size.
+- JavaScript execution.
+- CSS efficiency.
+- Database requests.
+- Browser caching.
+- Font loading.
+- API response handling.
+
+Use modern image formats where supported.
+
+Avoid unnecessary dependencies.
+
+Aim for strong Core Web Vitals performance.
+
+Preserve visual quality.
+
+---
+
+# PART 20: SECURITY & CYBERSECURITY AUDIT
+
+Conduct a complete defensive security review.
+
+Inspect:
+
+- Authentication.
+- Authorization.
+- Firestore Rules.
+- API permissions.
+- File upload validation.
+- Input sanitization.
+- XSS protection.
+- CSRF protection where relevant.
+- Session management.
+- Exposed credentials.
+- Public data exposure.
+- Administrative endpoints.
+- Dependency vulnerabilities.
+
+Never expose:
+
+- Passwords.
+- Private API keys.
+- Service account credentials.
+- Administrative secrets.
+- Confidential applicant records.
+
+Use secure server-side authorization.
+
+Apply least-privilege access.
+
+Do not bypass authentication or access restrictions.
+
+---
+
+# PART 21: ACCESSIBILITY & INTERNATIONALIZATION
+
+Implement:
+
+- Semantic HTML.
+- Keyboard navigation.
+- Visible focus indicators.
+- Accessible labels.
+- Proper heading hierarchy.
+- Sufficient contrast.
+- Screen-reader-friendly components.
+- Accessible forms.
+
+Support Bengali and English.
+
+Ensure Bengali text remains correctly formatted across all screen sizes.
+
+---
+
+# PART 22: NETLIFY DEPLOYMENT & PRODUCTION
+
+Preserve compatibility with the existing deployment.
+
+Inspect:
+
+- Build commands.
+- Publish directory.
+- Netlify configuration.
+- Redirects.
+- Environment variables.
+- SPA routing.
+- Asset paths.
+- Deployment behavior.
+
+Preserve existing public URLs wherever possible.
+
+If SPA fallback is needed, configure it correctly.
+
+Do not change production deployment settings unnecessarily.
+
+If a separate backend is required, document its deployment requirements.
+
+Never assume a frontend-only Netlify deployment can directly execute an Express backend.
+
+---
+
+# PART 23: ZERO-DATA-LOSS PROTOCOL
+
+This section has the highest priority.
+
+The existing website contains valuable organizational and historical data.
+
+Mandatory rules:
+
+1. Preserve all existing cadet records.
+2. Preserve leadership histories.
+3. Preserve existing gallery photographs.
+4. Preserve notices and documents.
+5. Preserve application records.
+6. Preserve existing unique IDs.
+7. Preserve user accounts and permissions.
+8. Preserve existing functional routes.
+9. Preserve external integrations.
+10. Preserve existing database relationships.
+
+Before any potentially destructive change:
+
+- Create a backup.
+- Identify affected collections.
+- Document the migration.
+- Verify backup integrity.
+- Test the migration in a development environment.
+- Confirm data preservation.
+
+Never:
+
+- Delete production collections.
+- Reset the production database.
+- Replace real data with demo data.
+- Generate fictional cadet records.
+- Change IDs unnecessarily.
+- Delete existing images.
+- Overwrite user information.
+
+If an operation creates a data-loss risk, stop and request authorization.
+
+---
+
+# PART 24: TESTING & QUALITY ASSURANCE
+
+Test the entire website after implementation.
+
+## Functional tests
+
+- Homepage.
+- Navigation.
+- All internal routes.
+- External links.
+- Gallery.
+- Image viewer.
+- Notices.
+- PDF downloads.
+- Recruitment.
+- Application forms.
+- Admit cards.
+- QR verification.
+- Examination portal.
+- Admin login.
+- Role permissions.
+- Database operations.
+- Contact form.
+
+## Responsive tests
+
+- Mobile.
+- Tablet.
+- Laptop.
+- Desktop.
+
+## Technical tests
+
+- Production build.
+- TypeScript checks.
+- Console errors.
+- Broken routes.
+- Broken image paths.
+- API errors.
+- Database permissions.
+- Security checks.
+- Performance.
+
+Fix all critical issues before completion.
+
+---
+
+# PART 25: DEVELOPMENT WORKFLOW
+
+Follow this exact workflow.
+
+PHASE 1 — DISCOVERY
+
+Inspect the live website and supplied source files.
+
+PHASE 2 — AUDIT
+
+Document the existing architecture, pages, features, and problems.
+
+PHASE 3 — BACKUP
+
+Protect source code, assets, and database records before making changes.
+
+PHASE 4 — PLANNING
+
+Prepare an implementation plan.
+
+PHASE 5 — DESIGN SYSTEM
+
+Create the global visual system and reusable components.
+
+PHASE 6 — IMPLEMENTATION
+
+Modify the actual existing project.
+
+Do not stop at screenshots or mockups.
+
+PHASE 7 — INTEGRATION
+
+Preserve database connections, API routes, authentication, and existing services.
+
+PHASE 8 — TESTING
+
+Run functional, responsive, technical, and security tests.
+
+PHASE 9 — OPTIMIZATION
+
+Improve performance, accessibility, and SEO.
+
+PHASE 10 — FINAL REVIEW
+
+Compare the upgraded project against the original.
+
+PHASE 11 — DELIVERY
+
+Provide a detailed implementation report.
+
+Do not skip phases.
+
+Do not stop after producing a plan.
+
+---
+
+# PART 26: STRICT DEVELOPMENT RULES
+
+These rules are mandatory.
+
+1. Do not rebuild the website from scratch unnecessarily.
+2. Do not remove existing functional features.
+3. Do not delete existing content.
+4. Do not invent organizational information.
+5. Do not fabricate cadet records.
+6. Do not fabricate leadership histories.
+7. Do not remove existing photographs.
+8. Do not break existing URLs unnecessarily.
+9. Do not overwrite production data.
+10. Do not expose credentials.
+11. Do not introduce unnecessary dependencies.
+12. Do not leave nonfunctional buttons.
+13. Do not claim untested features work.
+14. Do not compromise security.
+15. Do not perform irreversible operations without backup and authorization.
+16. Do not replace authentic photographs with artificial people.
+17. Do not expose confidential personal information.
+18. Do not create a separate incompatible admin system.
+19. Do not use fake statistics.
+20. Do not stop at UI design.
+
+---
+
+# PART 27: FINAL DELIVERY REQUIREMENTS
+
+When development is complete, provide:
+
+## A. Website Upgrade Summary
+
+Explain all major improvements.
+
+## B. Modified Files
+
+List important modified files and explain their purpose.
+
+## C. New Components
+
+List newly created reusable components.
+
+## D. Fixed Issues
+
+List bugs and technical problems that were resolved.
+
+## E. Database Changes
+
+Document any database schema or rule changes.
+
+## F. Security Improvements
+
+Explain important security improvements.
+
+## G. Performance Improvements
+
+Summarize optimization work.
+
+## H. Testing Report
+
+Show which tests passed, failed, or remain incomplete.
+
+## I. Deployment Instructions
+
+Explain how to deploy the updated project.
+
+## J. Remaining Limitations
+
+Clearly disclose anything that could not be implemented or verified.
+
+Never claim complete success if important features remain untested.
+
+---
+
+# PART 28: FINAL ACCEPTANCE CRITERIA
+
+The final website must be:
+
+- Modern.
+- Professional.
+- Premium.
+- Institutionally appropriate.
+- Fully responsive.
+- Secure.
+- Fast.
+- Accessible.
+- SEO-friendly.
+- Bengali and English compatible.
+- Easy to maintain.
+- Easy to navigate.
+- Data-preserving.
+- Fully integrated with existing systems.
+
+The website must preserve its original organizational identity while providing a significantly improved digital experience.
+
+# FINAL COMMAND
+
+START BY INSPECTING THE ACTUAL EXISTING WEBSITE AND THE COMPLETE SOURCE CODE PROVIDED TO YOU.
+
+First understand the project.
+
+Then audit it.
+
+Then protect its existing data.
+
+Then plan the improvements.
+
+Then implement the actual code changes.
+
+Then test the entire system.
+
+Do not ask me to rebuild the project from scratch.
+
+Do not replace the website with a generic template.
+
+Do not assume that a feature exists without verifying it.
+
+Do not delete existing information.
+
+If the source code is unavailable, explicitly request the project files or repository access instead of pretending to have inspected them.
+
+If a required integration is unavailable, document the limitation and implement only what can safely be completed.
+
+Your mission is to deliver a complete, secure, optimized, modern, and production-ready upgraded version of the existing Cox's Bazar City College BNCC Platoon website.
+
+**PRESERVE THE LEGACY. MODERNIZE THE EXPERIENCE. PROTECT THE DATA. DELIVER A PROFESSIONAL SYSTEM.**

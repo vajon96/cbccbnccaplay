@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { 
   BarChart3, FileQuestion, Award, Trophy, 
-  Settings, LogOut, Shield, CheckCircle2, FileText
+  Settings, LogOut, Shield, CheckCircle2, FileText, ArrowLeft
 } from "lucide-react";
-import { getSession, clearSession } from "../lib/auth";
+import { getSession } from "../lib/auth";
+import { hasPermission } from "../lib/rbac";
+import { useAuth } from "../context/AuthContext";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
 import { ExamOverview } from "../components/exam/ExamOverview";
 import { QuestionBank } from "../components/exam/QuestionBank";
@@ -16,7 +18,8 @@ import { AnswerScriptsList } from "../components/exam/AnswerScriptsList";
 import { AnswerScriptViewer } from "../components/exam/AnswerScriptViewer";
 
 export function ExamAdminDashboard() {
-  const session = getSession();
+  const { user: authUser, loading: authLoading } = useAuth();
+  const session = authUser || getSession();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<
@@ -27,12 +30,13 @@ export function ExamAdminDashboard() {
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!session || (session.role !== "admin" && session.role !== "super_admin")) {
+    if (authLoading) return;
+    if (!session || !hasPermission(session.role, "manage_exams", session.permissions)) {
       navigate("/exam/admin/login");
     }
-  }, [session?.id, session?.role]);
+  }, [authLoading, session?.id, session?.role, navigate]);
 
-  if (!session) return null;
+  if (authLoading || !session) return null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col selection:bg-primary selection:text-white">
@@ -43,6 +47,13 @@ export function ExamAdminDashboard() {
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
           
           <div className="flex items-center space-x-1 sm:space-x-2">
+            <Link
+              to="/admin/dashboard?module=suite-exam"
+              className="px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 bg-white/5 text-amber-300 hover:bg-amber-500/20 border border-amber-500/25 mr-1"
+            >
+              <ArrowLeft size={14} />
+              <span className="hidden md:inline">Main Admin Suite</span>
+            </Link>
             <button
               onClick={() => { setActiveTab("overview"); setSelectedAttemptId(null); }}
               className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer ${

@@ -1,0 +1,300 @@
+/* ==========================================
+   BNCC Cadet Profile System - Core Stylesheet
+   ========================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Oswald:wght@500;700&display=swap');
+
+:root {
+    --bncc-red: #e63946;
+    --bncc-red-hover: #c82333;
+    --bg-dark: #0a0f1d;
+    --card-bg: rgba(23, 32, 54, 0.75);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --text-main: #f8f9fa;
+    --text-muted: #94a3b8;
+    --accent-gold: #ffb703;
+    --font-main: 'Plus Jakarta Sans', sans-serif;
+    --font-heading: 'Oswald', sans-serif;
+}
+
+/* Reset & Global Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-main);
+    background-color: var(--bg-dark);
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(230, 57, 70, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
+    background-attachment: fixed;
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header Component */
+header {
+    background: rgba(10, 15, 29, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+header img, 
+.header-logo {
+    height: 48px;
+    width: auto;
+    object-fit: contain;
+    transition: transform 0.2s ease;
+}
+
+header img:hover,
+.header-logo:hover {
+    transform: scale(1.05);
+}
+
+.header-title-container {
+    text-align: center;
+}
+
+.header-title-container h1,
+.header-title-container h6 {
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+    color: #ffffff;
+    font-size: 1.1rem;
+    margin: 0;
+    letter-spacing: 0.5px;
+}
+
+.header-title-container small {
+    color: var(--bncc-red);
+    font-family: monospace;
+    font-size: 0.75rem;
+}
+
+/* Navigation Links */
+nav, .nav-bar {
+    background: rgba(230, 57, 70, 0.9);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+nav a, 
+.nav-link {
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 10px 18px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+nav a:hover,
+.nav-link:hover {
+    background: var(--bncc-red-hover);
+    color: #ffffff;
+}
+
+/* Main Layout Frame */
+main, .main-container {
+    flex-grow: 1;
+    padding: 40px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Glassmorphic ID Card Wrapper */
+.id-card, 
+.profile-card {
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+}
+
+.id-card::before,
+.profile-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--bncc-red), var(--accent-gold));
+}
+
+/* Image / Avatar Display */
+.id-card img,
+.avatar-img {
+    width: 150px;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 16px;
+    border: 3px solid var(--accent-gold);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    margin: 0 auto 20px;
+    display: block;
+}
+
+/* Name & Titles */
+.id-card h2,
+.profile-name {
+    font-family: var(--font-heading);
+    letter-spacing: 0.5px;
+    font-size: 1.85rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+
+.rank-badge,
+.badge-appointment {
+    background: rgba(230, 57, 70, 0.2);
+    color: #ff6b6b;
+    border: 1px solid rgba(230, 57, 70, 0.4);
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 50px;
+    text-transform: uppercase;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 12px;
+}
+
+/* Key-Value Information Grid */
+.info-grid, 
+.info-list {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+}
+
+.id-card p,
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.id-card p strong,
+.info-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.id-card p span,
+.info-value {
+    color: var(--text-main);
+    font-weight: 600;
+    text-align: right;
+}
+
+.badge-blood {
+    background: rgba(230, 57, 70, 0.25);
+    color: #ff6b6b;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+}
+
+/* Internal Card Pagination & Navigation */
+.nav-links,
+.card-pagination {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.nav-links a,
+.btn-custom {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nav-links a:hover,
+.btn-custom:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Footer Element */
+footer {
+    background: rgba(10, 15, 29, 0.95);
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 20px 0;
+    text-align: center;
+    margin-top: auto;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 576px) {
+    header {
+        padding: 10px 15px;
+    }
+    
+    header img, .header-logo {
+        height: 38px;
+    }
+    
+    .id-card, .profile-card {
+        padding: 24px 16px;
+    }
+    
+    .id-card h2, .profile-name {
+        font-size: 1.5rem;
+    }
+
+    .nav-links a, .btn-custom {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+}

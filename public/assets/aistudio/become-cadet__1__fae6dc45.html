@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Join Cox's Bazar City College BNCC Platoon to develop discipline, leadership, and patriotism. Register now to become a cadet.">
+    <title>Join Us - Become a Cadet | CBCC BNCC</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;800&family=Public+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #0047AB;    /* Valor Blue */
+            --primary-dark: #002D6B;
+            --accent: #FFD700;     /* Regimental Gold */
+            --accent-hover: #E6C200;
+            --dark-bg: #0A1128;    /* Deep Navy */
+            --light-bg: #F0F4F8;   /* Ice Grey */
+            --white: #ffffff;
+            --text-main: #1A202C;
+            --text-muted: #718096;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        body {
+            font-family: 'Public Sans', sans-serif;
+            line-height: 1.6;
+            color: var(--text-main);
+            background-color: var(--light-bg);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Institutional Header */
+        .institutional-header {
+            background-color: var(--white);
+            padding: 1.2rem 0;
+            border-bottom: 4px solid var(--primary);
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .logo {
+            height: 75px;
+            width: auto;
+            transition: var(--transition);
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .institution-name {
+            flex-grow: 1;
+            text-align: center;
+            font-family: 'Inter', sans-serif;
+            font-size: 1.3rem;
+            color: var(--primary);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0 1rem;
+        }
+
+        /* Modern Navigation */
+        .main-navigation {
+            background-color: var(--dark-bg);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .nav-menu {
+            display: flex;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-link {
+            color: #E2E8F0;
+            text-decoration: none;
+            padding: 1.2rem 1.2rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--accent);
+            background-color: rgba(255,255,255,0.05);
+        }
+
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            width: 60%;
+            height: 3px;
+            background-color: var(--accent);
+            border-radius: 10px 10px 0 0;
+        }
+
+        /* Mobile Toggle */
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 1.5rem;
+            padding: 1rem;
+        }
+
+        /* Banner/Hero Section */
+        .banner {
+            padding: 6rem 1rem;
+            background: linear-gradient(135deg, var(--dark-bg) 0%, var(--primary) 100%);
+            color: var(--white);
+            border-radius: 0 0 50px 50px;
+            text-align: center;
+            margin-bottom: -4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .banner::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+            opacity: 0.1;
+        }
+
+        .banner h2 {
+            font-family: 'Inter', sans-serif;
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            position: relative;
+        }
+
+        .banner p {
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+            opacity: 0.9;
+            font-weight: 300;
+            position: relative;
+        }
+
+        /* Application Section */
+        .apply-container {
+            background: var(--white);
+            padding: 60px 40px;
+            margin: 0 auto 4rem;
+            max-width: 900px;
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 10;
+        }
+
+        .apply-container h2 {
+            font-family: 'Inter', sans-serif;
+            font-size: 2.2rem;
+            color: var(--primary);
+            margin-bottom: 2.5rem;
+            text-align: center;
+        }
+
+        .apply-steps {
+            list-style: none;
+            padding: 0;
+            margin: 2.5rem 0;
+        }
+
+        .apply-steps li {
+            font-size: 1.05rem;
+            margin-bottom: 1.2rem;
+            padding: 20px;
+            background: #F8FAFC;
+            border-radius: 12px;
+            border-left: 5px solid var(--accent);
+            display: flex;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .apply-steps li:hover {
+            transform: translateX(10px);
+            background: #EDF2F7;
+        }
+
+        .apply-steps i {
+            font-size: 1.4rem;
+            color: var(--primary);
+            margin-right: 20px;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .apply-link {
+            display: block;
+            text-align: center;
+            text-decoration: none;
+            color: var(--dark-bg);
+            background-color: var(--accent);
+            padding: 20px 40px;
+            font-size: 1.3rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 12px;
+            transition: var(--transition);
+            box-shadow: 0 10px 20px rgba(255, 215, 0, 0.3);
+            margin: 30px auto 0;
+            max-width: 400px;
+        }
+
+        .apply-link:hover {
+            background-color: var(--accent-hover);
+            transform: translateY(-3px);
+            color: var(--dark-bg);
+            box-shadow: 0 15px 30px rgba(255, 215, 0, 0.4);
+        }
+
+        /* Commander Card */
+        .platoon-commander-card {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: var(--shadow);
+            max-width: 400px;
+            margin: 40px auto;
+            text-align: center;
+            border-bottom: 5px solid var(--primary);
+            transition: var(--transition);
+        }
+
+        .platoon-commander-card:hover {
+            transform: translateY(-10px);
+        }
+
+        .platoon-commander-card img {
+            width: 160px;
+            height: 160px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 6px solid var(--light-bg);
+            outline: 3px solid var(--accent);
+            margin-bottom: 20px;
+        }
+
+        .platoon-commander-card h6 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+
+        /* Footer */
+        .institutional-footer {
+            background-color: var(--dark-bg);
+            color: var(--white);
+            padding: 5rem 0 2rem;
+            margin-top: auto;
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 3rem;
+        }
+
+        .footer-title {
+            color: var(--accent);
+            font-family: 'Inter', sans-serif;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .footer-title::after {
+            content: '';
+            position: absolute;
+            bottom: -8px; left: 0; width: 40px; height: 2px;
+            background: var(--accent);
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer-links a {
+            color: #A0AEC0;
+            text-decoration: none;
+            display: block;
+            padding: 0.4rem 0;
+            transition: var(--transition);
+        }
+
+        .footer-links a:hover {
+            color: var(--accent);
+            padding-left: 10px;
+        }
+
+        .copyright {
+            text-align: center;
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.85rem;
+            color: #718096;
+        }
+
+        /* Media Queries */
+        @media (max-width: 992px) {
+            .header-container { flex-direction: column; text-align: center; }
+            .institution-name { padding: 1.5rem 0; font-size: 1.1rem; }
+            .menu-toggle { display: block; margin-left: auto; }
+            .nav-menu {
+                flex-direction: column;
+                max-height: 0;
+                overflow: hidden;
+                width: 100%;
+                transition: max-height 0.5s ease;
+            }
+            .nav-menu.is-open { max-height: 600px; }
+            .nav-link { text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
+            .banner h2 { font-size: 2.2rem; }
+        }
+
+        @media (max-width: 576px) {
+            .logo { height: 55px; }
+            .apply-container { padding: 30px 20px; }
+            .banner { padding: 4rem 1rem 6rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="institutional-header">
+        <div class="header-container">
+            <a href="https://cbcc.edu.bd/" aria-label="Visit Cox's Bazar City College">
+                <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo" class="logo">
+            </a>
+            <div class="institution-name">
+                Cox's Bazar City College BNCC Platoon
+            </div>
+            <a href="https://bncc.info/" aria-label="Visit BNCC Official">
+                <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" class="logo">
+            </a>
+        </div>
+    </header>
+
+    <nav class="main-navigation">
+        <div class="nav-container">
+            <button class="menu-toggle" aria-label="Toggle navigation">
+                <i class="fas fa-bars"></i>
+            </button>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link"><i class="fas fa-home me-2"></i>Home</a></li>
+                <li><a href="about.html" class="nav-link"><i class="fas fa-info-circle me-2"></i>About</a></li>
+                <li><a href="activities.html" class="nav-link"><i class="fas fa-tasks me-2"></i>Activities</a></li>
+                <li><a href="cadets.html" class="nav-link"><i class="fas fa-users me-2"></i>Cadets</a></li>
+                <li><a href="gallery.html" class="nav-link"><i class="fas fa-images me-2"></i>Gallery</a></li>
+                <li><a href="contact.html" class="nav-link"><i class="fas fa-envelope me-2"></i>Contact</a></li>
+                <li><a href="hall-of-incharges.html" class="nav-link"><i class="fas fa-medal me-2"></i>Leadership</a></li>
+                <li><a href="become-cadet.html" class="nav-link active"><i class="fas fa-user-plus me-2"></i>Join Us</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main>
+        <div class="banner">
+            <h2>Cadet Enrollment 2026</h2>
+            <p>Your journey toward discipline, leadership, and national service starts here. Step into the shoes of a leader with the Army Wing.</p>
+        </div>
+
+        <section class="container">
+            <div class="apply-container">
+                <h2>Become a Cadet 🎯</h2>
+                <p class="text-center text-muted mb-4">
+                    Join an elite group of students dedicated to excellence and patriotism.
+                </p>
+
+                <ul class="apply-steps">
+                    <li><i class="fas fa-id-badge"></i> <strong>Step 1: Check Eligibility</strong> — Open to students of CBCC with high academic standing and physical fitness.</li>
+                    <li><i class="fas fa-edit"></i> <strong>Step 2: Submit Application</strong> — Complete the digital form via the link below or visit the Platoon Office.</li>
+                    <li><i class="fas fa-running"></i> <strong>Step 3: Physical & Oral Test</strong> — Attend the scheduled recruitment session for fitness and aptitude evaluation.</li>
+                    <li><i class="fas fa-check-circle"></i> <strong>Step 4: Final Selection</strong> — Successful candidates will be formally inducted into the BNCC Army Wing.</li>
+                </ul>
+
+                <a href="https://cbccbnccapply.vercel.app" class="apply-link">
+                    Start Application <i class="fas fa-chevron-right ms-2"></i>
+                </a>
+                
+                <p class="text-center mt-4 small text-muted">
+                    *Detailed guidelines are issued by the Platoon Commander during the recruitment cycle.
+                </p>
+            </div>
+
+            <div class="contact-info-section mb-5">
+                <h3 class="text-center mb-4" style="color: var(--primary); font-weight: 800;">Commanding Officer</h3>
+                <div class="platoon-commander-card">
+                    <img src="POU.png" alt="Professor Under Officer Ujjwal Kanti Deb">
+                    <h6>Professor Under Officer<br><span style="color: var(--text-main)">Ujjwal Kanti Deb</span></h6>
+                    <hr>
+                    <p class="mb-2"><i class="fas fa-phone-alt me-2" style="color: var(--primary);"></i> <a href="tel:+8801812430454" class="text-decoration-none text-dark">+880 1812-430454</a></p>
+                    <p><i class="fas fa-envelope me-2" style="color: var(--primary);"></i> <a href="mailto:contact@cbccbncc.edu.bd" class="text-decoration-none text-dark">contact@cbccbncc.edu.bd</a></p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="institutional-footer">
+        <div class="footer-container">
+            <div>
+                <h3 class="footer-title">Navigation</h3>
+                <ul class="footer-links">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="activities.html">Platoon Activities</a></li>
+                    <li><a href="gallery.html">Photo Gallery</a></li>
+                </ul>
+            </div>
+            
+            <div>
+                <h3 class="footer-title">Resources</h3>
+                <ul class="footer-links">
+                    <li><a href="hall-of-incharges.html">Leadership Registry</a></li>
+                    <li><a href="contact.html">Support Desk</a></li>
+                    <li><a href="privacy.html">Privacy Policy</a></li>
+                    <li><a href="sitemap.html">Sitemap</a></li>
+                </ul>
+            </div>
+            
+            <div>
+                <h3 class="footer-title">Contact Office</h3>
+                <ul class="footer-links">
+                    <li><a href="#"><i class="fas fa-map-marker-alt me-2"></i> Cox's Bazar City College</a></li>
+                    <li><a href="tel:+8801812430454"><i class="fas fa-phone me-2"></i> +880 1812-430454</a></li>
+                    <li><a href="mailto:contact@cbccbncc.edu.bd"><i class="fas fa-envelope me-2"></i> contact@cbccbncc.edu.bd</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="copyright">
+            &copy; <span id="currentYear"></span> Cox's Bazar City College BNCC Platoon. <br>
+            Designed for Excellence and Discipline.
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+        const menuToggle = document.querySelector('.menu-toggle');
+        const navMenu = document.querySelector('.nav-menu');
+        const icon = menuToggle.querySelector('i');
+
+        menuToggle.addEventListener('click', () => {
+            const isOpen = navMenu.classList.toggle('is-open');
+            icon.classList.toggle('fa-bars', !isOpen);
+            icon.classList.toggle('fa-times', isOpen);
+        });
+    </script>
+</body>
+</html>

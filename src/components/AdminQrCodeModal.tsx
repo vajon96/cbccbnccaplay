@@ -119,42 +119,7 @@ export function AdminQrCodeModal({ isOpen, onClose, admin }: AdminQrCodeModalPro
   };
 
   const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-    
-    const qrSvgElement = document.getElementById("admin-qr-svg");
-    const svgOuterHTML = qrSvgElement ? qrSvgElement.outerHTML : "";
-    
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Admin QR Code - ${admin.name}</title>
-          <style>
-            body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; padding: 40px; color: #333; }
-            .card { border: 2px solid #eaeaea; border-radius: 20px; padding: 30px; display: inline-block; max-width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-            h1 { font-size: 20px; margin-bottom: 5px; color: #0f172a; }
-            p { font-size: 13px; color: #64748b; margin-top: 0; }
-            .role { display: inline-block; padding: 4px 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; border-radius: 100px; background-color: #ef4444; color: white; margin-bottom: 20px; letter-spacing: 1px; }
-            .qr-holder { margin: 20px auto; padding: 15px; background: white; display: inline-block; border-radius: 12px; border: 1px solid #f1f5f9; }
-            .meta { font-size: 11px; color: #94a3b8; font-family: monospace; word-break: break-all; margin-top: 15px; }
-            .warning { font-size: 12px; font-weight: bold; color: #b91c1c; background-color: #fef2f2; padding: 10px; border-radius: 8px; margin-top: 20px; border: 1px solid #fee2e2; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <span class="role">${adminRole.replace("_", " ")}</span>
-            <h1>${admin.name}</h1>
-            <p>Cox's Bazar City College BNCC Platoon</p>
-            <div class="qr-holder">${svgOuterHTML}</div>
-            <p class="meta">TOKEN: ${tokenData?.qrToken || "N/A"}</p>
-            <p style="font-size: 11px; color: #64748b;">Expires: ${tokenData?.expiresAt ? tokenData.expiresAt.toDate().toLocaleDateString() : "Never (Permanent)"}</p>
-            <div class="warning">WARNING: Keep this QR Code highly private. Anyone with this QR can instantly login to your administrative account.</div>
-          </div>
-          <script>window.onload = function() { window.print(); window.close(); }</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    window.print();
   };
 
   return (
@@ -198,8 +163,12 @@ export function AdminQrCodeModal({ isOpen, onClose, admin }: AdminQrCodeModalPro
                     {adminRole.replace("_", " ")}
                   </span>
 
-                  {/* QR Image Frame */}
-                  <div className="p-5 bg-gradient-to-tr from-slate-50 to-slate-100/50 border border-slate-100 rounded-3xl shadow-inner relative flex items-center justify-center">
+                  {/* QR Image Frame (print-ready) */}
+                  <div className="print-area p-5 bg-gradient-to-tr from-slate-50 to-slate-100/50 border border-slate-100 rounded-3xl shadow-inner relative flex flex-col items-center justify-center">
+                    <div className="hidden print:block text-center mb-3">
+                      <p className="text-sm font-bold text-[#002147]">{admin.name} ({adminRole.replace("_", " ")})</p>
+                      <p className="text-[11px] text-slate-600">Cox&apos;s Bazar City College BNCC Platoon</p>
+                    </div>
                     <QRCodeSVG
                       id="admin-qr-svg"
                       value={tokenData.qrToken}

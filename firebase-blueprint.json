@@ -2,271 +2,260 @@
   "entities": {
     "applicant": {
       "title": "Applicant",
-      "description": "Represents a BNCC enrollment applicant.",
+      "description": "Represents a BNCC enrollment applicant bound to an authenticated ownerUid.",
       "type": "object",
       "properties": {
-        "fullNameBangla": { "type": "string", "description": "Full name in Bangla" },
-        "fullNameEnglish": { "type": "string", "description": "Full name in English" },
-        "fatherNameBangla": { "type": "string", "description": "Father's name in Bangla" },
-        "fatherNameEnglish": { "type": "string", "description": "Father's name in English" },
-        "motherNameBangla": { "type": "string", "description": "Mother's name in Bangla" },
-        "motherNameEnglish": { "type": "string", "description": "Mother's name in English" },
-        "dob": { "type": "string", "description": "Date of birth" },
-        "nidBirthReg": { "type": "string", "description": "NID or Birth Registration number" },
-        "gender": { "type": "string", "description": "Gender" },
-        "religion": { "type": "string", "description": "Religion" },
-        "presentAddress": { "type": "string", "description": "Present address" },
-        "permanentAddress": { "type": "string", "description": "Permanent address" },
-        "studentPhone": { "type": "string", "description": "Student's phone number" },
-        "studentEmail": { "type": "string", "description": "Student's email address" },
-        "heightFeet": { "type": "integer", "description": "Height in feet" },
-        "heightInches": { "type": "integer", "description": "Height in inches" },
-        "weightKg": { "type": "number", "description": "Weight in kg" },
-        "bloodGroup": { "type": "string", "description": "Blood group" },
-        "sscGpa": { "type": "number", "description": "SSC GPA" },
-        "sscGroup": { "type": "string", "description": "SSC group/department" },
-        "sscYear": { "type": "string", "description": "SSC passing year" },
-        "sscBoard": { "type": "string", "description": "SSC board" },
-        "hscGpa": { "type": "string", "description": "HSC GPA" },
-        "hscGroup": { "type": "string", "description": "HSC group/department" },
-        "hscYear": { "type": "string", "description": "HSC passing year" },
-        "hscBoard": { "type": "string", "description": "HSC board" },
-        "studyStatus": { "type": "string", "description": "Current study status" },
-        "subject": { "type": "string", "description": "Subject" },
-        "classRoll": { "type": "string", "description": "Class roll" },
-        "section": { "type": "string", "description": "Section" },
-        "session": { "type": "string", "description": "Session" },
-        "emisId": { "type": "string", "description": "College eMIS ID or Payment Unique Code" },
-        "collegeName": { "type": "string", "description": "College name" },
-        "photo": { "type": "string", "description": "Base64 encoded photo" },
-        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"], "description": "Application status" },
-        "attendanceStatus": { "type": "string", "enum": ["Present", "Absent"], "description": "Attendance status" },
-        "attendanceTime": { "type": "string", "format": "date-time", "description": "Time of attendance marking" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
-      },
-      "required": ["fullNameBangla", "fullNameEnglish", "fatherNameBangla", "fatherNameEnglish", "motherNameBangla", "motherNameEnglish", "dob", "nidBirthReg", "gender", "religion", "presentAddress", "permanentAddress", "studentPhone", "heightFeet", "heightInches", "weightKg", "bloodGroup", "sscGpa", "sscGroup", "sscYear", "sscBoard", "studyStatus", "subject", "classRoll", "session", "emisId", "collegeName", "photo"]
-    },
-    "admin": {
-      "title": "Admin",
-      "description": "Represents an administrative user.",
-      "type": "object",
-      "properties": {
-        "name": { "type": "string", "description": "Admin's display name" },
-        "username": { "type": "string", "description": "Login username" },
-        "password": { "type": "string", "description": "Hashed password" },
-        "role": { "type": "string", "enum": ["super_admin", "admin"], "description": "Access level" },
-        "permissions": {
-          "type": "object",
-          "properties": {
-            "canAdd": { "type": "boolean" },
-            "canEdit": { "type": "boolean" },
-            "canDelete": { "type": "boolean" },
-            "canViewLogs": { "type": "boolean" },
-            "canResetPW": { "type": "boolean" },
-            "canApprove": { "type": "boolean" },
-            "canExport": { "type": "boolean" },
-            "canChat": { "type": "boolean" }
-          }
-        },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["name", "username", "password", "role"]
-    },
-    "admin_config": {
-      "title": "Admin Config",
-      "description": "Configuration settings for the admin panel.",
-      "type": "object",
-      "properties": {
-        "key": { "type": "string", "description": "Configuration key" },
-        "value": { "type": "string", "description": "Configuration value" }
-      },
-      "required": ["key", "value"]
-    },
-    "activity_log": {
-      "title": "Activity Log",
-      "description": "Log of system and user activities.",
-      "type": "object",
-      "properties": {
-        "type": { "type": "string", "enum": ["ACCOUNT_CREATED", "PROFILE_UPDATED", "PASSWORD_CHANGED", "PASSWORD_RESET_BY_ADMIN"] },
-        "targetId": { "type": "string", "description": "ID of the target entity" },
-        "actorId": { "type": "string", "description": "ID of the user who performed the action" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "details": { "type": "string" },
-        "changes": { "type": "object", "description": "Optional details of changes made" }
-      },
-      "required": ["type", "targetId", "actorId", "timestamp", "details"]
-    },
-    "message": {
-      "title": "Message",
-      "description": "A chat message in the group chat.",
-      "type": "object",
-      "properties": {
-        "senderId": { "type": "string", "description": "ID of the sender" },
-        "senderName": { "type": "string", "description": "Name of the sender" },
-        "content": { "type": "string", "description": "Message content" },
-        "timestamp": { "type": "string", "format": "date-time", "description": "When the message was sent" },
-        "role": { "type": "string", "enum": ["user", "admin"], "description": "Role of the sender" }
-      },
-      "required": ["senderId", "senderName", "content", "timestamp", "role"]
-    },
-    "attendance_record": {
-      "title": "Attendance Record",
-      "description": "Logs individual attendance events.",
-      "type": "object",
-      "properties": {
-        "applicantId": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "markedBy": { "type": "string", "description": "Admin ID who marked it" },
-        "type": { "type": "string", "enum": ["Parade", "Training", "Special Event"] }
-      },
-      "required": ["applicantId", "timestamp", "markedBy"]
-    },
-    "notification": {
-      "title": "Notification",
-      "description": "System notifications for users or admins.",
-      "type": "object",
-      "properties": {
-        "targetId": { "type": "string", "description": "ID of recipient or 'ALL'" },
-        "title": { "type": "string" },
-        "message": { "type": "string" },
-        "type": { "type": "string", "enum": ["Alert", "Announcement", "Message"] },
-        "isRead": { "type": "boolean" },
-        "timestamp": { "type": "string", "format": "date-time" }
-      },
-      "required": ["title", "message", "timestamp"]
-    },
-    "counter": {
-      "title": "Counter",
-      "description": "Tracker for sequential IDs.",
-      "type": "object",
-      "properties": {
-        "currentId": { "type": "integer", "description": "The last used ID" }
-      },
-      "required": ["currentId"]
-    },
-    "circular": {
-      "title": "Circular",
-      "description": "Represents an enrollment/recruitment circular.",
-      "type": "object",
-      "properties": {
-        "referenceNumber": { "type": "string" },
-        "startDate": { "type": "string" },
-        "deadlineDate": { "type": "string" },
-        "publicationDate": { "type": "string", "format": "date-time" },
-        "status": { "type": "string" },
-        "title": { "type": "string" },
-        "introduction": { "type": "string" },
-        "purpose": { "type": "string" },
-        "eligibility": { "type": "string" },
-        "requiredDocuments": { "type": "string" },
-        "applicationProcedure": { "type": "string" },
-        "importantDates": { "type": "string" },
-        "verificationProcess": { "type": "string" },
-        "rulesAndConditions": { "type": "string" },
-        "contactInfo": { "type": "string" },
-        "footer": { "type": "string" },
-        "category": { "type": "string" },
-        "fileType": { "type": "string" },
-        "hasPdfChunks": { "type": "boolean" },
-        "chunksCount": { "type": "integer" },
-        "pdfFileName": { "type": "string" },
-        "pdfFileSize": { "type": "integer" },
-        "pdfData": { "type": "string" },
+        "ownerUid": { "type": "string", "description": "Firebase Auth UID of the applicant owner" },
+        "fullNameBangla": { "type": "string", "maxLength": 160 },
+        "fullNameEnglish": { "type": "string", "maxLength": 160 },
+        "fatherNameBangla": { "type": "string", "maxLength": 160 },
+        "fatherNameEnglish": { "type": "string", "maxLength": 160 },
+        "motherNameBangla": { "type": "string", "maxLength": 160 },
+        "motherNameEnglish": { "type": "string", "maxLength": 160 },
+        "dob": { "type": "string", "maxLength": 32 },
+        "nidBirthReg": { "type": "string", "maxLength": 64 },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "religion": { "type": "string", "maxLength": 64 },
+        "presentAddress": { "type": "string", "maxLength": 500 },
+        "permanentAddress": { "type": "string", "maxLength": 500 },
+        "studentPhone": { "type": "string", "maxLength": 32 },
+        "studentEmail": { "type": "string", "maxLength": 160 },
+        "heightFeet": { "type": "integer" },
+        "heightInches": { "type": "integer" },
+        "weightKg": { "type": "number" },
+        "bloodGroup": { "type": "string", "maxLength": 16 },
+        "sscGpa": { "type": "number" },
+        "sscGroup": { "type": "string", "maxLength": 64 },
+        "sscYear": { "type": "string", "maxLength": 16 },
+        "sscBoard": { "type": "string", "maxLength": 64 },
+        "hscGpa": { "type": "string", "maxLength": 16 },
+        "hscGroup": { "type": "string", "maxLength": 64 },
+        "hscYear": { "type": "string", "maxLength": 16 },
+        "hscBoard": { "type": "string", "maxLength": 64 },
+        "studyStatus": { "type": "string", "maxLength": 100 },
+        "subject": { "type": "string", "maxLength": 100 },
+        "classRoll": { "type": "string", "maxLength": 40 },
+        "section": { "type": "string", "maxLength": 40 },
+        "session": { "type": "string", "maxLength": 40 },
+        "emisId": { "type": "string", "maxLength": 64 },
+        "collegeName": { "type": "string", "maxLength": 180 },
+        "photo": { "type": "string", "maxLength": 350000 },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "attendanceStatus": { "type": "string", "enum": ["Present", "Absent"] },
+        "attendanceTime": { "type": "string", "format": "date-time" },
+        "registrationNumber": { "type": "string", "maxLength": 32 },
+        "role": { "type": "string", "enum": ["cadet", "user"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["referenceNumber", "startDate", "deadlineDate", "status", "title"]
+      "required": ["fullNameBangla", "fullNameEnglish", "studentPhone", "status"]
     },
-    "circular_setting": {
-      "title": "Circular Setting",
-      "description": "Stores general settings for the circular module.",
+    "admin": {
+      "title": "Admin",
+      "description": "Administrative user document keyed by Firebase Auth UID or officer record.",
       "type": "object",
       "properties": {
-        "key": { "type": "string" },
-        "value": { "type": "boolean" }
+        "uid": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "username": { "type": "string", "maxLength": 80 },
+        "email": { "type": "string", "maxLength": 160 },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "exam_admin", "qr_admin", "sub_admin", "attendance_officer"] },
+        "permissions": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["key", "value"]
+      "required": ["name", "role"]
+    },
+    "qr_record": {
+      "title": "Public QR Projection",
+      "description": "Non-PII public verification projection for cadet QR card scanning.",
+      "type": "object",
+      "properties": {
+        "cadetId": { "type": "string", "maxLength": 64 },
+        "fullNameEnglish": { "type": "string", "maxLength": 160 },
+        "fullNameBangla": { "type": "string", "maxLength": 160 },
+        "status": { "type": "string", "maxLength": 40 },
+        "attendanceStatus": { "type": "string", "maxLength": 40 },
+        "batch": { "type": "string", "maxLength": 40 },
+        "photo": { "type": "string", "maxLength": 350000 }
+      },
+      "required": ["cadetId", "fullNameEnglish", "status"]
+    },
+    "exam": {
+      "title": "Exam",
+      "description": "Sanitized exam definition without answer keys.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["draft", "scheduled", "published", "live", "completed", "archived"] },
+        "durationMinutes": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "status"]
+    },
+    "exam_answer_key": {
+      "title": "Exam Answer Key",
+      "description": "Encrypted/sealed answer keys readable only by exam/super admins.",
+      "type": "object",
+      "properties": {
+        "examId": { "type": "string" },
+        "sealedPayload": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["examId", "sealedPayload"]
+    },
+    "exam_attempt": {
+      "title": "Exam Attempt",
+      "description": "Candidate exam attempt and live answers owned by ownerUid.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "examId": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "status": { "type": "string", "enum": ["in_progress", "submitted", "graded"] },
+        "answers": { "type": "object" },
+        "startedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "examId", "candidateId", "status"]
+    },
+    "exam_result": {
+      "title": "Exam Result",
+      "description": "Scored exam result owned by ownerUid.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "attemptId": { "type": "string" },
+        "examId": { "type": "string" },
+        "obtainedMarks": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "gradingStatus": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["ownerUid", "attemptId", "examId"]
+    },
+    "message": {
+      "title": "Message",
+      "description": "Private 1:1 thread or platoon announcement message.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "threadId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 120 },
+        "recipientId": { "type": "string", "maxLength": 128 },
+        "content": { "type": "string", "maxLength": 4000 },
+        "role": { "type": "string", "maxLength": 40 },
+        "isRead": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "content", "timestamp"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "System and user notifications.",
+      "type": "object",
+      "properties": {
+        "targetId": { "type": "string", "maxLength": 128 },
+        "ownerUid": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 2000 },
+        "type": { "type": "string", "maxLength": 40 },
+        "isRead": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetId", "title", "message", "timestamp"]
+    },
+    "offline_application": {
+      "title": "Offline Application",
+      "description": "Offline printable/paper cadet application synced from client.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "applicationNumber": { "type": "string", "maxLength": 64 },
+        "syncStatus": { "type": "string", "enum": ["Draft", "Pending Sync", "Syncing", "Synced", "Sync Failed", "Requires Review"] },
+        "reviewStatus": { "type": "string", "enum": ["Pending", "Reviewed", "Approved", "Rejected"] }
+      },
+      "required": ["applicationNumber", "syncStatus"]
+    },
+    "cms_document": {
+      "title": "CMS Document",
+      "description": "Structured CMS item/section/profile/media document.",
+      "type": "object",
+      "properties": {
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "media_asset": {
+      "title": "Media Asset",
+      "description": "Centralized platform media library metadata record with strict public/private visibility isolation.",
+      "type": "object",
+      "properties": {
+        "fileName": { "type": "string", "maxLength": 200 },
+        "title": { "type": "string", "maxLength": 200 },
+        "altText": { "type": "string", "maxLength": 300 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "mimeType": { "type": "string", "maxLength": 100 },
+        "sizeBytes": { "type": "integer" },
+        "category": { "type": "string", "maxLength": 64 },
+        "tags": { "type": "array" },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "storageLocation": { "type": "string", "enum": ["firebase_storage", "server_vault", "public_assets", "external"] },
+        "storagePath": { "type": "string", "maxLength": 500 },
+        "url": { "type": "string", "maxLength": 1500 },
+        "uploadedBy": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fileName", "mimeType", "visibility", "url"]
+    },
+    "generic_admin_record": {
+      "title": "Admin Managed Record",
+      "description": "Protected operational or audit document managed by admins.",
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
-    "/circulars/{circularId}": {
-      "schema": "circular",
-      "description": "System generated enrollment circulars"
-    },
-    "/circulars/{circularId}/chunks/{chunkId}": {
-      "description": "Chunked storage for large PDF circular files to prevent exceeding document size limits"
-    },
-    "/circular_settings/{settingId}": {
-      "schema": "circular_setting",
-      "description": "General settings for the circular module"
-    },
-    "/applicants/{applicantId}": {
-      "schema": "applicant",
-      "description": "Collection of applicants"
-    },
-    "/pending_profile_changes/{changeId}": {
-      "description": "Pending profile change requests from cadets awaiting admin approval"
-    },
-    "/counters/{counterId}": {
-      "schema": "counter",
-      "description": "Sequential ID counters"
-    },
-    "/attendance_logs/{logId}": {
-      "schema": "attendance_record",
-      "description": "Logs of attendance events"
-    },
-    "/notifications/{notifId}": {
-      "schema": "notification",
-      "description": "System notifications"
-    },
-    "/admin_config/{configId}": {
-      "schema": "admin_config",
-      "description": "Admin configuration settings"
-    },
-    "/activity_logs/{logId}": {
-      "schema": "activity_log",
-      "description": "System activity logs"
-    },
-    "/messages/{messageId}": {
-      "schema": "message",
-      "description": "Group chat messages"
-    },
-    "/admins/{adminId}": {
-      "schema": "admin",
-      "description": "Administrative users"
-    },
-    "/qr_records/{qrRecordId}": {
-      "description": "Independent QR Admin snapshot records"
-    },
-    "/guides/{guideId}": {
-      "description": "Official enrollment guides"
-    },
-    "/guide_settings/{settingId}": {
-      "description": "General settings for the guide module"
-    },
-    "/question_bank/{questionId}": {
-      "description": "Central question bank storing exam questions"
-    },
-    "/exams/{examId}": {
-      "description": "Exams configuration and rules"
-    },
-    "/exam_attempts/{attemptId}": {
-      "description": "Candidate exam attempts and temporary answer states"
-    },
-    "/exam_results/{resultId}": {
-      "description": "Final scored exam results for candidates"
-    },
-    "/exam_settings/{settingId}": {
-      "description": "Global exam portal settings"
-    },
-    "/exam_activity_logs/{logId}": {
-      "description": "Audit trail logs for exam admin operations"
-    },
-    "/adminTokens/{tokenId}": {
-      "description": "Admin session tokens"
-    },
-    "/security_logs/{logId}": {
-      "description": "Security logs"
-    }
+    "/circulars/{circularId}": { "schema": "generic_admin_record", "description": "Recruitment circulars" },
+    "/circulars/{circularId}/chunks/{chunkId}": { "schema": "generic_admin_record", "description": "Circular PDF chunks" },
+    "/circular_settings/{settingId}": { "schema": "generic_admin_record", "description": "Circular settings" },
+    "/guides/{guideId}": { "schema": "generic_admin_record", "description": "Admission guides" },
+    "/guide_settings/{settingId}": { "schema": "generic_admin_record", "description": "Guide settings" },
+    "/applicants/{applicantId}": { "schema": "applicant", "description": "BNCC applicants & cadets (PII isolated)" },
+    "/pending_profile_changes/{changeId}": { "schema": "generic_admin_record", "description": "Cadet profile change requests" },
+    "/counters/{counterId}": { "schema": "generic_admin_record", "description": "Sequential registration ID counter" },
+    "/attendance_logs/{logId}": { "schema": "generic_admin_record", "description": "Attendance audit events" },
+    "/notifications/{notifId}": { "schema": "notification", "description": "Notifications for cadets and platoon" },
+    "/admin_config/{configId}": { "schema": "generic_admin_record", "description": "Admin config" },
+    "/activity_logs/{logId}": { "schema": "generic_admin_record", "description": "Activity audit logs" },
+    "/security_logs/{logId}": { "schema": "generic_admin_record", "description": "Security audit logs" },
+    "/password_resets/{resetId}": { "schema": "generic_admin_record", "description": "Authorized password reset requests" },
+    "/messages/{messageId}": { "schema": "message", "description": "Scoped messenger threads & announcements" },
+    "/admins/{adminId}": { "schema": "admin", "description": "Verified platform admins" },
+    "/adminTokens/{tokenId}": { "schema": "generic_admin_record", "description": "QR officer login tokens" },
+    "/public_qr_cards/{cardId}": { "schema": "qr_record", "description": "Non-PII single-document public QR verification cards" },
+    "/qr_records/{qrRecordId}": { "schema": "generic_admin_record", "description": "Admin-only QR inspection logs" },
+    "/question_bank/{questionId}": { "schema": "generic_admin_record", "description": "Admin-only question bank" },
+    "/exams/{examId}": { "schema": "exam", "description": "Published exam shells (keys stripped)" },
+    "/exam_answer_keys/{keyId}": { "schema": "exam_answer_key", "description": "Admin-only answer keys" },
+    "/exam_attempts/{attemptId}": { "schema": "exam_attempt", "description": "Candidate exam attempts" },
+    "/exam_results/{resultId}": { "schema": "exam_result", "description": "Exam results" },
+    "/exam_settings/{settingId}": { "schema": "generic_admin_record", "description": "Exam module settings" },
+    "/exam_activity_logs/{logId}": { "schema": "generic_admin_record", "description": "Exam audit logs" },
+    "/answer_script_audit_logs/{logId}": { "schema": "generic_admin_record", "description": "Grading script audit logs" },
+    "/leaderboard/{entryId}": { "schema": "generic_admin_record", "description": "Exam leaderboard rankings" },
+    "/cms_content/{id}": { "schema": "cms_document", "description": "Universal editable CMS strings" },
+    "/cms_sections/{id}": { "schema": "cms_document", "description": "Page section visibility and ordering" },
+    "/cms_cadets/{id}": { "schema": "cms_document", "description": "Public cadet directory showcase" },
+    "/cms_incharges/{id}": { "schema": "cms_document", "description": "Public in-charges showcase" },
+    "/cms_commander/{id}": { "schema": "cms_document", "description": "Platoon commander public profile" },
+    "/cms_notices/{id}": { "schema": "cms_document", "description": "Public CMS notices" },
+    "/cms_activities/{id}": { "schema": "cms_document", "description": "Public CMS activities" },
+    "/cms_gallery/{id}": { "schema": "cms_document", "description": "Public CMS media gallery" },
+    "/cms_settings/{id}": { "schema": "cms_document", "description": "Global CMS site settings" },
+    "/cms_pages/{id}": { "schema": "cms_document", "description": "Custom dynamic CMS pages" },
+    "/offline_applications/{id}": { "schema": "offline_application", "description": "Local-first synced offline applications" },
+    "/media_assets/{assetId}": { "schema": "media_asset", "description": "Centralized Media Management Library metadata" },
+    "/test/{id}": { "schema": "generic_admin_record", "description": "Firestore connectivity check document" }
   }
 }

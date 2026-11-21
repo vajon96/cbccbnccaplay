@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - Cox's Bazar City College BNCC Platoon</title>
+    <meta name="description" content="Cox's Bazar City College BNCC Platoon is dedicated to discipline, leadership, and excellence. Join us to build a better future with teamwork and patriotism.">
+    <meta name="keywords" content="BNCC, Cox's Bazar City College, Army Wing, Leadership, Discipline, Patriotism">
+    <meta name="author" content="Cox's Bazar City College BNCC Platoon">
+    <meta property="og:title" content="Home - Cox's Bazar City College BNCC Platoon">
+    <meta property="og:description" content="Join Cox's Bazar City College BNCC Platoon to develop leadership, discipline, and patriotism.">
+    <meta property="og:image" content="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png">
+    <meta property="og:url" content="https://cbcc.edu.bd/">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bncc-red: #b41d2a;
+            --bncc-dark-red: #8a171e;
+            --bncc-blue: #0056b3;
+            --bncc-dark-blue: #003d82;
+            --bncc-green: #2e7d32;
+            --bncc-dark-green: #1e5321;
+            --bncc-light: #f8f9fa;
+            --bncc-white: #ffffff;
+            --bncc-gray: #333333;
+            --bncc-light-gray: #6c757d;
+            --bncc-border: #e0e0e0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            line-height: 1.7;
+            color: var(--bncc-gray);
+            background-color: var(--bncc-white);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--bncc-red), var(--bncc-dark-red));
+            padding: 15px 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo-container img {
+            height: 70px;
+            transition: transform 0.3s;
+        }
+
+        .logo-container img:hover {
+            transform: scale(1.05);
+        }
+
+        .download-btn {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--bncc-white);
+            background-color: var(--bncc-blue);
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .download-btn:hover {
+            background-color: var(--bncc-dark-blue);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .banner {
+            background-color: var(--bncc-red);
+            color: var(--bncc-white);
+            padding: 15px 0;
+            text-align: center;
+            margin-bottom: 0;
+        }
+
+        .banner h2 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .banner p {
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        nav {
+            background-color: var(--bncc-dark-red);
+            padding: 10px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-header {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 5px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .nav-link {
+            color: var(--bncc-white);
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background-color: var(--bncc-white);
+            color: var(--bncc-red);
+        }
+        
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--bncc-white);
+            font-size: 1.8rem;
+            cursor: pointer;
+            padding: 0 10px;
+        }
+
+        main {
+            flex: 1;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .recruitment-box {
+            background: linear-gradient(135deg, var(--bncc-green), var(--bncc-dark-green));
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 800px;
+            margin: 0 auto 50px;
+            text-align: center;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            color: var(--bncc-white);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .recruitment-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: var(--bncc-white);
+        }
+
+        .recruitment-box h3 {
+            color: var(--bncc-white);
+            margin-bottom: 15px;
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        .recruitment-box p {
+            font-size: 1.1rem;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .apply-btn {
+            background-color: var(--bncc-white);
+            color: var(--bncc-green);
+            padding: 12px 30px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            display: inline-block;
+            transition: all 0.3s;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .apply-btn:hover {
+            background-color: var(--bncc-light);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .welcome-section h2 {
+            color: var(--bncc-red);
+            font-size: 2.2rem;
+            margin-bottom: 40px;
+            position: relative;
+            display: inline-block;
+            font-weight: 700;
+        }
+
+        .welcome-section h2::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 3px;
+            background-color: var(--bncc-red);
+        }
+
+        .logo-animation {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto 40px;
+        }
+
+        .center-logo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            z-index: 2;
+            animation: pulse 2s infinite;
+        }
+
+        .orbit {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .orbit img {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            animation: orbit 15s linear infinite;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .orbit img:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .orbit img:nth-child(2) {
+            animation-delay: -5s;
+        }
+
+        .orbit img:nth-child(3) {
+            animation-delay: -10s;
+        }
+
+        .orbit img:nth-child(4) {
+            animation-delay: -15s;
+        }
+
+        @keyframes orbit {
+            0% {
+                transform: rotate(0deg) translateX(120px) rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg) translateX(120px) rotate(-360deg);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .featured-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 30px auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: block;
+            border: 3px solid var(--bncc-red);
+        }
+
+        .welcome-text {
+            max-width: 800px;
+            margin: 0 auto;
+            font-size: 1.1rem;
+            line-height: 1.8;
+            text-align: justify;
+            background-color: var(--bncc-light);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            border-left: 4px solid var(--bncc-red);
+        }
+
+        .notice-link {
+            display: inline-block;
+            margin-top: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--bncc-white);
+            background-color: var(--bncc-red);
+            padding: 12px 25px;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: all 0.3s;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .notice-link:hover {
+            background-color: var(--bncc-dark-red);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .features-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 60px 0;
+        }
+
+        .feature-card {
+            background-color: var(--bncc-white);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+            border-top: 4px solid var(--bncc-red);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            color: var(--bncc-red);
+            margin-bottom: 15px;
+        }
+
+        .feature-card h3 {
+            color: var(--bncc-red);
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+        }
+
+        .feature-card p {
+            color: var(--bncc-light-gray);
+            line-height: 1.6;
+        }
+
+        footer {
+            background: linear-gradient(135deg, var(--bncc-red), var(--bncc-dark-red));
+            color: var(--bncc-white);
+            text-align: center;
+            padding: 40px 0 20px;
+            margin-top: 60px;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .footer p {
+            margin-bottom: 10px;
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 25px 0;
+        }
+
+        .social-links a {
+            color: var(--bncc-white);
+            font-size: 1.5rem;
+            transition: all 0.3s;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .social-links a:hover {
+            color: var(--bncc-red);
+            background-color: var(--bncc-white);
+            transform: translateY(-3px);
+        }
+
+        .copyright {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        @media (max-width: 768px) {
+            .header-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .logo-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .nav-container {
+                flex-direction: column;
+                align-items: center;
+                gap: 0;
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease-out;
+                padding: 0 20px;
+            }
+
+            .nav-container.open {
+                max-height: 500px;
+                padding: 10px 20px;
+            }
+
+            .nav-link {
+                width: 100%;
+                text-align: center;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            .nav-link:last-child {
+                border-bottom: none;
+            }
+
+            .logo-animation {
+                width: 250px;
+                height: 250px;
+            }
+
+            .orbit img {
+                width: 50px;
+                height: 50px;
+            }
+
+            @keyframes orbit {
+                0% {
+                    transform: rotate(0deg) translateX(100px) rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg) translateX(100px) rotate(-360deg);
+                }
+            }
+
+            .features-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo-container">
+                <a href="https://cbcc.edu.bd/">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="Cox's Bazar City College Logo">
+                </a>
+                <a href="https://bncc.info/">
+                    <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                </a>
+            </div>
+            <a href="Cox's Bazar City College BNCC Platoon (Army Wing).apk" class="download-btn">
+                <i class="fas fa-download"></i> Download App
+            </a>
+        </div>
+    </header>
+
+    <div class="banner">
+        <h2>Cox's Bazar City College BNCC Platoon (Army Wing)</h2>
+        <p>Developing Discipline, Leadership, and Patriotism</p>
+    </div>
+
+    <nav>
+        <div class="nav-header">
+            <button class="menu-toggle" aria-label="Toggle navigation menu">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        
+        <div class="nav-container">
+            <a class="nav-link active" href="index.html">Home</a>
+            <a class="nav-link" href="about.html">About Us</a>
+            <a class="nav-link" href="activities.html">Activities</a>
+            <a class="nav-link" href="cadets.html">Cadets</a>
+            <a class="nav-link" href="gallery.html">Gallery</a>
+            <a class="nav-link" href="contact.html">Contact</a>
+            <a class="nav-link" href="hall-of-incharges.html">Hall of In-Charges</a>
+            <a class="nav-link" href="how-to-become-cadet.html">How to Join</a>
+            <a class="nav-link" href="become-cadet.html">Apply Now</a>
+        </div>
+    </nav>
+
+    <main>
+        <section class="welcome-section">
+            <h2>Welcome to BNCC</h2>
+            
+            <div class="logo-animation">
+                <img src="https://i.ibb.co/pr5HjFn0/logo3.png" alt="Center Logo" class="center-logo">
+                <div class="orbit">
+                    <img src="https://i.ibb.co/WNyRtBcF/center-logo.png" alt="Cox's Bazar City College Logo">
+                    <img src="https://i.ibb.co/9kZJrrKB/logo1.png" alt="BNCC Logo">
+                    <img src="https://i.ibb.co/99QHMxhX/logo2.png" alt="Logo 3">
+                    <img src="https://i.ibb.co/Z63c0BXN/logo4.png" alt="Logo 4">
+                </div>
+            </div>
+
+            <!-- Added image here -->
+            <img src="dddf.jpg" alt="Description of image" class="featured-image">
+
+            <div class="welcome-text">
+                <p>
+                    Cox's Bazar City College BNCC Platoon (Army Wing) is dedicated to discipline, leadership, and excellence. 
+                    Through rigorous training and activities, we aim to build confident, capable, and patriotic individuals ready to serve the nation. 
+                    Join us as we strive for personal growth, teamwork, and the values that shape the future leaders of tomorrow. 
+                    Together, we uphold the honor and traditions of BNCC while making a meaningful impact on our community and beyond. 
+                    Discipline, Dedication, Determination – This is our motto.
+                </p>
+            </div>
+
+            <a href="notc.html" class="notice-link">
+                <i class="fas fa-bullhorn"></i> নোটিশ
+            </a>
+        </section>
+
+        <section class="features-section">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-medal"></i>
+                </div>
+                <h3>Discipline & Excellence</h3>
+                <p>We instill discipline and strive for excellence in all our cadets through structured training programs and activities.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h3>Leadership Development</h3>
+                <p>Our programs are designed to develop leadership qualities, decision-making skills, and team management abilities.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-flag"></i>
+                </div>
+                <h3>Patriotism & Service</h3>
+                <p>We foster a deep sense of patriotism and commitment to serving the nation and community with honor and integrity.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>Cox's Bazar City College BNCC Platoon (Army Wing)</p>
+            <p>Developing Discipline, Leadership, and Patriotism</p>
+            
+            <div class="social-links">
+                <a href="#"><i class="fab fa-facebook-f"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-instagram"></i></a>
+                <a href="#"><i class="fab fa-youtube"></i></a>
+            </div>
+            
+            <div class="copyright">
+                <p>&copy; 2025 Cox's Bazar City College BNCC Platoon. All Rights Reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPage = location.pathname.split('/').pop() || 'index.html';
+            const navLinks = document.querySelectorAll('.nav-link');
+            
+            navLinks.forEach(link => {
+                if (link.getAttribute('href') === currentPage) {
+                    link.classList.add('active');
+                }
+            });
+
+            const menuToggle = document.querySelector('.menu-toggle');
+            const navContainer = document.querySelector('.nav-container');
+
+            if (menuToggle) {
+                menuToggle.addEventListener('click', () => {
+                    navContainer.classList.toggle('open');
+                    const isExpanded = navContainer.classList.contains('open');
+                    menuToggle.setAttribute('aria-expanded', isExpanded);
+                    
+                    const icon = menuToggle.querySelector('i');
+                    if (isExpanded) {
+                        icon.classList.remove('fa-bars');
+                        icon.classList.add('fa-times');
+                    } else {
+                        icon.classList.remove('fa-times');
+                        icon.classList.add('fa-bars');
+                    }
+                });
+            }
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 768) {
+                        navContainer.classList.remove('open');
+                        const icon = menuToggle.querySelector('i');
+                        if (icon) {
+                            icon.classList.remove('fa-times');
+                            icon.classList.add('fa-bars');
+                        }
+                        if (menuToggle) {
+                            menuToggle.setAttribute('aria-expanded', false);
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

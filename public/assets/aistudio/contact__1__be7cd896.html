@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Contact the Cox's Bazar City College BNCC Platoon for inquiries, enrollment information, or general correspondence.">
+    <title>Contact - Cox's Bazar City College BNCC Platoon</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Professional Color Scheme (Navy & Gold) */
+        :root {
+            --navy: #002366;
+            --dark-blue: #00356b;
+            --gold: #d4af37;
+            --light-gray: #f8f9fa;
+            --dark-gray: #343a40;
+            --white: #ffffff;
+            --text: #333;
+            --text-light: #7f8c8d;
+        }
+
+        /* Base Styles */
+        body {
+            font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--light-gray);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Ensures footer sticks to the bottom */
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            color: var(--dark-gray);
+        }
+
+        /* Institutional Header */
+        .institutional-header {
+            background-color: var(--white);
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .logo {
+            height: 70px;
+            width: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .institution-name {
+            flex-grow: 1;
+            text-align: center;
+            font-size: 1.4rem;
+            color: var(--navy);
+            font-weight: 600;
+            padding: 0 2rem;
+        }
+        
+        /* Navigation (Responsive) */
+        .main-navigation {
+            background-color: var(--navy);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: center; 
+            align-items: center;
+            flex-wrap: wrap; 
+        }
+        
+        .menu-toggle {
+            display: none; /* Hidden on desktop */
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 1rem 0;
+            margin-left: auto; 
+        }
+
+        .nav-menu {
+            display: flex;
+            justify-content: center;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            transition: max-height 0.4s ease-in-out;
+        }
+
+        .nav-item {
+            margin: 0 0.5rem;
+        }
+
+        .nav-link {
+            color: var(--white);
+            text-decoration: none;
+            padding: 1rem 1.5rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            display: block;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background-color: rgba(255,255,255,0.1);
+            border-bottom-color: var(--gold);
+        }
+
+        .nav-link i {
+            margin-right: 8px;
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 20px;
+            width: 100%;
+        }
+
+        /* Contact Section */
+        .contact-section {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            padding: 3rem;
+            margin-bottom: 3rem;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+            color: var(--navy);
+        }
+
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background-color: var(--gold);
+        }
+
+        .section-subtitle {
+            color: var(--text-light);
+            font-size: 1.1rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Contact Cards (CSS Grid for Responsiveness) */
+        .contact-grid {
+            display: grid;
+            /* Auto-fit and minmax ensures the columns rearrange from 4 to 2 to 1 based on screen size */
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .contact-card {
+            background: var(--white);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-top: 5px solid var(--navy);
+            text-align: center;
+        }
+
+        .contact-icon {
+            font-size: 2.5rem;
+            color: var(--gold);
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+
+        .contact-link {
+            color: var(--navy);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+            display: inline-block;
+            margin-top: 0.5rem;
+        }
+
+        .contact-link:hover {
+            color: var(--gold);
+            text-decoration: underline;
+        }
+
+        /* Map Section */
+        .map-section {
+            margin: 4rem 0;
+        }
+
+        .map-container {
+            height: 400px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        /* Social Media */
+        .social-section {
+            text-align: center;
+            margin: 3rem 0;
+            padding: 2rem;
+            background-color: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .social-link {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: var(--navy);
+            color: var(--white);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 1.1rem;
+            text-decoration: none;
+        }
+
+        .social-link:hover {
+            background-color: var(--gold);
+            color: var(--navy);
+            transform: translateY(-3px);
+        }
+
+        /* Footer (Responsive Grid) */
+        .institutional-footer {
+            background-color: var(--dark-gray);
+            color: var(--white);
+            padding: 3rem 0 1.5rem;
+            margin-top: auto; 
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: grid;
+            /* Footer columns stack nicely on smaller screens */
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .footer-links i {
+            width: 20px;
+            text-align: center;
+            margin-right: 8px;
+        }
+        
+        /* -------------------------------------- */
+        /* MEDIA QUERIES FOR MOBILE/TABLET DEVICES */
+        /* -------------------------------------- */
+
+        @media (max-width: 992px) {
+            .header-container {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .institution-name {
+                padding: 1rem 0;
+                font-size: 1.2rem;
+            }
+            
+            .nav-container {
+                /* Align items to sides for the toggle button */
+                justify-content: space-between;
+                padding-top: 5px;
+            }
+
+            .nav-menu {
+                /* Hide on mobile by default and stack links */
+                flex-direction: column;
+                align-items: center;
+                width: 100%;
+                max-height: 0; 
+                overflow: hidden;
+                padding: 0;
+            }
+
+            .menu-toggle {
+                display: block; /* Show hamburger button on mobile */
+            }
+            
+            .nav-menu.is-open {
+                max-height: 500px; /* Expands menu when JavaScript adds 'is-open' */
+            }
+            
+            .nav-item {
+                width: 100%;
+                text-align: center;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                margin: 0;
+            }
+
+            .nav-link {
+                padding: 0.75rem 1rem;
+            }
+
+            .contact-section {
+                padding: 2rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .logo {
+                height: 50px;
+            }
+
+            .contact-section {
+                padding: 1.5rem;
+            }
+
+            .section-title {
+                font-size: 1.7rem;
+            }
+
+            .map-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="institutional-header">
+        <div class="header-container">
+            <a href="https://cbcc.edu.bd/" aria-label="Visit Cox's Bazar City College website">
+                <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo" class="logo">
+            </a>
+            <div class="institution-name">
+                Cox's Bazar City College BNCC Platoon
+            </div>
+            <a href="https://bncc.info/" aria-label="Visit BNCC official website">
+                <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" class="logo">
+            </a>
+        </div>
+    </header>
+
+    <nav class="main-navigation">
+        <div class="nav-container">
+            <button class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="index.html" class="nav-link"><i class="fas fa-home"></i> Home</a></li>
+                <li class="nav-item"><a href="about.html" class="nav-link"><i class="fas fa-info-circle"></i> About</a></li>
+                <li class="nav-item"><a href="activities.html" class="nav-link"><i class="fas fa-tasks"></i> Activities</a></li>
+                <li class="nav-item"><a href="cadets.html" class="nav-link"><i class="fas fa-users"></i> Cadets</a></li>
+                <li class="nav-item"><a href="gallery.html" class="nav-link"><i class="fas fa-images"></i> Gallery</a></li>
+                <li class="nav-item"><a href="contact.html" class="nav-link active" aria-current="page"><i class="fas fa-envelope"></i> Contact</a></li>
+                <li class="nav-item"><a href="hall-of-incharges.html" class="nav-link"><i class="fas fa-medal"></i> Leadership</a></li>
+                <li class="nav-item"><a href="become-cadet.html" class="nav-link"><i class="fas fa-user-plus"></i> Join Us</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main>
+        <section class="contact-section">
+            <div class="section-header">
+                <h2 class="section-title">Get in Touch With Us</h2>
+                <p class="section-subtitle">We're here to answer your questions and provide information about our BNCC programs, activities, and enrollment process.</p>
+            </div>
+
+            <div class="contact-grid">
+                <div class="contact-card">
+                    <div class="contact-icon">
+                        <i class="fas fa-map-marker-alt"></i>
+                    </div>
+                    <h3 class="contact-title">Our Location</h3>
+                    <p class="contact-info">
+                        **Cox's Bazar City College**<br>
+                        College Road, Cox's Bazar Sadar<br>
+                        Chittagong Division, Bangladesh
+                    </p>
+                    <a href="https://maps.app.goo.gl/355mF4gS1eQ8qM6R6" target="_blank" class="contact-link">View on Google Maps <i class="fas fa-external-link-alt"></i></a>
+                </div>
+
+                <div class="contact-card">
+                    <div class="contact-icon">
+                        <i class="fas fa-phone-alt"></i>
+                    </div>
+                    <h3 class="contact-title">Phone Contact</h3>
+                    <p class="contact-info">
+                        For urgent inquiries or to speak directly with the platoon commander:
+                    </p>
+                    <a href="tel:+8801812430454" class="contact-link">+880 1812-430454</a>
+                </div>
+
+                <div class="contact-card">
+                    <div class="contact-icon">
+                        <i class="fas fa-envelope"></i>
+                    </div>
+                    <h3 class="contact-title">Email Us</h3>
+                    <p class="contact-info">
+                        For official correspondence, enrollment forms, or detailed documentation:
+                    </p>
+                    <a href="mailto:contact@cbccbncc.edu.bd" class="contact-link">contact@cbccbncc.edu.bd</a>
+                </div>
+
+                <div class="contact-card">
+                    <div class="contact-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h3 class="contact-title">Office Hours</h3>
+                    <p class="contact-info">
+                        **Sunday - Thursday**:<br>
+                        9:00 AM - 5:00 PM (BNCC Office)<br><br>
+                        **Friday - Saturday**:<br>
+                        Closed (Weekend/Holidays)
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="map-section">
+            <h3 class="section-title" style="text-align: center; margin-bottom: 2rem;">Locate Our Platoon</h3>
+            <div class="map-container">
+                <iframe 
+                    src="https://maps.google.com/maps?q=Cox's Bazar City College&z=15&output=embed" 
+                    width="100%" 
+                    height="100%" 
+                    style="border:0;" 
+                    allowfullscreen="" 
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    aria-label="Map of Cox's Bazar City College location">
+                </iframe>
+            </div>
+        </section>
+
+        <section class="social-section">
+            <h3 class="social-title">Connect With Us</h3>
+            <p class="social-subtitle">Stay updated with our latest activities, announcements, and training events by following our official social media channels.</p>
+            <div class="social-links">
+                <a href="https://www.facebook.com/cbcc.bncc/" class="social-link" target="_blank" aria-label="Facebook">
+                    <i class="fab fa-facebook-f"></i>
+                </a>
+                <a href="#" class="social-link" aria-label="Twitter">
+                    <i class="fab fa-twitter"></i>
+                </a>
+                <a href="#" class="social-link" aria-label="Instagram">
+                    <i class="fab fa-instagram"></i>
+                </a>
+                <a href="#" class="social-link" aria-label="YouTube">
+                    <i class="fab fa-youtube"></i>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="institutional-footer">
+        <div class="footer-container">
+            <div class="footer-column">
+                <h3 class="footer-title">Quick Navigation</h3>
+                <ul class="footer-links">
+                    <li><a href="index.html"><i class="fas fa-chevron-right"></i> Home</a></li>
+                    <li><a href="about.html"><i class="fas fa-chevron-right"></i> About Us</a></li>
+                    <li><a href="activities.html"><i class="fas fa-chevron-right"></i> Activities</a></li>
+                    <li><a href="gallery.html"><i class="fas fa-chevron-right"></i> Gallery</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-column">
+                <h3 class="footer-title">Help & Resources</h3>
+                <ul class="footer-links">
+                    <li><a href="how-to-become-cadet.html"><i class="fas fa-chevron-right"></i> How to Join</a></li>
+                    <li><a href="hall-of-incharges.html"><i class="fas fa-chevron-right"></i> Platoon Leadership</a></li>
+                    <li><a href="privacy.html"><i class="fas fa-chevron-right"></i> Privacy Policy</a></li>
+                    <li><a href="sitemap.html"><i class="fas fa-chevron-right"></i> Sitemap</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-column">
+                <h3 class="footer-title">Platoon Contact</h3>
+                <ul class="footer-links">
+                    <li><a href="https://maps.app.goo.gl/355mF4gS1eQ8qM6R6" target="_blank"><i class="fas fa-map-marker-alt"></i> Cox's Bazar City College</a></li>
+                    <li><a href="tel:+8801812430454"><i class="fas fa-phone"></i> +880 1812-430454</a></li>
+                    <li><a href="mailto:contact@cbccbncc.edu.bd"><i class="fas fa-envelope"></i> contact@cbccbncc.edu.bd</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="copyright">
+            © 2025 Cox's Bazar City College BNCC Platoon. All Rights Reserved.
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Mobile Menu Toggle Logic (makes the navigation responsive) ---
+            const menuToggle = document.querySelector('.menu-toggle');
+            const navMenu = document.querySelector('.nav-menu');
+
+            if (menuToggle && navMenu) {
+                menuToggle.addEventListener('click', () => {
+                    const isExpanded = navMenu.classList.toggle('is-open');
+                    menuToggle.setAttribute('aria-expanded', isExpanded);
+
+                    // Change hamburger icon (bars) to close icon (times)
+                    const icon = menuToggle.querySelector('i');
+                    if (isExpanded) {
+                        icon.classList.remove('fa-bars');
+                        icon.classList.add('fa-times');
+                    } else {
+                        icon.classList.remove('fa-times');
+                        icon.classList.add('fa-bars');
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

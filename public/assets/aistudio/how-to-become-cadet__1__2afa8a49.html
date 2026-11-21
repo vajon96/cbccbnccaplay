@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cox's Bazar City College BNCC Platoon</title>
+    <meta name="description" content="Official admission notice for Cox's Bazar City College BNCC Army Wing – 2025-26 Session. Leadership, Discipline, and Patriotism.">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-red: #9e1b1b;
+            --secondary-red: #c62828;
+            --dark-red: #5f0909;
+            --army-green: #2e4a23;
+            --light-bg: #fdfdfd;
+            --card-bg: #ffffff;
+            --gold: #ffb300;
+            --text-dark: #212529;
+            --text-muted: #6c757d;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(180deg, #f7f9fa 0%, #eceff1 100%);
+            color: var(--text-dark);
+            line-height: 1.7;
+        }
+        
+        /* Premium Header */
+        header {
+            background: linear-gradient(135deg, var(--dark-red) 0%, var(--primary-red) 50%, var(--dark-red) 100%);
+            color: white;
+            padding: 20px 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            position: relative;
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+        
+        header img {
+            height: 85px;
+            filter: drop-shadow(0px 4px 8px rgba(0,0,0,0.2));
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        header img:hover {
+            transform: scale(1.08) rotate(2deg);
+        }
+        
+        .marquee-container {
+            flex: 1;
+            min-width: 300px;
+            overflow: hidden;
+            white-space: nowrap;
+            margin: 0 20px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px 15px;
+            border-radius: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .marquee-text {
+            display: inline-block;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
+            animation: marquee 20s linear infinite;
+            padding-left: 100%;
+        }
+        
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+        
+        /* Sticky Navigation */
+        nav {
+            background: rgba(198, 40, 40, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 3px solid var(--gold);
+        }
+        
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+        }
+        
+        nav a {
+            color: rgba(255,255,255,0.9);
+            text-decoration: none;
+            font-weight: 600;
+            padding: 15px 30px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+        }
+        
+        nav a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 3px;
+            background: var(--gold);
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
+        }
+        
+        nav a:hover {
+            color: #fff;
+            background: rgba(0,0,0,0.1);
+        }
+        
+        nav a:hover::after {
+            width: 100%;
+        }
+        
+        /* Modern Hero Banner */
+        .banner {
+            background: linear-gradient(45deg, rgba(95,9,9,0.9) 0%, rgba(158,27,27,0.8) 100%), url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1200') center/cover;
+            color: white;
+            text-align: center;
+            padding: 90px 20px;
+            position: relative;
+            box-shadow: inset 0 -10px 20px rgba(0,0,0,0.2);
+        }
+        
+        .banner-content {
+            max-width: 850px;
+            margin: 0 auto;
+        }
+        
+        .banner h2 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .banner p {
+            font-size: 1.4rem;
+            margin: 10px 0;
+            font-weight: 400;
+            opacity: 0.95;
+        }
+        
+        .banner em {
+            font-style: normal;
+            color: var(--gold);
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        
+        /* Main Layout & Cards */
+        main {
+            max-width: 1140px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        
+        .section-title {
+            color: var(--dark-red);
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin: 45px 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .section-title i {
+            color: var(--primary-red);
+            background: rgba(158,27,27,0.1);
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 1.5rem;
+        }
+        
+        .highlight-box {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 25px 0;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0,0,0,0.04);
+            border-left: 6px solid var(--primary-red);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .highlight-box:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+        }
+        
+        /* Custom Premium Lists */
+        ul.custom-list {
+            list-style-type: none;
+            padding-left: 0;
+            margin-bottom: 0;
+        }
+        
+        ul.custom-list li {
+            padding: 12px 0 12px 35px;
+            position: relative;
+            border-bottom: 1px dashed rgba(0,0,0,0.08);
+            font-size: 16.5px;
+        }
+        
+        ul.custom-list li:last-child {
+            border-bottom: none;
+        }
+        
+        ul.custom-list li:before {
+            content: "\f058";
+            font-family: "Font Awesome 5 Free";
+            font-weight: 900;
+            color: var(--primary-red);
+            font-size: 1.2rem;
+            position: absolute;
+            left: 5px;
+            top: 12px;
+        }
+        
+        /* Order Lists (Timeline Style) */
+        ol.custom-list {
+            list-style-type: none;
+            counter-reset: item;
+            padding-left: 0;
+            margin-bottom: 0;
+        }
+        
+        ol.custom-list li {
+            counter-increment: item;
+            padding: 15px 0 15px 45px;
+            position: relative;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            font-size: 16.5px;
+        }
+        
+        ol.custom-list li:last-child {
+            border-bottom: none;
+        }
+        
+        ol.custom-list li:before {
+            content: counter(item);
+            background: var(--primary-red);
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            position: absolute;
+            left: 5px;
+            top: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 6px rgba(158,27,27,0.3);
+        }
+        
+        /* Premium Table Design */
+        .table-responsive {
+            margin: 20px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead {
+            background: linear-gradient(135deg, var(--dark-red), var(--primary-red));
+            color: white;
+        }
+        
+        .table th, .table td {
+            padding: 16px 20px;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(158,27,27,0.02);
+        }
+        
+        /* Modernized Alert Boxes */
+        .alert {
+            border-radius: 12px;
+            padding: 18px 25px;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+        }
+        
+        .alert-warning {
+            background-color: #fffde7;
+            border-left: 5px solid var(--gold);
+            color: #5d4037;
+        }
+        
+        .alert-danger {
+            background-color: #ffebee;
+            border-left: 5px solid #d32f2f;
+            color: #c62828;
+        }
+        
+        /* Premium Call-to-Action Button */
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, var(--secondary-red) 0%, var(--primary-red) 100%);
+            color: white !important;
+            padding: 14px 40px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 16px;
+            text-decoration: none !important;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 6px 20px rgba(198, 40, 40, 0.4);
+            border: none;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(198, 40, 40, 0.5);
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+        }
+        
+        .cta-button i {
+            transition: transform 0.3s ease;
+        }
+        
+        .cta-button:hover i {
+            transform: translateX(5px);
+        }
+        
+        /* Clean Footer & Commander Profile */
+        footer {
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 60px 20px 30px;
+            margin-top: 80px;
+            position: relative;
+            border-top: 5px solid var(--primary-red);
+        }
+        
+        .platoon-commander {
+            text-align: center;
+            max-width: 450px;
+            margin: -120px auto 40px;
+            padding: 30px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(0,0,0,0.06);
+            color: var(--text-dark);
+        }
+        
+        .platoon-commander img {
+            width: 160px;
+            height: 160px;
+            object-fit: cover;
+            border-radius: 50%;
+            margin: 15px 0;
+            border: 5px solid white;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            transition: transform 0.4s ease;
+        }
+        
+        .platoon-commander img:hover {
+            transform: scale(1.05);
+        }
+        
+        .platoon-commander h3 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--dark-red);
+            margin-bottom: 5px;
+        }
+        
+        .platoon-commander h6 {
+            font-weight: 600;
+            color: #455a64;
+            font-size: 16px;
+        }
+        
+        .social-links a {
+            background: rgba(255,255,255,0.08);
+            width: 42px;
+            height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            color: #fff !important;
+        }
+        
+        .social-links a:hover {
+            background: #1877f2;
+            transform: translateY(-3px);
+        }
+        
+        footer p {
+            margin: 10px 0 0;
+            font-size: 0.95rem;
+            color: #9e9e9e;
+        }
+        
+        /* Utilities */
+        .text-danger {
+            color: var(--primary-red) !important;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+            header { padding: 15px 0; }
+            .header-content { flex-direction: column; gap: 15px; text-align: center; }
+            .logo-container { justify-content: center; gap: 15px; }
+            header img { height: 65px; }
+            .marquee-container { min-width: 100%; margin: 10px 0 0; }
+            .marquee-text { font-size: 16px; }
+            
+            .banner { padding: 60px 15px; }
+            .banner h2 { font-size: 2rem; }
+            .banner p { font-size: 1.1rem; }
+            
+            .nav-container { flex-direction: column; }
+            nav a { width: 100%; text-align: center; justify-content: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+            
+            .section-title { font-size: 1.4rem; }
+            .highlight-box { padding: 20px; }
+            .platoon-commander { margin-top: -100px; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Premium Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo-container">
+                <a href="https://cbcc.edu.bd/">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo">
+                </a>
+                <a href="https://bncc.info/">
+                    <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                </a>
+            </div>
+            <div class="marquee-container">
+                <div class="marquee-text">Cox's Bazar City College BNCC Platoon | Leadership | Discipline | Patriotism</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav>
+        <div class="nav-container">
+            <a href="index.html"><i class="fas fa-home icon"></i>Back to Home</a>
+            <a href="become-cadet.html"><i class="fas fa-user-plus icon"></i>Join Now</a>
+        </div>
+    </nav>
+
+    <!-- Hero Banner -->
+    <div class="banner">
+        <div class="banner-content">
+            <h2>বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC)</h2>
+            <p>কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন (সেনা শাখা)</p>
+            <p><em>Discipline | Leadership | Patriotism</em></p>
+            <a href="become-cadet.html" class="cta-button">Apply Now <i class="fas fa-arrow-right"></i></a>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="container">
+        
+        <div class="highlight-box text-center">
+            <h3 class="mb-3">🟩 জ্ঞান | শৃঙ্খলা | স্বেচ্ছাসেবা</h3>
+            <h4 class="text-danger font-weight-bold">📝 ভর্তি বিজ্ঞপ্তি ২০২৬–২০২৭ শিক্ষাবর্ষ</h4>
+            <p class="mb-0">📢 সীমিত আসনে নতুন ক্যাডেট ভর্তি চলছে।</p>
+        </div>
+
+        <h2 class="section-title"><i class="fas fa-clipboard-list"></i> আবেদনের যোগ্যতা</h2>
+        <div class="highlight-box">
+            <ul class="custom-list">
+                <li>কক্সবাজার সিটি কলেজে <strong>একাদশ শ্রেণি</strong> অথবা <strong>ডিগ্রি/অনার্স ১ম বর্ষে</strong> অধ্যয়নরত হতে হবে।</li>
+                <li><strong>অবিবাহিত</strong> হতে হবে।</li>
+                <li>এসএসসি পরীক্ষায় <strong>ন্যূনতম GPA 3.00</strong> থাকতে হবে।</li>
+                <li>শারীরিক যোগ্যতা:</li>
+            </ul>
+        </div>
+
+        <h2 class="section-title"><i class="fas fa-ruler-combined"></i> শারীরিক যোগ্যতা</h2>
+        <div class="highlight-box">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle text-center">
+                    <thead>
+                        <tr>
+                            <th style="width:20%;">বিষয়</th>
+                            <th style="width:40%;">পুরুষ প্রার্থী</th>
+                            <th style="width:40%;">মহিলা প্রার্থী</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th class="bg-light">উচ্চতা (ন্যূনতম)</th>
+                            <td class="text-start">
+                                <strong>১.৬৫ মিটার (৫ ফুট ৫ ইঞ্চি)</strong><br>
+                                <small class="text-muted">
+                                    নৃতাত্ত্বিক (ক্ষুদ্র-নৃগোষ্ঠী) সম্প্রদায়ের জন্য
+                                    <strong>১.৬৩ মিটার (৫ ফুট ৪ ইঞ্চি)</strong>
+                                </small>
+                            </td>
+                            <td class="text-start">
+                                <strong>১.৫৫ মিটার (৫ ফুট ১ ইঞ্চি)</strong><br>
+                                <small class="text-muted">
+                                    নৃতাত্ত্বিক (ক্ষুদ্র-নৃগোষ্ঠী) সম্প্রদায়ের জন্য
+                                    <strong>১.৫২ মিটার (৫ ফুট ০ ইঞ্চি)</strong>
+                                </small>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">ওজন (ন্যূনতম)</th>
+                            <td class="text-start">
+                                <strong>৪৯.准০ কেজি (১১০ পাউন্ড)</strong><br>
+                                <small class="text-muted">সর্বনিম্ন উচ্চতার জন্য</small>
+                            </td>
+                            <td class="text-start">
+                                <strong>৪৭ কেজি (১০৪ পাউন্ড)</strong><br>
+                                <small class="text-muted">সর্বনিম্ন উচ্চতার জন্য</small>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">বুক (ন্যূনতম)</th>
+                            <td class="text-start">
+                                স্বাভাবিক <strong>০.৮১ মিটার (৩২ ইঞ্চি)</strong><br>
+                                স্ফীত <strong>০.৮৬ মিটার (৩৪ ইঞ্চি)</strong>
+                            </td>
+                            <td class="text-start">
+                                স্বাভাবিক <strong>০.৭১ মিটার (২৮ ইঞ্চি)</strong><br>
+                                স্ফীত <strong>০.৭৬ মিটার (৩০ ইঞ্চি)</strong>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">চোখের মান</th>
+                            <td><strong>৬/৬</strong> বা সংশোধিত দৃষ্টিশক্তি</td>
+                            <td><strong>৬/৬</strong> বা সংশোধিত দৃষ্টিশক্তি</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="alert alert-warning mt-4 mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>বিশেষ দ্রষ্টব্য:</strong>
+                নৃতাত্ত্বিক (ক্ষুদ্র-নৃগোষ্ঠী) সম্প্রদায়ের প্রার্থীদের ক্ষেত্রে সংশ্লিষ্ট কর্তৃপক্ষ কর্তৃক প্রদত্ত বৈধ সনদপত্র দাখিল করতে হবে।
+            </div>
+
+            <p class="mb-2"><i class="fas fa-info-circle text-danger"></i> <strong>ওজন:</strong> সশস্ত্র বাহিনীর নির্ধারিত স্কেল অনুযায়ী হতে হবে। অতিরিক্ত ওজন থাকলে অযোগ্য বিবেচিত হবে।</p>
+            <p class="mb-0"><i class="fas fa-exclamation-triangle text-danger"></i> <strong>বিঃদ্রঃ:</strong> শারীরিক যোগ্যতা যাচাইয়ের জন্য <strong>প্রাথমিক স্বাস্থ্য পরীক্ষা বাধ্যতামূলক</strong>।</p>
+        </div>
+
+        <h2 class="section-title"><i class="fas fa-file-alt"></i> প্রয়োজনীয় কাগজপত্র</h2>
+        <div class="highlight-box">
+            <ul class="custom-list">
+                <li>এসএসসি ও এইচএসসি সনদপত্র, নম্বরপত্র, প্রশংসাপত্র – ২ কপি করে ফটোকপি</li>
+                <li>কলেজ ভর্তির রশিদ/OK Wallet প্রিন্ট কপি</li>
+                <li>পাসপোর্ট সাইজ ছবি – ২ কপি</li>
+                <li>ব্লাড গ্রুপ রিপোর্টের ফটোকপি – ২ কপি</li>
+                <li>জাতীয় পরিচয়পত্র/জন্ম নিবন্ধনের ফটোকপি</li>
+                <li>পিতামাতার জাতীয় পরিচয়পত্রের ফটোকপি</li>
+            </ul>
+        </div>
+
+        <h2 class="section-title"><i class="fas fa-tasks"></i> নির্বাচন প্রক্রিয়া</h2>
+        <div class="highlight-box">
+            <ol class="custom-list">
+                <li>প্রাথমিক স্বাস্থ্য পরীক্ষা</li>
+                <li>লিখিত পরীক্ষা</li>
+                <li>ভাইভা (মৌখিক পরীক্ষা)</li>
+                <li>চূড়ান্ত নির্বাচন</li>
+            </ol>
+            <p class="mt-3 mb-0"><i class="fas fa-calendar-check text-danger"></i> <strong>পরীক্ষার তারিখ:</strong> আবেদন শেষ হওয়ার পর জানানো হবে</p>
+        </div>
+
+        <h2 class="section-title"><i class="fas fa-star"></i> সুবিধাসমূহ</h2>
+        <div class="highlight-box">
+            <ul class="custom-list">
+                <li><i class="fas fa-check-circle text-success"></i> সরাসরি ISSB পরীক্ষায় অংশগ্রহণের সুযোগ</li>
+                <li><i class="fas fa-check-circle text-success"></i> BNCC কোটায় সামরিক ও সরকারি চাকরিতে অগ্রাধিকার</li>
+                <li><i class="fas fa-check-circle text-success"></i> দেশ-বিদেশে সামরিক প্রশিক্ষণ ও ভ্রমণ</li>
+                <li><i class="fas fa-check-circle text-success"></i> সাংস্কৃতিক, নেতৃত্ব ও স্বেচ্ছাসেবামূলক কার্যক্রমে অংশগ্রহণ</li>
+                <li><i class="fas fa-check-circle text-success"></i> চাকরি জীবনে বিশেষ সুবিধা</li>
+                <li><i class="fas fa-check-circle text-success"></i> বিনামূল্যে প্রশিক্ষণ সামগ্রী ও ইউনিফর্ম</li>
+                <li><i class="fas fa-check-circle text-success"></i> জাতীয় পর্যায়ে প্রতিযোগিতায় অংশগ্রহণের সুযোগ</li>
+            </ul>
+        </div>
+
+        <h2 class="section-title"><i class="fas fa-gift"></i> BNCC-তে যোগদানের বিশেষ প্রণোদনা</h2>
+        <div class="highlight-box">
+            <ul class="custom-list">
+                <li><i class="fas fa-award text-warning"></i> শিক্ষাজীবনে সামরিক প্রশিক্ষণের বিরল সুযোগ</li>
+                <li><i class="fas fa-award text-warning"></i> প্রাথমিক বাছাই ছাড়াই ISSB পরীক্ষায় অংশগ্রহণ</li>
+                <li><i class="fas fa-award text-warning"></i> সৈনিক পদে বছরে ৪০০টি আসন BNCC ক্যাডেটদের জন্য সংরক্ষিত</li>
+                <li><i class="fas fa-award text-warning"></i> সামরিক ঘাঁটি ও ঐতিহাসিক স্থান পরিদর্শন</li>
+                <li><i class="fas fa-award text-warning"></i> Youth Exchange Program-এ অংশগ্রহণ</li>
+                <li><i class="fas fa-award text-warning"></i> BNCC স্কলারশিপ (JSC/SSC/HSC ফলাফলের ভিত্তিতে)</li>
+                <li><i class="fas fa-award text-warning"></i> জাতীয় দিবসে বিশেষ সম্মাননা</li>
+            </ul>
+        </div>
+
+        <h2 class="section-title"><i class="fas fa-map-marker-alt"></i> অনলাইন আবেদন পোর্টাল: CBCC BNCC Apply Portal</h2>
+        <div class="highlight-box">
+            <h5><strong>আবেদন প্রক্রিয়া সংক্ষেপে:</strong></h5>
+            <ol class="custom-list" style="counter-reset: none; list-style-type: decimal; padding-left: 20px;">
+                <li style="padding-left: 10px; border: none;">ওয়েবসাইটে প্রবেশ করুন।</li>
+                <li style="padding-left: 10px; border: none;">আবেদন ফরমের সকল তথ্য সঠিকভাবে পূরণ করুন।</li>
+                <li style="padding-left: 10px; border: none;">প্রয়োজনীয় ছবি ও অন্যান্য নথি আপলোড করুন (যদি প্রযোজ্য হয়)।</li>
+                <li style="padding-left: 10px; border: none;">সকল তথ্য যাচাই করে আবেদন সাবমিট করুন।</li>
+                <li style="padding-left: 10px; border: none;">ভবিষ্যৎ প্রয়োজনে আবেদন নম্বর বা কনফার্মেশন সংরক্ষণ করুন।</li>
+            </ol>
+            
+            <p class="mt-4">আপনি চাইলে এই তথ্যটি আপনার সার্কুলারে আরও অফিসিয়ালভাবে এভাবেও লিখতে পারেন:</p>
+            <p class="mb-0"><strong>আবেদন পদ্ধতি:</strong> আগ্রহী প্রার্থীদের শুধুমাত্র অনলাইনে আবেদন করতে হবে। আবেদন ফরম পূরণ ও জমা দেওয়ার জন্য নির্ধারিত ওয়েবসাইটে প্রবেশ করুন: <a href="https://cbccbnccapply.vercel.app" target="_blank" style="color: var(--primary-red); font-weight: 600;">cbccbnccapply.vercel.app</a>। কোনো প্রকার অফলাইন আবেদন গ্রহণ করা হবে না।</p>
+        </div>
+
+        <div class="alert alert-danger mt-4">
+            <i class="fas fa-exclamation-circle me-2"></i> <strong>বি.দ্রঃ</strong> আসন সংখ্যা সীমিত। আগ্রহী শিক্ষার্থীদের দ্রুত যোগাযোগ করার জন্য অনুরোধ করা হচ্ছে। শেষ তারিখের পর কোনো আবেদন গ্রহণ করা হবে না।
+        </div>
+
+        <div class="text-center mt-5">
+            <h3 class="mb-3"><strong>প্রস্তুত? নেতৃত্ব শুরু হোক এখনই!</strong></h3>
+            <a href="become-cadet.html" class="cta-button">Apply Now <i class="fas fa-arrow-right"></i></a>
+        </div>
+    </main>
+
+    <!-- Professional Footer -->
+    <footer>
+        <div class="platoon-commander">
+            <h3><i class="fas fa-user-shield"></i> Platoon Commander</h3>
+            <a href="#">
+                <img src="https://i.ibb.co/dsqhP9LH/file-1-3.jpg" alt="Platoon Commander">
+            </a>
+            <h6>Professor Under Officer: Ujjwal Kanti Deb</h6>
+            <p class="mb-0 text-muted">Contact: </p>
+        </div>
+        
+        <div class="container text-center">
+            <div class="social-links mb-4">
+                <a href="https://www.facebook.com/cbcc.bncc/" target="_blank"><i class="fab fa-facebook-f"></i></a>
+            </div>
+            <p>&copy; 2025 Cox's Bazar City College BNCC Platoon. All Rights Reserved.</p>
+            <p style="font-size: 0.85rem; opacity: 0.6;">Developed by CBCC BNCC IT Team</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

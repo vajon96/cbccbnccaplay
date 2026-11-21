@@ -1,28 +1,46 @@
 import { useState, FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Lock, ArrowRight, Shield, AlertCircle, CheckCircle2, LayoutDashboard, LogOut } from "lucide-react";
-import { centralAuthenticate, setSession, getSession, clearSession, isAuthorizedAdmin } from "../lib/auth";
+import {
+  User,
+  Lock,
+  ArrowRight,
+  Shield,
+  AlertCircle,
+  CheckCircle2,
+  LayoutDashboard,
+  LogOut,
+  Loader2,
+} from "lucide-react";
+import {
+  centralAuthenticate,
+  setSession,
+  getSession,
+  clearSession,
+  isAuthorizedAdmin,
+  logoutEverywhere,
+} from "../lib/auth";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
+import { GoogleSignInButton } from "../components/GoogleSignInButton";
+import { useAuth } from "../context/AuthContext";
 
 export function ExamCandidateLogin() {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const { loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const activeSession = getSession();
 
   const handleGoToDashboard = () => {
     if (!activeSession) return;
-    if (isAuthorizedAdmin(activeSession.role)) {
-      navigate("/exam/admin");
-    } else {
-      navigate("/exam/dashboard");
-    }
+    navigate(isAuthorizedAdmin(activeSession.role) ? "/exam/admin" : "/exam/dashboard");
   };
 
-  const handleLogoutExisting = () => {
+  const handleLogoutExisting = async () => {
+    await logoutEverywhere();
     clearSession();
     window.location.reload();
   };
@@ -30,7 +48,7 @@ export function ExamCandidateLogin() {
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     if (!userId.trim() || !password.trim()) {
-      setError("ইউজার আইডি ও পাসওয়ার্ড প্রবেশ করান।");
+      setError("ইউজার আইডি / ইমেইল ও পাসওয়ার্ড প্রবেশ করান।");
       return;
     }
 
@@ -39,66 +57,75 @@ export function ExamCandidateLogin() {
 
     try {
       const res = await centralAuthenticate(userId, password);
-
       if (!res.success || !res.user) {
         setError(res.error || "উক্ত ইউজার আইডি সংবলিত প্রোফাইল পাওয়া যায়নি বা পাসওয়ার্ড ভুল।");
-        setLoading(false);
         return;
       }
 
-      // Set central auth session
       setSession(res.user);
-
-      if (isAuthorizedAdmin(res.user.role)) {
-        navigate("/exam/admin");
-      } else {
-        navigate("/exam/dashboard");
-      }
+      navigate(isAuthorizedAdmin(res.user.role) ? "/exam/admin" : "/exam/dashboard");
     } catch (err: any) {
-      console.error("Login error:", err);
-      setError("লগইন করতে সমস্যা হয়েছে: " + (err.message || ""));
+      setError("লগইন করতে সমস্যা হয়েছে: " + (err?.message || ""));
     } finally {
       setLoading(false);
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const res = await loginWithGoogle();
+      if (!res.success || !res.user) {
+        setError(res.error || "Google সাইন-ইন সম্পন্ন করা যায়নি।");
+        return;
+      }
+      setSession(res.user);
+      navigate(isAuthorizedAdmin(res.user.role) ? "/exam/admin" : "/exam/dashboard");
+    } catch (err: any) {
+      setError("Google লগইন করতে সমস্যা হয়েছে: " + (err?.message || ""));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col selection:bg-primary selection:text-white">
+    <div className="min-h-screen bg-[#020B18] text-white font-sans flex flex-col">
       <ExamNavbar />
 
       <main className="flex-1 flex items-center justify-center p-4 py-12">
-        <div className="bg-slate-900 border border-white/10 rounded-3xl max-w-md w-full p-8 space-y-6 shadow-2xl relative">
-          
+        <div className="bg-[#061830] border border-white/10 rounded-3xl max-w-md w-full p-8 space-y-6 shadow-2xl">
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-primary/20 text-primary border border-primary/30 flex items-center justify-center mx-auto mb-3">
+            <div className="w-14 h-14 rounded-2xl bg-[#002147] text-[#C5A059] border border-[#C5A059]/30 flex items-center justify-center mx-auto mb-3">
               <Shield size={28} />
             </div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight font-display">
+            <h2 className="text-2xl font-black text-white tracking-tight font-display">
               Examination Portal Access
             </h2>
-            <p className="text-slate-400 text-xs font-semibold">
-              ইউজার আইডি / অ্যাডমিন আইডি ও পাসওয়ার্ড ব্যবহার করে লগইন করুন
+            <p className="text-slate-300 text-xs font-medium">
+              ক্যাডেট ও আবেদনকারী পরীক্ষার্থীর লগইন (ইমেইল অথবা ক্যাডেট আইডি)
             </p>
           </div>
 
-          {/* Active Session Card */}
           {activeSession && (
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-3 text-center">
-              <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs">
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl space-y-3 text-center">
+              <div className="flex items-center justify-center gap-2 text-emerald-300 font-bold text-xs">
                 <CheckCircle2 size={16} />
-                <span>You are currently logged in as <strong className="text-white">{activeSession.name}</strong></span>
+                <span>
+                  Logged in as <strong className="text-white">{activeSession.name}</strong>
+                </span>
               </div>
-              <div className="flex items-center justify-center gap-2 pt-1">
+              <div className="flex items-center justify-center gap-2">
                 <button
                   onClick={handleGoToDashboard}
-                  className="px-4 py-2 bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl flex items-center gap-1.5 hover:bg-emerald-400 transition-all cursor-pointer"
+                  className="px-4 py-2 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                 >
                   <LayoutDashboard size={14} />
                   Enter Exam Dashboard
                 </button>
                 <button
                   onClick={handleLogoutExisting}
-                  className="px-4 py-2 bg-white/10 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center gap-1.5 hover:bg-white/20 transition-all cursor-pointer"
+                  className="px-4 py-2 bg-white/10 text-slate-200 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                 >
                   <LogOut size={14} />
                   Logout
@@ -108,7 +135,7 @@ export function ExamCandidateLogin() {
           )}
 
           {error && (
-            <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-bold flex items-center gap-2.5">
+            <div role="alert" className="p-4 bg-rose-500/10 border border-rose-500/25 text-rose-300 rounded-2xl text-xs font-bold flex items-center gap-2.5">
               <AlertCircle size={18} className="shrink-0" />
               <span>{error}</span>
             </div>
@@ -116,30 +143,36 @@ export function ExamCandidateLogin() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase mb-2">User ID / Username (ইউজার বা অ্যাডমিন আইডি)</label>
+              <label htmlFor="exam-cand-id" className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
+                Email or Cadet / Applicant ID
+              </label>
               <div className="relative">
-                <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
+                  id="exam-cand-id"
                   type="text"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
-                  placeholder="e.g. BNCC2026-XXXX or admin"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-xs text-white outline-none focus:border-primary font-mono font-bold"
+                  placeholder="cadet@example.com or 1111"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3 py-3 text-xs text-white outline-none focus:border-[#C5A059] font-bold"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase mb-2">Password (পাসওয়ার্ড)</label>
+              <label htmlFor="exam-cand-pw" className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
+                Password
+              </label>
               <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
+                  id="exam-cand-pw"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-xs text-white outline-none focus:border-primary font-mono"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3 py-3 text-xs text-white outline-none focus:border-[#C5A059] font-mono"
                   required
                 />
               </div>
@@ -147,30 +180,42 @@ export function ExamCandidateLogin() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3.5 bg-primary hover:bg-primary/90 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-primary/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+              disabled={loading || googleLoading}
+              className="w-full py-3.5 bg-[#C5A059] hover:bg-[#d6b36c] text-[#00152e] font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              {loading ? "Authenticating Credentials..." : "Access Examination Portal"}
-              <ArrowRight size={16} />
+              {loading ? <Loader2 className="animate-spin" size={16} /> : null}
+              <span>{loading ? "Authenticating..." : "Access Examination Portal"}</span>
+              {!loading && <ArrowRight size={16} />}
             </button>
           </form>
 
-          <div className="pt-4 border-t border-white/5 text-center text-xs text-slate-500 font-semibold space-y-2">
-            <p>একটি সেন্ট্রাল পাসওয়ার্ড দিয়ে সব সার্ভিস এক্সেস করুন</p>
-            <div className="flex items-center justify-center gap-4 text-[11px] font-bold uppercase">
-              <Link to="/login" className="text-primary hover:underline">
-                Central Portal Login
-              </Link>
-              <span>•</span>
-              <Link to="/exam/admin/login" className="text-amber-400 hover:underline">
-                Exam Admin Login →
-              </Link>
+          <div className="space-y-3">
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-white/10 w-full" />
+              <span className="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-[#061830] shrink-0">
+                OR
+              </span>
+              <div className="border-t border-white/10 w-full" />
             </div>
+            <GoogleSignInButton
+              onClick={() => void handleGoogleLogin()}
+              loading={googleLoading}
+              disabled={loading}
+              label="Google দিয়ে পরীক্ষার্থী লগইন"
+            />
           </div>
 
+          <div className="pt-3 border-t border-white/10 text-center text-xs text-slate-400 flex items-center justify-center gap-4 font-bold">
+            <Link to="/login" className="text-[#C5A059] hover:underline">
+              Central Portal Login
+            </Link>
+            <span>•</span>
+            <Link to="/exam/admin/login" className="text-slate-300 hover:underline">
+              Exam Admin Login →
+            </Link>
+          </div>
         </div>
       </main>
     </div>
   );
 }
-

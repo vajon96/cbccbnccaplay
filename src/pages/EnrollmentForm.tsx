@@ -1,14 +1,29 @@
-import { useState, useRef, ChangeEvent, useEffect } from "react";
+import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
-import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit, BookOpen, AlertCircle, Clock, Loader2 } from "lucide-react";
-import { db, collection, setDoc, doc, getDoc, Timestamp, handleFirestoreError, OperationType, addDoc, runTransaction } from "../firebase";
+import { useNavigate, Link } from "react-router-dom";
+import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit, BookOpen, AlertCircle, Clock, Loader2, ShieldCheck, Lock } from "lucide-react";
+import { auth, db, collection, setDoc, doc, getDocs, query, where, Timestamp, handleFirestoreError, OperationType, addDoc, runTransaction } from "../firebase";
 import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
-import { generatePassword, hashPassword } from "../lib/auth";
+import { authenticateWithEmailPassword, authenticateWithGoogle, registerWithEmailPassword, generatePassword, hashPassword, setSession, syncServerSession, getSession } from "../lib/auth";
+import { isAdminRole } from "../lib/rbac";
+import { useCMS } from "../context/CMSContext";
+import { GoogleSignInButton } from "../components/GoogleSignInButton";
 
 export function EnrollmentForm() {
+  const { settings: cmsSettings, loading: cmsLoading } = useCMS();
+  const [adminPreviewAnyway, setAdminPreviewAnyway] = useState(false);
+  const currentSession = getSession();
+  const isAdminSession = Boolean(currentSession && isAdminRole(currentSession.role));
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [portalSignedInEmail, setPortalSignedInEmail] = useState<string | null>(
+    auth.currentUser && auth.currentUser.email ? auth.currentUser.email : null
+  );
+  const [portalAccountMode, setPortalAccountMode] = useState<"register" | "login">("register");
+  const [portalPassword, setPortalPassword] = useState("");
+  const [portalAuthLoading, setPortalAuthLoading] = useState(false);
+  const [portalGoogleLoading, setPortalGoogleLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -27,7 +42,7 @@ export function EnrollmentForm() {
     presentAddress: "",
     permanentAddress: "",
     studentPhone: "",
-    studentEmail: "",
+    studentEmail: auth.currentUser?.email || "",
     heightFeet: "",
     heightInches: "",
     weightKg: "",
@@ -65,6 +80,55 @@ export function EnrollmentForm() {
   const [aiFormFeedback, setAiFormFeedback] = useState("");
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
+  const handlePortalAuth = async () => {
+    setSubmitError(null);
+    const email = formData.studentEmail.trim();
+    if (!email || !email.includes("@")) {
+      setSubmitError("অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা লিখুন।");
+      return;
+    }
+    if (portalPassword.length < 6) {
+      setSubmitError("পোর্টাল অ্যাকাউন্টের পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।");
+      return;
+    }
+    setPortalAuthLoading(true);
+    try {
+      const displayName = formData.fullNameEnglish || formData.fullNameBangla || "BNCC Applicant";
+      const res =
+        portalAccountMode === "register"
+          ? await registerWithEmailPassword(email, portalPassword, displayName)
+          : await authenticateWithEmailPassword(email, portalPassword);
+      if (!res.success || !auth.currentUser) {
+        setSubmitError(res.error || "ইমেইল অ্যাকাউন্ট যাচাই সম্পন্ন করা যায়নি।");
+        return;
+      }
+      setPortalSignedInEmail(auth.currentUser.email || email);
+    } finally {
+      setPortalAuthLoading(false);
+    }
+  };
+
+  const handlePortalGoogleAuth = async () => {
+    setSubmitError(null);
+    setPortalGoogleLoading(true);
+    try {
+      const res = await authenticateWithGoogle();
+      if (!res.success || !auth.currentUser) {
+        setSubmitError(res.error || "Google অ্যাকাউন্ট সংযুক্ত করা যায়নি।");
+        return;
+      }
+      const connectedEmail = auth.currentUser.email || res.user?.email || "";
+      setPortalSignedInEmail(connectedEmail);
+      setFormData((prev) => ({
+        ...prev,
+        studentEmail: prev.studentEmail || connectedEmail,
+        fullNameEnglish: prev.fullNameEnglish || res.user?.name || "",
+      }));
+    } finally {
+      setPortalGoogleLoading(false);
+    }
+  };
+
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -80,7 +144,7 @@ export function EnrollmentForm() {
     }
   };
 
-  const compressImage = (base64Str: string, maxWidth = 600, maxHeight = 600): Promise<string> => {
+  const compressImage = (base64Str: string, maxWidth = 520, maxHeight = 520): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.src = base64Str;
@@ -105,7 +169,7 @@ export function EnrollmentForm() {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
+        resolve(canvas.toDataURL('image/jpeg', 0.65));
       };
     });
   };
@@ -136,13 +200,23 @@ export function EnrollmentForm() {
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("ছবির সাইজ ৫ মেগাবাইটের বেশি হতে পারবে না।");
+      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        setSubmitError("শুধুমাত্র JPG, PNG অথবা WEBP ছবি আপলোড করুন।");
         return;
       }
+      if (file.size > 5 * 1024 * 1024) {
+        setSubmitError("ছবির সাইজ ৫ মেগাবাইটের বেশি হতে পারবে না।");
+        return;
+      }
+      setSubmitError(null);
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressedPhoto = await compressImage(reader.result as string);
+        if (compressedPhoto.length > 350000) {
+          setSubmitError("কম্প্রেস করার পরও ছবির আকার বেশি; অনুগ্রহ করে ছোট ছবি নির্বাচন করুন।");
+          return;
+        }
         setFormData({ ...formData, photo: compressedPhoto });
         
         // AI Photo Check
@@ -162,7 +236,7 @@ export function EnrollmentForm() {
   };
 
   const handleSubmit = async () => {
-    // Basic validation
+    setSubmitError(null);
     const requiredFields = [
       'fullNameBangla', 'fullNameEnglish', 'fatherNameBangla', 'fatherNameEnglish', 
       'motherNameBangla', 'motherNameEnglish', 'dob', 'nidBirthReg', 'gender', 
@@ -205,41 +279,70 @@ export function EnrollmentForm() {
         photo: "ছবি"
       };
       const missingLabels = missingFields.map(field => fieldLabels[field] || field).join(", ");
-      alert(`অনুগ্রহ করে সকল প্রয়োজনীয় তথ্য এবং ছবি প্রদান করুন।\n\nবাকি আছে: ${missingLabels}`);
+      setSubmitError(`অনুগ্রহ করে সকল প্রয়োজনীয় তথ্য এবং ছবি প্রদান করুন। বাকি আছে: ${missingLabels}`);
       return;
     }
 
-    // Sequential ID Generation starting from 1111
     setLoading(true);
-    let id = "";
     try {
-      id = await runTransaction(db, async (transaction) => {
+      // Ensure Firebase Email/Password Auth session before writing private applicant doc
+      if (!auth.currentUser || auth.currentUser.isAnonymous) {
+        const email = formData.studentEmail.trim();
+        if (!email || !email.includes("@") || portalPassword.length < 6) {
+          setSubmitError("আবেদন জমা দেওয়ার আগে উপরের পোর্টাল অ্যাকাউন্ট সেকশনে ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিয়ে সাইন-ইন বা অ্যাকাউন্ট তৈরি করুন।");
+          setLoading(false);
+          return;
+        }
+        const displayName = formData.fullNameEnglish || formData.fullNameBangla || "BNCC Applicant";
+        const authRes =
+          portalAccountMode === "register"
+            ? await registerWithEmailPassword(email, portalPassword, displayName)
+            : await authenticateWithEmailPassword(email, portalPassword);
+        if (!authRes.success || !auth.currentUser) {
+          setSubmitError(authRes.error || "পোর্টাল অ্যাকাউন্ট যাচাই করা যায়নি।");
+          setLoading(false);
+          return;
+        }
+        setPortalSignedInEmail(auth.currentUser.email || email);
+      }
+
+      const ownerUid = auth.currentUser.uid;
+
+      // Duplicate check for same authenticated user
+      const existingSnap = await getDocs(
+        query(collection(db, "applicants"), where("ownerUid", "==", ownerUid))
+      );
+      if (!existingSnap.empty) {
+        const existingDoc = existingSnap.docs[0];
+        setSubmitError(`আপনার এই ইমেইল অ্যাকাউন্ট থেকে ইতিমধ্যেই একটি আবেদন জমা দেওয়া হয়েছে (ID: ${existingDoc.id})।`);
+        setLoading(false);
+        return;
+      }
+
+      // Sequential ID Generation starting from 1111
+      const id = await runTransaction(db, async (transaction) => {
         const counterDocRef = doc(db, "counters", "applicant_id");
         const counterDoc = await transaction.get(counterDocRef);
-        
+
         let nextId = 1111;
         if (counterDoc.exists()) {
-          nextId = counterDoc.data().currentId + 1;
+          nextId = (counterDoc.data().currentId || 1110) + 1;
+          transaction.update(counterDocRef, { currentId: nextId });
+        } else {
+          transaction.set(counterDocRef, { currentId: nextId });
         }
-        
-        transaction.set(counterDocRef, { currentId: nextId });
         return nextId.toString();
       });
-    } catch (e) {
-      console.error("Sequential ID generation error:", e);
-      // Fallback if transaction fails
-      id = Math.floor(10000 + Math.random() * 90000).toString(); 
-    }
 
-    const rawPassword = generatePassword();
-    const path = `applicants/${id}`;
-    
-    try {
+      const rawPassword = generatePassword();
       const hashedPassword = await hashPassword(rawPassword);
       const applicantData = {
         ...formData,
         id,
-        password: hashedPassword,
+        registrationNumber: id,
+        ownerUid,
+        studentEmail: formData.studentEmail || auth.currentUser.email || "",
+        passwordHash: hashedPassword,
         role: "user",
         status: "Pending",
         attendanceStatus: "Absent",
@@ -247,27 +350,49 @@ export function EnrollmentForm() {
       };
 
       await setDoc(doc(db, "applicants", id), applicantData);
-      
-      // Log the creation (wrapped in try-catch to prevent blocking submission)
-      try {
-        await addDoc(collection(db, "activity_logs"), {
-          type: "ACCOUNT_CREATED",
-          targetId: id,
-          actorId: "SYSTEM",
-          timestamp: Timestamp.now(),
-          details: "New applicant account created via enrollment form"
-        });
-      } catch (logError) {
-        console.error("Logging error:", logError);
-        // Don't alert here, as the main submission succeeded
-      }
 
-      navigate(`/admit-card/${id}?pw=${encodeURIComponent(rawPassword)}`);
+      // Non-PII public QR card projection (no phone, email, NID, address, password)
+      await setDoc(doc(db, "public_qr_cards", id), {
+        id,
+        cadetId: id,
+        ownerUid,
+        fullNameEnglish: formData.fullNameEnglish,
+        fullNameBangla: formData.fullNameBangla,
+        studyStatus: formData.studyStatus,
+        collegeName: formData.collegeName,
+        platoonName: "Cox's Bazar City College BNCC Platoon",
+        status: "Pending",
+        isValidCadet: false,
+        photo: formData.photo || "",
+        updatedAt: Timestamp.now(),
+      }).catch(() => {});
+
+      await addDoc(collection(db, "activity_logs"), {
+        type: "ACCOUNT_CREATED",
+        targetId: id,
+        actorId: ownerUid,
+        timestamp: Timestamp.now(),
+        details: "New applicant account created via enrollment form",
+      }).catch(() => {});
+
+      const sessionUser = {
+        id,
+        uid: ownerUid,
+        email: auth.currentUser.email,
+        name: formData.fullNameEnglish || formData.fullNameBangla,
+        role: "user" as const,
+        registrationNumber: id,
+        authSource: "firebase" as const,
+      };
+      setSession(sessionUser);
+      await syncServerSession(sessionUser);
+
+      // Navigate passing password exclusively in memory router state (never ?pw= query string!)
+      navigate(`/admit-card/${id}`, { state: { generatedPassword: rawPassword } });
     } catch (error: any) {
       console.error("Submission error:", error);
-      const errorMessage = error?.message || "Unknown error";
-      alert(`আবেদন জমা দিতে সমস্যা হয়েছে।\nত্রুটি: ${errorMessage}\n\nঅনুগ্রহ করে পুনরায় চেষ্টা করুন অথবা আপনার ইন্টারনেট সংযোগ চেক করুন।`);
-      handleFirestoreError(error, OperationType.WRITE, path);
+      setSubmitError(`আবেদন জমা দিতে সমস্যা হয়েছে: ${error?.message || "Unknown error"}`);
+      handleFirestoreError(error, OperationType.WRITE, `applicants/new`);
     } finally {
       setLoading(false);
     }
@@ -281,12 +406,158 @@ export function EnrollmentForm() {
     { id: 5, title: "পর্যালোচনা", icon: CheckCircle }
   ];
 
+  if (!cmsLoading && cmsSettings.enrollmentOpen === false && !adminPreviewAnyway) {
+    return (
+      <div className="min-h-[75vh] bg-[#F5F7FA] flex items-center justify-center px-4 py-16">
+        <div className="max-w-lg w-full bg-white rounded-3xl border border-slate-200 shadow-xl p-8 text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-[#002147] text-[#C5A059] flex items-center justify-center mx-auto">
+            <Lock size={28} />
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-600">
+              Admission Status
+            </p>
+            <h1 className="text-2xl font-black text-[#002147] font-display">
+              অনলাইন ক্যাডেট ভর্তি বর্তমানে বন্ধ রয়েছে
+            </h1>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনের নতুন ক্যাডেট অনলাইন ভর্তি আবেদন সাময়িকভাবে স্থগিত করা হয়েছে। পরবর্তী ভর্তি বিজ্ঞপ্তির জন্য নোটিশ বোর্ড দেখুন।
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Link
+              to="/"
+              className="px-5 py-2.5 bg-[#002147] text-white text-xs font-bold rounded-xl hover:bg-[#003366] transition-colors"
+            >
+              হোমপেজে ফিরে যান
+            </Link>
+            <Link
+              to="/notices"
+              className="px-5 py-2.5 bg-slate-100 text-slate-800 text-xs font-bold rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              নোটিশ বোর্ড
+            </Link>
+            {isAdminSession && (
+              <button
+                type="button"
+                onClick={() => setAdminPreviewAnyway(true)}
+                className="px-5 py-2.5 bg-[#C5A059] text-[#002147] text-xs font-black rounded-xl hover:bg-[#b59048] transition-colors cursor-pointer"
+              >
+                Admin Preview Form
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
-      <div className="text-center mb-12">
-        <h1 className="text-3xl font-bold text-black mb-2 font-display">ক্যাডেট ভর্তি আবেদন ফরম</h1>
-        <p className="text-black/50">সঠিক তথ্য দিয়ে নিচের ধাপগুলো পূরণ করুন</p>
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-[#002147] mb-2 font-display">ক্যাডেট ভর্তি আবেদন ফরম</h1>
+        <p className="text-slate-600">সঠিক তথ্য দিয়ে নিচের ধাপগুলো পূরণ করুন</p>
       </div>
+
+      {/* Email / Password Portal Account Setup Banner */}
+      <div className="mb-8 p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 text-sm">
+            <ShieldCheck className={portalSignedInEmail ? "text-emerald-600 shrink-0" : "text-[#C5A059] shrink-0"} size={22} />
+            <div>
+              {portalSignedInEmail ? (
+                <p className="font-semibold text-slate-800">
+                  পোর্টাল অ্যাকাউন্ট সংযুক্ত: <span className="text-[#002147] font-mono">{portalSignedInEmail}</span>
+                </p>
+              ) : (
+                <p className="font-semibold text-slate-800">
+                  আবেদন জমার জন্য আপনার পোর্টাল ইমেইল ও পাসওয়ার্ড সেট করুন
+                </p>
+              )}
+              <p className="text-xs text-slate-500">
+                {portalSignedInEmail
+                  ? "আপনার আবেদন ও এডমিট কার্ড এই অ্যাকাউন্টের সাথে নিরাপদভাবে সংযুক্ত হবে।"
+                  : "আপনার নতুন অ্যাকাউন্ট তৈরি করতে অথবা পূর্বের ইমেইল দিয়ে সাইন-ইন করতে নিচের তথ্য দিন।"}
+              </p>
+            </div>
+          </div>
+          {!portalSignedInEmail && (
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg self-start sm:self-center">
+              <button
+                type="button"
+                onClick={() => setPortalAccountMode("register")}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md cursor-pointer transition-colors ${
+                  portalAccountMode === "register" ? "bg-[#002147] text-white" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                নতুন অ্যাকাউন্ট
+              </button>
+              <button
+                type="button"
+                onClick={() => setPortalAccountMode("login")}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md cursor-pointer transition-colors ${
+                  portalAccountMode === "login" ? "bg-[#002147] text-white" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                সাইন ইন
+              </button>
+            </div>
+          )}
+        </div>
+
+        {!portalSignedInEmail && (
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="email"
+                name="studentEmail"
+                value={formData.studentEmail}
+                onChange={handleChange}
+                placeholder="আপনার ইমেইল (example@mail.com)"
+                aria-label="Portal Email Address"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 focus:border-[#002147] outline-none"
+              />
+              <input
+                type="password"
+                value={portalPassword}
+                onChange={(e) => setPortalPassword(e.target.value)}
+                placeholder="পোর্টাল পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)"
+                aria-label="Portal Account Password"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 focus:border-[#002147] outline-none"
+              />
+              <button
+                type="button"
+                onClick={handlePortalAuth}
+                disabled={portalAuthLoading || portalGoogleLoading}
+                className="px-4 py-2.5 bg-[#002147] hover:bg-[#002e63] disabled:opacity-60 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors flex items-center justify-center gap-2"
+              >
+                {portalAuthLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {portalAccountMode === "register" ? "অ্যাকাউন্ট যুক্ত করুন" : "ইমেইল যাচাই করুন"}
+              </button>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
+                অথবা ১ ক্লিকে যুক্ত করুন:
+              </span>
+              <GoogleSignInButton
+                variant="light"
+                onClick={() => void handlePortalGoogleAuth()}
+                loading={portalGoogleLoading}
+                disabled={portalAuthLoading}
+                label="Google দিয়ে অ্যাকাউন্ট সংযুক্ত করুন"
+                className="sm:max-w-xs py-2.5!"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {submitError && (
+        <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-semibold flex items-start gap-2.5">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <span>{submitError}</span>
+        </div>
+      )}
 
       {/* Progress Bar */}
       <div className="flex items-center justify-between mb-12 relative">

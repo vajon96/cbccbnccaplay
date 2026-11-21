@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /admin2
+Disallow: /dashboard
+Disallow: /messenger
+Disallow: /exam/take/
+Disallow: /exam/admin
+
+Sitemap: /sitemap.xml

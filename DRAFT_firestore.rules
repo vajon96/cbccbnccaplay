@@ -1,0 +1,455 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Identity & Validation Primitives
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_.:\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAuthenticatedUser() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function isSuperAdmin() {
+      return isVerifiedEmail() && request.auth.token.email == 'sajondey102@gmail.com';
+    }
+
+    function isAdmin() {
+      return isSuperAdmin() || (
+        isAuthenticatedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(data) {
+      return isAuthenticatedUser() && ('ownerUid' in data) && data.ownerUid == request.auth.uid;
+    }
+
+    function isValidApplicantCreate(data) {
+      return data.keys().hasAll(['fullNameEnglish', 'studentPhone', 'status', 'ownerUid'])
+        && data.fullNameEnglish is string && data.fullNameEnglish.size() > 0 && data.fullNameEnglish.size() <= 200
+        && data.studentPhone is string && data.studentPhone.size() >= 6 && data.studentPhone.size() <= 32
+        && data.ownerUid is string && data.ownerUid.size() > 0 && data.ownerUid.size() <= 128
+        && data.status in ['Pending', 'Approved', 'Rejected']
+        && (!('role' in data) || data.role in ['cadet', 'user'])
+        && (!('photo' in data) || (data.photo is string && data.photo.size() <= 500000));
+    }
+
+    function isValidApplicantUpdate(data) {
+      return data.fullNameEnglish is string && data.fullNameEnglish.size() > 0 && data.fullNameEnglish.size() <= 200
+        && data.studentPhone is string && data.studentPhone.size() >= 6 && data.studentPhone.size() <= 32
+        && (!('status' in data) || data.status in ['Pending', 'Approved', 'Rejected'])
+        && (!('photo' in data) || (data.photo is string && data.photo.size() <= 500000));
+    }
+
+    function isValidOfflineApp(data) {
+      return data.keys().hasAll(['applicationNumber', 'syncStatus'])
+        && data.applicationNumber is string && data.applicationNumber.size() > 0 && data.applicationNumber.size() <= 80
+        && data.syncStatus is string && data.syncStatus.size() <= 40;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderId', 'senderName', 'content', 'timestamp'])
+        && data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128
+        && data.senderName is string && data.senderName.size() > 0 && data.senderName.size() <= 160
+        && data.content is string && data.content.size() > 0 && data.content.size() <= 5000;
+    }
+
+    function isValidExamAttempt(data) {
+      return data.keys().hasAll(['ownerUid', 'examId', 'candidateId', 'status'])
+        && data.ownerUid is string && data.ownerUid.size() > 0 && data.ownerUid.size() <= 128
+        && data.examId is string && data.examId.size() > 0 && data.examId.size() <= 128
+        && data.candidateId is string && data.candidateId.size() > 0 && data.candidateId.size() <= 128
+        && data.status in ['in_progress', 'submitted', 'graded'];
+    }
+
+    function isValidExamResult(data) {
+      return data.keys().hasAll(['ownerUid', 'attemptId', 'examId'])
+        && data.ownerUid is string && data.ownerUid.size() > 0 && data.ownerUid.size() <= 128
+        && data.attemptId is string && data.attemptId.size() > 0 && data.attemptId.size() <= 128
+        && data.examId is string && data.examId.size() > 0 && data.examId.size() <= 128;
+    }
+
+    // 1. Public Institutional Website & CMS Collections (Public Read, Verified Admin Write)
+    match /cms_content/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_sections/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_cadets/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 35;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_incharges/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_commander/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_notices/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_activities/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_gallery/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_settings/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 50;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /cms_pages/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 30;
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /circular_settings/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /circulars/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id) && isAdmin();
+
+      match /chunks/{chunkId} {
+        allow get: if isValidId(id) && isValidId(chunkId);
+        allow list: if true;
+        allow create, update, delete: if isValidId(id) && isValidId(chunkId) && isAdmin();
+      }
+    }
+
+    match /guide_settings/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /guides/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    // 2. Non-PII Public QR Projection (Zero phones/emails/NIDs/passwords, no list enumeration)
+    match /public_qr_cards/{id} {
+      allow get: if isValidId(id);
+      allow list: if false;
+      allow create, update: if isValidId(id)
+        && (isAdmin() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid))
+        && !('password' in incoming())
+        && !('passwordHash' in incoming())
+        && !('nidBirthReg' in incoming())
+        && !('studentPhone' in incoming())
+        && !('studentEmail' in incoming())
+        && !('presentAddress' in incoming())
+        && !('permanentAddress' in incoming());
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    // QR Admin Inspection Records (Admin-Only)
+    match /qr_records/{id} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    // 3. PII-Isolated Applicants & Profile Changes
+    match /applicants/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id)
+        && isValidApplicantCreate(incoming())
+        && (
+          isAdmin() ||
+          (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid && incoming().status == 'Pending')
+        );
+      allow update: if isValidId(id)
+        && isValidApplicantUpdate(incoming())
+        && (
+          isAdmin() ||
+          (
+            isAuthenticatedUser() &&
+            isOwner(existing()) &&
+            incoming().ownerUid == existing().ownerUid &&
+            incoming().status == existing().status &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'presentAddress', 'permanentAddress', 'studentEmail', 'bloodGroup',
+              'weightKg', 'heightFeet', 'heightInches', 'photo', 'updatedAt', 'passwordHash'
+            ])
+          )
+        );
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /pending_profile_changes/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && isAuthenticatedUser() && incoming().ownerUid == request.auth.uid;
+      allow update, delete: if isValidId(id) && isAdmin();
+    }
+
+    // 4. Admins, Tokens & Operational Config (Admin-Only)
+    match /admins/{id} {
+      allow get: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && id == request.auth.uid));
+      allow list: if isAdmin();
+      allow create, update, delete: if isValidId(id) && isSuperAdmin();
+    }
+
+    match /adminTokens/{id} {
+      allow get: if isValidId(id) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /admin_config/{id} {
+      allow get: if isValidId(id) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    // 5. Counters (Monotonic +1 increment by authenticated applicant or Admin management)
+    match /counters/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isAuthenticatedUser());
+      allow list: if isAdmin();
+      allow create: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && id == 'applicant_id' && incoming().currentId == 1111));
+      allow update: if isValidId(id) && (
+        isAdmin() ||
+        (isAuthenticatedUser() && id == 'applicant_id'
+          && incoming().currentId is int
+          && existing().currentId is int
+          && incoming().currentId == existing().currentId + 1)
+      );
+      allow delete: if isValidId(id) && isSuperAdmin();
+    }
+
+    // 6. Audit, Attendance & Password Reset Requests
+    match /activity_logs/{id} {
+      allow get: if isValidId(id) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && incoming().size() <= 12));
+      allow update, delete: if isValidId(id) && isSuperAdmin();
+    }
+
+    match /security_logs/{id} {
+      allow get: if isValidId(id) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && incoming().size() <= 12));
+      allow update, delete: if isValidId(id) && isSuperAdmin();
+    }
+
+    match /attendance_logs/{id} {
+      allow get: if isValidId(id) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /password_resets/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && isAuthenticatedUser() && incoming().ownerUid == request.auth.uid && incoming().status == 'Pending';
+      allow update, delete: if isValidId(id) && isAdmin();
+    }
+
+    // 7. Scoped Messenger & Notifications
+    match /messages/{id} {
+      allow get: if isValidId(id) && (
+        isAdmin() ||
+        existing().recipientId == 'ALL' ||
+        isOwner(existing()) ||
+        (isAuthenticatedUser() && (existing().senderId == request.auth.uid || existing().recipientId == request.auth.uid))
+      );
+      allow list: if isAdmin() || (
+        isAuthenticatedUser() && (
+          resource.data.recipientId == 'ALL' ||
+          resource.data.ownerUid == request.auth.uid ||
+          resource.data.senderId == request.auth.uid ||
+          resource.data.recipientId == request.auth.uid
+        )
+      );
+      allow create: if isValidId(id) && isValidMessage(incoming()) && (
+        isAdmin() ||
+        (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid && incoming().role != 'admin')
+      );
+      allow update: if isValidId(id) && (
+        isAdmin() ||
+        (isAuthenticatedUser() && (isOwner(existing()) || existing().recipientId == request.auth.uid)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'readAt']))
+      );
+      allow delete: if isValidId(id) && (isAdmin() || isOwner(existing()));
+    }
+
+    match /notifications/{id} {
+      allow get: if isValidId(id) && (
+        isAdmin() ||
+        existing().targetId == 'ALL' ||
+        isOwner(existing())
+      );
+      allow list: if isAdmin() || (
+        isAuthenticatedUser() && (resource.data.targetId == 'ALL' || resource.data.ownerUid == request.auth.uid)
+      );
+      allow create: if isValidId(id) && isAdmin();
+      allow update: if isValidId(id) && (
+        isAdmin() ||
+        (isOwner(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['isRead']))
+      );
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    // 8. Examination Subsystem (Answer Keys Strictly Isolated to Admins)
+    match /question_bank/{id} {
+      allow get, list, create, update, delete: if isAdmin();
+    }
+
+    match /exam_answer_keys/{id} {
+      allow get, list, create, update, delete: if isAdmin();
+    }
+
+    match /exams/{id} {
+      allow get: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && existing().status in ['published', 'live']));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.status in ['published', 'live']);
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /exam_attempts/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && isValidExamAttempt(incoming()) && (
+        isAdmin() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid && incoming().status == 'in_progress')
+      );
+      allow update: if isValidId(id) && isValidExamAttempt(incoming()) && (
+        isAdmin() ||
+        (isAuthenticatedUser() && isOwner(existing()) && existing().status == 'in_progress'
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().status in ['in_progress', 'submitted'])
+      );
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /exam_results/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && isValidExamResult(incoming()) && (
+        isAdmin() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid)
+      );
+      allow update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /exam_settings/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isAuthenticatedUser());
+      allow list: if isAdmin() || isAuthenticatedUser();
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /exam_activity_logs/{id} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(id) && (isAdmin() || isAuthenticatedUser());
+      allow update, delete: if isValidId(id) && isSuperAdmin();
+    }
+
+    match /answer_script_audit_logs/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    match /leaderboard/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isAuthenticatedUser());
+      allow list: if isAdmin() || isAuthenticatedUser();
+      allow create, update, delete: if isValidId(id) && isAdmin();
+    }
+
+    // 9. Local-First Synced Offline Applications
+    match /offline_applications/{id} {
+      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
+      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && isValidOfflineApp(incoming()) && (
+        isAdmin() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid)
+      );
+      allow update: if isValidId(id) && isValidOfflineApp(incoming()) && (
+        isAdmin() ||
+        (isAuthenticatedUser() && isOwner(existing()) && incoming().ownerUid == existing().ownerUid)
+      );
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    // 10. Centralized Media Management Metadata (Public visibility vs Admin-only private isolation)
+    match /media_assets/{id} {
+      allow get: if isValidId(id) && (isAdmin() || existing().visibility == 'public');
+      allow list: if isAdmin() || resource.data.visibility == 'public';
+      allow create, update: if isValidId(id)
+        && isAdmin()
+        && incoming().size() <= 30
+        && incoming().visibility in ['public', 'private'];
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    // 11. Health Check Document
+    match /test/{id} {
+      allow get: if isValidId(id);
+      allow list: if false;
+      allow write: if false;
+    }
+  }
+}

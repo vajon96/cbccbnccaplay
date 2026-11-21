@@ -33,8 +33,8 @@ export function NotificationCenter({ notifications: initialNotifications }: { no
     switch (type) {
       case "Alert": return { icon: AlertTriangle, color: "text-red-400", bg: "bg-red-400/10" };
       case "Announcement": return { icon: Info, color: "text-cyan-400", bg: "bg-cyan-400/10" };
-      case "Message": return { icon: MessageSquare, color: "text-primary", bg: "bg-primary/10" };
-      default: return { icon: Bell, color: "text-slate-400", bg: "bg-slate-400/10" };
+      case "Message": return { icon: MessageSquare, color: "text-[#C5A059]", bg: "bg-[#C5A059]/15" };
+      default: return { icon: Bell, color: "text-slate-300", bg: "bg-white/10" };
     }
   };
 
@@ -42,11 +42,12 @@ export function NotificationCenter({ notifications: initialNotifications }: { no
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2.5 bg-surface border border-white/5 rounded-xl hover:bg-white/5 transition-all group"
+        aria-label="Open notifications"
+        className="relative p-2.5 bg-white/10 border border-white/15 rounded-xl hover:bg-white/20 transition-all group cursor-pointer"
       >
-        <Bell size={20} className="text-slate-400 group-hover:text-primary transition-colors" />
+        <Bell size={20} className="text-slate-200 group-hover:text-[#C5A059] transition-colors" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-slate-900 text-[10px] font-black rounded-full flex items-center justify-center border-2 border-bg-light animate-pulse">
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#C5A059] text-[#002147] text-[10px] font-black rounded-full flex items-center justify-center border-2 border-[#002147] tabular-nums">
             {unreadCount}
           </span>
         )}
@@ -66,16 +67,16 @@ export function NotificationCenter({ notifications: initialNotifications }: { no
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 mt-4 w-80 lg:w-96 glass-card rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden"
+              className="absolute right-0 mt-4 w-80 lg:w-96 glass-card rounded-3xl border border-white/15 shadow-2xl z-50 overflow-hidden"
             >
-              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+              <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
                 <div className="flex items-center gap-2">
-                  <Bell size={18} className="text-primary" />
+                  <Bell size={18} className="text-[#C5A059]" />
                   <h3 className="text-sm font-black uppercase tracking-widest text-white">Notifications</h3>
                 </div>
                 <button 
                   onClick={markAllAsRead}
-                  className="text-[10px] font-black uppercase text-primary hover:text-cyan-400 transition-colors"
+                  className="text-[10px] font-black uppercase text-[#C5A059] hover:text-amber-300 transition-colors cursor-pointer"
                 >
                   Mark all as read
                 </button>
@@ -88,7 +89,7 @@ export function NotificationCenter({ notifications: initialNotifications }: { no
                     return (
                       <div 
                         key={notif.id}
-                        className={`p-4 hover:bg-white/5 transition-colors border-l-4 ${notif.isRead ? "border-transparent opacity-60" : "border-primary bg-primary/5"}`}
+                        className={`p-4 hover:bg-white/5 transition-colors border-l-4 cursor-pointer ${notif.isRead ? "border-transparent opacity-65" : "border-[#C5A059] bg-[#C5A059]/10"}`}
                         onClick={() => markAsRead(notif.id)}
                       >
                         <div className="flex gap-4">

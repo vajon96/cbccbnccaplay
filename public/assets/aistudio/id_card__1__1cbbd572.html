@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BNCC Elite Cadet Roster - Cox's Bazar City College</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+       /* --- Root Variables & Global Reset --- */
+:root {
+    --primary-color: #1a3a5f;      /* Deep Navy Blue (Authority) */
+    --secondary-color: #e53e3e;    /* Striking Red (BNCC Color) */
+    --accent-color: #f7b731;       /* Gold/Yellow (Highlight) */
+    --text-color: #2c3e50;
+    --bg-dark: #f0f4f7;            /* Light textured background */
+    --card-bg: #ffffff;
+    --shadow-deep: 0 10px 30px rgba(0, 0, 0, 0.15);
+    --shadow-hover: 0 15px 40px rgba(0, 0, 0, 0.25);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-color);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+/* --- Keyframe Animations --- */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* --- Header Styling --- */
+header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #0d233e 100%);
+    padding: 20px 5%;
+    box-shadow: var(--shadow-deep);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.logo-bar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+}
+
+.logo {
+    height: 45px;
+    margin-right: 15px;
+    transition: transform 0.3s;
+}
+
+.logo:hover {
+    transform: rotate(5deg) scale(1.05);
+}
+
+.college-logo {
+    height: 60px;
+}
+
+.header-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 2em;
+    font-weight: 900;
+    color: var(--accent-color);
+    margin: 0;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.header-controls {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.search-input {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 25px;
+    font-size: 1em;
+    width: 300px;
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 2px solid transparent;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+.search-input::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.search-input:focus {
+    background-color: white;
+    color: var(--text-color);
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+.download-button {
+    background-color: var(--secondary-color);
+    color: white;
+    padding: 12px 25px;
+    text-decoration: none;
+    border-radius: 25px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: background-color 0.3s, transform 0.2s;
+    display: inline-flex;
+    align-items: center;
+}
+
+.download-button i {
+    margin-right: 8px;
+}
+
+.download-button:hover {
+    background-color: #c53030;
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(229, 62, 62, 0.5);
+}
+
+/* --- Profile Grid Layout --- */
+.profile-grid {
+    padding: 40px 5%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 30px;
+}
+
+/* --- Profile Card Styling (Animated) --- */
+.profile-card {
+    background-color: var(--card-bg);
+    border-radius: 15px;
+    box-shadow: var(--shadow-deep);
+    padding: 25px;
+    display: flex;
+    align-items: center;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s;
+    cursor: pointer;
+    border-left: 5px solid var(--accent-color);
+    opacity: 0;
+    animation: slideIn 0.5s forwards;
+}
+
+.profile-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: var(--shadow-hover);
+}
+
+.card-image-wrapper {
+    position: relative;
+    margin-right: 20px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    overflow: hidden;
+    transition: border-radius 0.3s;
+}
+
+.profile-card:hover .card-image-wrapper {
+    border-radius: 15px;
+}
+
+.profile-photo {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+    transition: transform 0.4s;
+}
+
+.profile-card:hover .profile-photo {
+    transform: scale(1.1) rotate(-2deg);
+    border-radius: 10px;
+}
+
+.profile-details {
+    flex-grow: 1;
+}
+
+.name {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 0 0 5px 0;
+    line-height: 1.1;
+}
+
+.id-number {
+    font-size: 0.9em;
+    color: var(--secondary-color);
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.info-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    padding: 2px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+.detail-label {
+    color: #777;
+}
+
+.detail-value {
+    font-weight: 600;
+}
+
+.blood-group {
+    color: var(--secondary-color);
+}
+
+.view-id-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 15px;
+    padding: 8px 15px;
+    background-color: var(--accent-color);
+    color: var(--text-color);
+    text-decoration: none;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 700;
+    transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.view-id-button:hover {
+    background-color: #f5a623;
+    box-shadow: 0 4px 10px rgba(247, 183, 49, 0.5);
+}
+
+.view-id-button i {
+    margin-left: 5px;
+    transition: transform 0.3s;
+}
+
+.view-id-button:hover i {
+    transform: translateX(3px);
+}
+
+/* --- Modal Styling (Animated) --- */
+.modal {
+    display: none; 
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(13, 35, 62, 0.85); /* Darker backdrop */
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+}
+
+.modal.is-open {
+    display: flex;
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: var(--shadow-hover);
+    position: relative;
+    width: 90%;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateY(-20px);
+    opacity: 0;
+    transition: transform 0.3s, opacity 0.3s;
+}
+
+.modal.is-open .modal-content {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    font-size: 36px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s, transform 0.3s;
+}
+
+.close-button:hover {
+    color: var(--secondary-color);
+    transform: rotate(90deg);
+}
+
+.print-button {
+    margin-top: 25px;
+    padding: 12px 25px;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+.print-button:hover {
+    background-color: #c53030;
+    transform: translateY(-2px);
+}
+
+/* --- ID Card Design for Modal (Extraordinary Style) --- */
+.printable-id-card {
+    width: 380px; 
+    height: 240px;
+    border: 5px solid; /* Dynamic border color from JS */
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    margin-bottom: 10px;
+    background-color: var(--card-bg);
+    position: relative;
+    font-size: 11px;
+    overflow: hidden;
+}
+
+.id-card-front {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+}
+
+/* Geometric Background Animation */
+.card-wave-bg {
+    position: absolute;
+    top: -20px;
+    left: -20px;
+    width: 150%;
+    height: 150%;
+    background: linear-gradient(135deg, rgba(26, 58, 95, 0.1) 0%, rgba(247, 183, 49, 0.1) 100%);
+    opacity: 0.8;
+    transform: rotate(-10deg);
+    transition: opacity 0.3s;
+}
+
+.printable-id-card:hover .card-wave-bg {
+    opacity: 1;
+    transform: rotate(-12deg);
+}
+
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.card-logo {
+    height: 35px;
+    width: 35px;
+    object-fit: contain;
+}
+
+.college-logo-id {
+    height: 45px;
+    width: 45px;
+}
+
+.card-title-box {
+    text-align: center;
+    flex-grow: 1;
+    line-height: 1.1;
+}
+
+.card-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.0em;
+    color: var(--primary-color);
+    font-weight: 900;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.card-subtitle {
+    font-size: 0.7em;
+    color: var(--secondary-color);
+    font-weight: 600;
+    margin: 0;
+}
+
+.card-body {
+    display: flex;
+    padding: 5px 0;
+    flex-grow: 1;
+}
+
+.photo-area {
+    margin-right: 15px;
+    position: relative;
+}
+
+.card-photo {
+    width: 85px;
+    height: 105px;
+    object-fit: cover;
+    border: 3px solid var(--primary-color);
+    border-radius: 8px;
+    z-index: 5;
+}
+
+.blood-stamp {
+    position: absolute;
+    bottom: 5px;
+    right: -15px;
+    background-color: var(--secondary-color);
+    color: white;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    transform: rotate(5deg);
+    box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.4);
+}
+
+.details-area {
+    font-size: 0.85em;
+    line-height: 1.5;
+    flex-grow: 1;
+}
+
+.details-area p {
+    margin: 3px 0;
+}
+
+.detail-name {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.2em;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 5px !important;
+}
+.detail-id {
+    font-weight: 600;
+    color: var(--secondary-color);
+}
+.detail-info strong {
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.card-footer {
+    padding-top: 5px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 5px;
+}
+
+.sign-block {
+    margin: 0;
+    line-height: 1.2;
+    text-align: center;
+}
+
+.sign-placeholder {
+    display: block;
+    width: 60px;
+    height: 12px;
+    border-bottom: 1px dashed #333;
+    margin: 0 auto 2px;
+}
+
+.sign-title {
+    font-size: 0.7em;
+    color: #555;
+    font-weight: 600;
+}
+
+.barcode-placeholder {
+    font-family: monospace;
+    font-size: 0.6em;
+    padding: 3px 5px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    align-self: center;
+}
+
+.validity-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--primary-color);
+    color: white;
+    text-align: center;
+    font-size: 0.6em;
+    font-weight: 700;
+    padding: 2px 0;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+
+/* --- Responsiveness --- */
+@media (max-width: 992px) {
+    .header-controls {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 768px) {
+    header {
+        padding: 15px 5%;
+    }
+    
+    .logo-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .header-title {
+        font-size: 1.5em;
+        margin-top: 10px;
+    }
+
+    .header-controls {
+        width: 100%;
+        margin-top: 15px;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .search-input, .download-button {
+        width: 100%;
+    }
+
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-card {
+        flex-direction: column;
+        text-align: center;
+        border-left: none;
+        border-top: 5px solid var(--accent-color);
+    }
+    
+    .card-image-wrapper {
+        margin-right: 0;
+        margin-bottom: 15px;
+    }
+    
+    .view-id-button {
+        width: 100%;
+    }
+    
+    .printable-id-card {
+        width: 90vw;
+        height: auto;
+        max-width: 400px;
+        font-size: 10px;
+    }
+}
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-bar">
+            <div class="logo-container">
+                <img src="images/logo-removebg-preview-2.png" alt="College Logo" class="logo college-logo">
+                <img src="images/Bncc-logo.png" alt="BNCC Logo" class="logo bncc-logo">
+            </div>
+            <h1 class="header-title">ELITE CADET ROSTER</h1>
+        </div>
+        
+        <div class="header-controls">
+            <input type="text" id="searchInput" placeholder="Search by Name or Cadet ID..." class="search-input">
+            <a href="Cox's Bazar City College BNCC Platoon (Army Wing).apk" download class="download-button">
+                <i class="fas fa-download"></i> Get BNCC App
+            </a>
+        </div>
+    </header>
+    
+    <main id="profileGrid" class="profile-grid">
+        </main>
+
+    <div id="idCardModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <div id="idCardDisplay" class="printable-id-card">
+                </div>
+            <button id="printButton" class="print-button">Download/Print Card</button>
+        </div>
+    </div>
+
+    <script>
+        // Cadet Data (Same as before)
+        const cadetsData = [
+            { "Photo Link": "gg (2).jpg", "First Name": "Umme", "Middle Name": "Taowfika", "Last Name": "Alam", "Gender": "Female", "Blood Group": "A+", "Email": "utaowfikaalam@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1816233554", "NID/Birth Certificate": "2.00822E+16", "Date of Birth": "28/11/2008", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Cox's Bazar sadar", "City": "Cox's Bazar", "Cadet Number": "25154364", "Ex-Cadet Number": "-" },
+            { "Photo Link": "gg (1).jpg", "First Name": "Irfatul", "Middle Name": "Jannat", "Last Name": "Kakoli", "Gender": "Female", "Blood Group": "B+", "Email": "irfatuljannat51@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "8.80195E+12", "NID/Birth Certificate": "2.00522E+16", "Date of Birth": "24/01/2005", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Cox's Bazar", "City": "Cox's Bazar", "Cadet Number": "25154370", "Ex-Cadet Number": "22154351" },
+            { "Photo Link": "2025 (8).png", "First Name": "Moinul", "Middle Name": "Hasem", "Last Name": "Dipto", "Gender": "Male", "Blood Group": "B+", "Email": "dipto1040@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1940199008", "NID/Birth Certificate": "2.00922E+16", "Date of Birth": "23/11/2009", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Moheshkhali", "City": "Moheshkhali", "Cadet Number": "25154357", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (2).png", "First Name": "Mohammad", "Middle Name": "", "Last Name": "Ibrahim", "Gender": "Male", "Blood Group": "A+", "Email": "mdibrahimcox002@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1858570296", "NID/Birth Certificate": "2.00822E+16", "Date of Birth": "10/11/2008", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Chakoria", "City": "Cox's Bazar", "Cadet Number": "25154359", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (7).png", "First Name": "Abrar", "Middle Name": "Shafi", "Last Name": "Adib", "Gender": "Male", "Blood Group": "O+", "Email": "adibadib86975@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1831595122", "NID/Birth Certificate": "2.00922E+16", "Date of Birth": "18/09/2009", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "বড় মহেশখালী", "City": "Cox's Bazar", "Cadet Number": "25154351", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (11).png", "First Name": "Alif Rafaj", "Middle Name": "Alif", "Last Name": "Siddique", "Gender": "Male", "Blood Group": "O+", "Email": "bdtop6007@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1839265129", "NID/Birth Certificate": "2.01022E+16", "Date of Birth": "8/4/2008", "Country": "Bangladesh", "Division": "Business study", "District": "Chattogram", "Upazila": "Mohashkali", "City": "Cox's Bazar", "Cadet Number": "25154361", "Ex-Cadet Number": "-" },
+            { "Photo Link": "gg (4).jpeg", "First Name": "Farhana", "Middle Name": "Bagum", "Last Name": "Bagum", "Gender": "Female", "Blood Group": "B+", "Email": "hossanfarhad@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1757953062", "NID/Birth Certificate": "2.00822E+16", "Date of Birth": "5/4/2008", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Cox's Bazar", "City": "Cox's Bazar", "Cadet Number": "25154363", "Ex-Cadet Number": "-" },
+            { "Photo Link": "gg (3).jpeg", "First Name": "Anwesha", "Middle Name": "Barua", "Last Name": "Arohi", "Gender": "Female", "Blood Group": "O+", "Email": "Anweshabarua903gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1882208109", "NID/Birth Certificate": "2.00822E+16", "Date of Birth": "4/9/2008", "Country": "Bangladesh", "Division": "Chattogram", "District": "CoxBazar", "Upazila": "Ukhiya", "City": "CoxBazar", "Cadet Number": "25154368", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (10).png", "First Name": "Tousid", "Middle Name": "Siddik", "Last Name": "Ayan", "Gender": "Male", "Blood Group": "O+", "Email": "abubakkarrhu@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1881425011", "NID/Birth Certificate": "2.00922E+16", "Date of Birth": "6/8/2009", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazaar", "Upazila": "Ramu", "City": "Cox's Bazaar", "Cadet Number": "25154356", "Ex-Cadet Number": "-" },
+            { "Photo Link": "gg (3).jpg", "First Name": "Tanisha", "Middle Name": "Rahaman", "Last Name": "Rahaman", "Gender": "Female", "Blood Group": "O+", "Email": "tanisharahman9698@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1816604511", "NID/Birth Certificate": "2.01022E+16", "Date of Birth": "7/3/2010", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Cox's Bazar", "City": "Cox's Bazar", "Cadet Number": "25154367", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (4).png", "First Name": "Mr", "Middle Name": "Eftehar", "Last Name": "Uddin", "Gender": "Male", "Blood Group": "B+", "Email": "shawonsikdar2182@gamail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "8.80186E+12", "NID/Birth Certificate": "4680363183", "Date of Birth": "10/9/2007", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Cox's Bazar", "City": "Kuroskul", "Cadet Number": "25154362", "Ex-Cadet Number": "22154352" },
+            { "Photo Link": "2025 (13).png", "First Name": "Saidul", "Middle Name": "Bashar", "Last Name": "Samir", "Gender": "Male", "Blood Group": "AB+", "Email": "bsls43852@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "8.80186E+12", "NID/Birth Certificate": "9182066960", "Date of Birth": "6/5/2007", "Country": "Bangladesh", "Division": "Chittagong", "District": "Cox's Bazar", "Upazila": "Ukhiya", "City": "Cox's Bazar", "Cadet Number": "25154358", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (6).png", "First Name": "Sad", "Middle Name": "Bin", "Last Name": "Omar", "Gender": "Male", "Blood Group": "AB+", "Email": "ofaruque033@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1876900571", "NID/Birth Certificate": "2.00922E+16", "Date of Birth": "1/7/2009", "Country": "Bangladesh", "Division": "Chittagong", "District": "Cox's bazer", "Upazila": "Chakaria", "City": "Konakhali", "Cadet Number": "25154352", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (3).png", "First Name": "Mohammad", "Middle Name": "", "Last Name": "Sadek", "Gender": "Male", "Blood Group": "A+", "Email": "mohammadsadekali77@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1924517587", "NID/Birth Certificate": "2.00822E+16", "Date of Birth": "10/12/2008", "Country": "Bangladesh", "Division": "Chottogram", "District": "Cox's Bazar", "Upazila": "Cox's Bazar sadar", "City": "Cox's Bazar", "Cadet Number": "25154360", "Ex-Cadet Number": "22154352" },
+            { "Photo Link": "gg (1).jpeg", "First Name": "Fatema", "Middle Name": "Akter", "Last Name": "Falak", "Gender": "Female", "Blood Group": "O+", "Email": "tanjinabintetanno@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1882920070", "NID/Birth Certificate": "2.00622E+16", "Date of Birth": "3/7/2006", "Country": "Bangladesh", "Division": "Chottogram", "District": "Cox's Bazar", "Upazila": "Cox's Bazar", "City": "Cox's Bazar", "Cadet Number": "25154366", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (9).png", "First Name": "Mohammad", "Middle Name": "Aman", "Last Name": "Ullah", "Gender": "Male", "Blood Group": "B+", "Email": "amanullah36141056@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1816618095", "NID/Birth Certificate": "", "Date of Birth": "4/1/2007", "Country": "Bangladesh", "Division": "Chottogram", "District": "Cox's Bazar", "Upazila": "Teknaf", "City": "Cox's Bazar", "Cadet Number": "25154353", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (12).png", "First Name": "Mohammad", "Middle Name": "", "Last Name": "Fahim", "Gender": "Male", "Blood Group": "A+", "Email": "Ifranulhoque41@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1612918015", "NID/Birth Certificate": "2.00622E+16", "Date of Birth": "10/1/2006", "Country": "Bangladesh", "Division": "Chattogram", "District": "Cox's Bazar", "Upazila": "Maheshkhali", "City": "Cox's Bazar", "Cadet Number": "25154355", "Ex-Cadet Number": "-" },
+            { "Photo Link": "gg (2).jpeg", "First Name": "Saleha", "Middle Name": "Sultana", "Last Name": "Aka", "Gender": "Female", "Blood Group": "B+", "Email": "Salehasultanaaka07@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1880644082", "NID/Birth Certificate": "9592806377", "Date of Birth": "20/07/2005", "Country": "Bangladesh", "Division": "Chittagong", "District": "Cox's bazar", "Upazila": "Sadar", "City": "Cox's bazar", "Cadet Number": "25154365", "Ex-Cadet Number": "-" },
+            { "Photo Link": "2025 (1).png", "First Name": "Mohammad", "Middle Name": "", "Last Name": "Sakib", "Gender": "Male", "Blood Group": "O+", "Email": "atikurrahmansayed9900@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1884762434", "NID/Birth Certificate": "", "Date of Birth": "1/2/2008", "Country": "Bangladesh", "Division": "Chattagram", "District": "Cox's Bazar", "Upazila": "Kutubdia", "City": "Cox's Bazar", "Cadet Number": "25154354", "Ex-Cadet Number": "NA" },
+            { "Photo Link": "gg (5).jpeg", "First Name": "Nusrat", "Middle Name": "Samim", "Last Name": "Nuri", "Gender": "Female", "Blood Group": "O+", "Email": "nusratnuri786@gmail.com", "Nationality": "bd", "Mobile": "####", "Guardian Mobile": "1838694251", "NID/Birth Certificate": "২.০০৮২২E+১৬", "Date of Birth": "6/2/2008", "Country": "Bangladesh", "Division": "ctg", "District": "Cox's Bazar", "Upazila": "Rumo", "City": "Cox's Bazar", "Cadet Number": "25154369", "Ex-Cadet Number": "-" }
+        ];
+
+        const profileGrid = document.getElementById('profileGrid');
+        const modal = document.getElementById('idCardModal');
+        const modalContent = document.getElementById('idCardDisplay');
+        const closeBtn = document.getElementsByClassName('close-button')[0];
+        const searchInput = document.getElementById('searchInput');
+        const printButton = document.getElementById('printButton');
+
+        // Function to create the ID card HTML structure
+        function createIDCardHTML(cadet) {
+            const fullName = `${cadet['First Name']} ${cadet['Middle Name']} ${cadet['Last Name']}`.trim();
+            const collegeLogo = 'https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png';
+            const bnccLogo = 'https://i.ibb.co/Fb3R6wR/Bncc-logo.png';
+            const cleanBg = 'images/hh.png'; 
+            const collegeName = "Cox's Bazar City College";
+            const batchYear = new Date().getFullYear() + 1; // Assuming 2026 Batch for example
+            const validUntil = `DEC ${batchYear}`;
+
+            // Determine border color based on gender for a slight visual cue
+            const borderColor = cadet['Gender'] === 'Male' ? '#2e8b57' : '#9c3131'; 
+
+            return `
+                <div class="id-card-front" style="border-color: ${borderColor};">
+                    <div class="card-wave-bg"></div>
+                    
+                    <div class="card-header">
+                        <img src="${collegeLogo}" alt="College Logo" class="card-logo college-logo-id">
+                        <div class="card-title-box">
+                            <h2 class="card-title">${collegeName}</h2>
+                            <h3 class="card-subtitle">BNCC PLATOON (ARMY WING)</h3>
+                        </div>
+                        <img src="${bnccLogo}" alt="BNCC Logo" class="card-logo bncc-logo-id">
+                    </div>
+                    
+                    <div class="card-body">
+                        <div class="photo-area">
+                            <img src="images/${cadet['Photo Link']}" onerror="this.onerror=null; this.src='images/placeholder.png';" alt="${fullName}" class="card-photo">
+                            <div class="blood-stamp">${cadet['Blood Group']}</div>
+                        </div>
+                        
+                        <div class="details-area">
+                            <p class="detail-name">${fullName}</p>
+                            <p class="detail-id"><strong>CADET ID:</strong> ${cadet['Cadet Number']}</p>
+                            <p class="detail-info"><strong>Gender:</strong> ${cadet['Gender']}</p>
+                            <p class="detail-info"><strong>D.O.B:</strong> ${cadet['Date of Birth']}</p>
+                            <p class="detail-info"><strong>Contact:</strong> ${cadet['Guardian Mobile']}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer">
+                        <p class="sign-block">
+                            <span class="sign-placeholder"></span>
+                            <span class="sign-title">Cadet Signature</span>
+                        </p>
+                        <div class="barcode-placeholder">[BARCODE]</div>
+                        <p class="sign-block oc-sign">
+                            <span class="sign-placeholder"></span>
+                            <span class="sign-title">O.C. Signature</span>
+                        </p>
+                    </div>
+                    <div class="validity-strip">VALID UNTIL: ${validUntil}</div>
+                </div>
+            `;
+        }
+
+        // Function to render profiles (Improved for animation)
+        function renderProfiles(data) {
+            profileGrid.innerHTML = '';
+            data.forEach((cadet, index) => {
+                const fullName = `${cadet['First Name']} ${cadet['Middle Name']} ${cadet['Last Name']}`.trim();
+                const profileCard = document.createElement('div');
+                profileCard.classList.add('profile-card');
+                profileCard.setAttribute('data-name', fullName.toLowerCase());
+                profileCard.setAttribute('data-id', cadet['Cadet Number']);
+                profileCard.style.animationDelay = `${index * 0.1}s`; // Staggered entry animation
+
+                profileCard.innerHTML = `
+                    <div class="card-image-wrapper">
+                        <img src="images/${cadet['Photo Link']}" onerror="this.onerror=null; this.src='images/placeholder.png';" alt="${fullName}" class="profile-photo">
+                    </div>
+                    <div class="profile-details">
+                        <h2 class="name">${fullName}</h2>
+                        <p class="id-number">#${cadet['Cadet Number']}</p>
+                        <div class="info-line">
+                            <span class="detail-label">Blood:</span> 
+                            <span class="detail-value blood-group">${cadet['Blood Group']}</span>
+                        </div>
+                        <div class="info-line">
+                            <span class="detail-label">District:</span> 
+                            <span class="detail-value">${cadet['District']}</span>
+                        </div>
+                        <a href="#" class="view-id-button" data-cadet='${JSON.stringify(cadet)}'>
+                            View ID Card <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </div>
+                `;
+                profileGrid.appendChild(profileCard);
+            });
+
+            // Add event listeners for View ID Card buttons
+            document.querySelectorAll('.view-id-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const cadetData = JSON.parse(e.target.getAttribute('data-cadet'));
+                    modalContent.innerHTML = createIDCardHTML(cadetData);
+                    modal.style.display = 'flex';
+                    setTimeout(() => {
+                         modal.classList.add('is-open'); // Trigger fade-in animation
+                    }, 10);
+                });
+            });
+        }
+
+        // Search/Filter Functionality
+        searchInput.addEventListener('keyup', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredData = cadetsData.filter(cadet => {
+                const fullName = `${cadet['First Name']} ${cadet['Middle Name']} ${cadet['Last Name']}`.trim().toLowerCase();
+                const cadetID = cadet['Cadet Number'];
+                return fullName.includes(searchTerm) || cadetID.includes(searchTerm);
+            });
+            renderProfiles(filteredData);
+        });
+
+        // Modal Close Functionality
+        closeBtn.onclick = function() {
+            modal.classList.remove('is-open');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300); // Wait for fade-out animation
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.classList.remove('is-open');
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 300);
+            }
+        }
+
+        // Print Functionality (Optimized to use the created ID Card HTML)
+        printButton.onclick = function() {
+            const cardToPrint = document.getElementById('idCardDisplay');
+            
+            // Temporarily hide elements that shouldn't be printed (like the print button in the modal)
+            const printStyles = `
+                @media print {
+                    body > *:not(.modal) { display: none; }
+                    .modal { display: block !important; position: static !important; background: none !important; }
+                    .modal-content { max-width: 100% !important; box-shadow: none !important; padding: 0 !important; }
+                    .close-button, .print-button { display: none !important; }
+                    
+                    /* ID Card print formatting */
+                    .printable-id-card { 
+                        width: 3.375in; 
+                        height: 2.125in; 
+                        margin: 0;
+                        box-shadow: none;
+                        border: none;
+                        background: none;
+                        font-size: 8px; /* Adjusted size for print */
+                        border-radius: 0;
+                    }
+                    /* Reapply key styles for print visibility */
+                    .id-card-front {
+                        border: 1px solid #000;
+                        padding: 5px;
+                    }
+                    .card-header, .card-body, .card-footer {
+                        border-color: #333 !important;
+                    }
+                    .card-title { font-size: 10px !important; }
+                    .card-subtitle { font-size: 6px !important; }
+                    .card-photo { width: 50px !important; height: 70px !important; }
+                    .details-area p { font-size: 7px !important; }
+                    .validity-strip { font-size: 6px !important; }
+                    .blood-stamp { font-size: 9px !important; padding: 1px 3px !important; }
+                    .card-wave-bg { display: none; } /* Hide complex background for print */
+                }
+            `;
+
+            const cardHtml = cardToPrint.outerHTML;
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write('<html><head><title>Print ID Card</title>');
+            printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">');
+            printWindow.document.write('<style>');
+            printWindow.document.write(document.querySelector('style').textContent); // Include existing styles
+            printWindow.document.write(printStyles);
+            printWindow.document.write('</style></head><body>');
+            printWindow.document.write(cardHtml);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
+        }
+
+        // Initial render
+        renderProfiles(cadetsData);
+    </script>
+</body>
+</html>

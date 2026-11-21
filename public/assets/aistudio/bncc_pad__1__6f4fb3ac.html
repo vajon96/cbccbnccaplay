@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BNCC Pad Generator - Cox's Bazar City College</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base styles */
+        body {
+            font-family: 'Hind Siliguri', 'Kalpurush', sans-serif;
+        }
+        
+        /* A4 preview container */
+        .a4-preview {
+            width: 210mm;
+            min-height: 297mm;
+            transform-origin: top center;
+            transition: transform 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        /* Print styles - FIXED */
+        @media print {
+            body, html {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+            }
+            
+            body * {
+                visibility: hidden;
+            }
+            
+            .page-container, .page-container * {
+                visibility: visible;
+            }
+            
+            .page-container {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 210mm !important;
+                height: 297mm !important;
+                margin: 0 !important;
+                padding: 15mm !important;
+                border: none !important;
+                box-shadow: none !important;
+                page-break-after: always;
+                box-sizing: border-box;
+                overflow: hidden;
+            }
+            
+            .controls-container, .buttons-container, 
+            .mobile-menu-toggle, #mobilePrintBtn, #mobilePdfBtn {
+                display: none !important;
+            }
+            
+            @page {
+                size: A4;
+                margin: 0;
+            }
+        }
+        
+        /* Logo styling */
+        .logo-img {
+            width: clamp(80px, 15vw, 120px);
+            height: auto;
+        }
+        
+        /* Watermark styling */
+        .watermark {
+            opacity: 0.07;
+            z-index: 0;
+            pointer-events: none;
+        }
+        
+        /* Responsive typography */
+        .responsive-heading {
+            font-size: clamp(1.25rem, 4vw, 1.5rem);
+        }
+        
+        .responsive-subheading {
+            font-size: clamp(1rem, 3vw, 1.25rem);
+        }
+        
+        .responsive-body {
+            font-size: clamp(0.875rem, 2.5vw, 1rem);
+        }
+        
+        /* Mobile menu styles */
+        .mobile-menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: #4b5563;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+        
+        .controls-container {
+            transition: all 0.3s ease;
+        }
+        
+        /* Focus styles for accessibility */
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        /* High contrast support */
+        @media (prefers-contrast: high) {
+            :root {
+                --bncc-red: #a00000;
+                --bncc-dark-red: #700000;
+                --bncc-blue: #0000ff;
+                --bncc-dark-blue: #0000a0;
+            }
+        }
+        
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        
+        /* Content area with fixed height for proper pagination */
+        .content-area {
+            min-height: 180mm;
+            max-height: 180mm;
+            overflow: hidden;
+        }
+        
+        /* Responsive breakpoints */
+        @media (max-width: 1023px) {
+            .mobile-menu-toggle {
+                display: block;
+            }
+            
+            .controls-container {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 50;
+                overflow-y: auto;
+                transform: translateX(-100%);
+            }
+            
+            .controls-container.active {
+                transform: translateX(0);
+            }
+            
+            .controls-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 40;
+            }
+            
+            .controls-overlay.active {
+                display: block;
+            }
+        }
+        
+        @media (max-width: 767px) {
+            .a4-preview {
+                transform: scale(0.7);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .a4-preview {
+                transform: scale(0.6);
+            }
+        }
+        
+        /* Print optimization */
+        .print-optimized {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-2xl lg:text-4xl font-bold text-gray-700">BNCC Pad Generator</h1>
+            <p class="text-sm lg:text-md text-gray-500">Cox's Bazar City College Platoon</p>
+        </header>
+
+        <!-- Mobile menu toggle -->
+        <div class="lg:hidden flex justify-between items-center mb-4">
+            <button id="mobileMenuToggle" class="mobile-menu-toggle focus-visible" aria-expanded="false" aria-controls="controls-container">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+                <span class="sr-only">Toggle Controls</span>
+            </button>
+            <div class="flex gap-2">
+                <button id="mobilePrintBtn" class="bg-blue-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 flex items-center justify-center gap-1 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                    Print
+                </button>
+                <button id="mobilePdfBtn" class="bg-green-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-green-700 transition-colors duration-300 flex items-center justify-center gap-1 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    PDF
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Controls -->
+            <div id="controls-container" class="lg:w-1/3 bg-white p-4 lg:p-6 rounded-lg shadow-lg controls-container">
+                <div class="flex justify-between items-center mb-4 lg:hidden">
+                    <h2 class="text-xl font-semibold">Controls</h2>
+                    <button id="closeControls" class="text-gray-500 hover:text-gray-700 focus-visible">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                        <span class="sr-only">Close Controls</span>
+                    </button>
+                </div>
+                <h2 class="text-xl lg:text-2xl font-semibold mb-4 border-b pb-2 hidden lg:block">Controls</h2>
+
+                <!-- Document Settings -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-600 mb-2">Document Settings</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="pageSize" class="block text-xs font-medium text-gray-500">Page Size</label>
+                            <select id="pageSize" class="w-full mt-1 p-2 border border-gray-300 rounded-md focus-visible">
+                                <option value="a4">A4 (Default)</option>
+                                <option value="legal">Legal</option>
+                                <option value="letter">Letter</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="pageCount" class="block text-xs font-medium text-gray-500">Page Count</label>
+                            <select id="pageCount" class="w-full mt-1 p-2 border border-gray-300 rounded-md focus-visible">
+                                <option value="1">1 Page</option>
+                                <option value="2">2 Pages</option>
+                                <option value="4">4 Pages</option>
+                                <option value="8">8 Pages</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memo and Date Inputs -->
+                <div class="grid grid-cols-1 gap-4 mb-6">
+                    <div>
+                        <label for="memoNo" class="block text-sm font-medium text-gray-600">সূত্র নং</label>
+                        <input type="text" id="memoNo" class="w-full mt-1 p-2 border border-gray-300 rounded-md focus-visible">
+                    </div>
+                    <div>
+                        <label for="dateInput" class="block text-sm font-medium text-gray-600">তারিখ</label>
+                        <div class="flex items-center gap-2 mt-1">
+                            <input type="text" id="dateInput" placeholder="dd/mm/yyyy" class="w-full p-2 border border-gray-300 rounded-md focus-visible">
+                            <button id="autoDateBtn" title="Use Current Date" class="p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus-visible">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                <span class="sr-only">Use Current Date</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main Text Input -->
+                <div class="mb-6">
+                    <label for="mainText" class="block text-lg font-medium text-gray-700 mb-2">Document Text</label>
+                    <textarea id="mainText" rows="10" class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition focus-visible" placeholder="Type your document content here..."></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Content will automatically adjust to fit one page</p>
+                </div>
+
+                <!-- Formatting Controls -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="fontSize" class="block text-sm font-medium text-gray-600">Font Size (px)</label>
+                        <input type="number" id="fontSize" value="14" min="10" max="20" class="w-full mt-1 p-2 border border-gray-300 rounded-md focus-visible">
+                    </div>
+                    <div>
+                        <label for="lineHeight" class="block text-sm font-medium text-gray-600">Line Spacing</label>
+                        <input type="number" id="lineHeight" value="1.6" step="0.1" min="1.2" max="2.5" class="w-full mt-1 p-2 border border-gray-300 rounded-md focus-visible">
+                    </div>
+                    <div>
+                        <label for="marginTop" class="block text-sm font-medium text-gray-600">Top Margin (mm)</label>
+                        <input type="number" id="marginTop" value="15" min="5" max="30" class="w-full mt-1 p-2 border border-gray-300 rounded-md focus-visible">
+                    </div>
+                    <div>
+                        <label for="marginBottom" class="block text-sm font-medium text-gray-600">Bottom Margin (mm)</label>
+                        <input type="number" id="marginBottom" value="15" min="5" max="30" class="w-full mt-1 p-2 border border-gray-300 rounded-md focus-visible">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="buttons-container space-y-3">
+                    <button id="printBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 flex items-center justify-center gap-2 focus-visible">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                        Print Document
+                    </button>
+                    <button id="pdfBtn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 flex items-center justify-center gap-2 focus-visible">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        Download as PDF
+                    </button>
+                    <button id="addPageBtn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 flex items-center justify-center gap-2 focus-visible">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Add Page
+                    </button>
+                </div>
+                <div id="loader" class="text-center mt-4 hidden">
+                    <p class="text-gray-600">Generating PDF, please wait...</p>
+                </div>
+            </div>
+
+            <!-- Controls overlay for mobile -->
+            <div id="controls-overlay" class="controls-overlay"></div>
+
+            <!-- Live Preview -->
+            <div class="lg:w-2/3 flex flex-col items-center gap-4 overflow-auto">
+                <div id="pages-container" class="w-full space-y-4">
+                    <!-- Pages will be added here dynamically -->
+                </div>
+                <button id="newPageBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 focus-visible">
+                    + Add New Page
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template for new pages -->
+    <template id="page-template">
+        <div class="page-container a4-preview bg-white border border-black shadow-2xl p-4 sm:p-6 md:p-8 lg:p-[40px] relative mb-4 mx-auto print-optimized">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 watermark">
+                <img src="Bncc_logo.png" alt="BNCC Watermark" class="w-[200px] sm:w-[300px] md:w-[400px]">
+            </div>
+
+            <div class="relative z-10 h-full flex flex-col">
+                <header class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                    <img src="logo-removebg-preview (2).png" alt="City College Logo" class="logo-img">
+                    <div class="text-center">
+                        <h2 class="responsive-heading font-bold text-red-600">বাংলাদেশ ন্যাশনাল ক্যাডেট কোর</h2>
+                        <h3 class="responsive-subheading font-semibold">কক্সবাজার সিটি কলেজ</h3>
+                        <h3 class="responsive-subheading font-bold text-red-600">মিশ্র প্লাটুন (সেনা শাখা)</h3>
+                        <h3 class="responsive-body font-medium">কক্সবাজার সদর</h3>
+                    </div>
+                    <img src="Bncc_logo.png" alt="BNCC Logo" class="logo-img">
+                </header>
+
+                <div class="text-center text-xs sm:text-sm mt-2">
+                    ইমেইল: coxcitycollege@gmail.com, cccbncc@gmail.com
+                </div>
+                <hr class="border-black border-t-2 my-3">
+
+                <div class="flex flex-col sm:flex-row justify-between text-sm sm:text-base font-medium gap-2">
+                    <div class="memo-preview">সূত্র নং: ____________________</div>
+                    <div class="date-preview">তারিখ: ____/____/________</div>
+                </div>
+
+                <!-- Content area with fixed height -->
+                <div class="content-area main-body-preview mt-4 sm:mt-6 md:mt-[20px] responsive-body" style="line-height: 1.6;"></div>
+
+                <div class="text-right mt-4 sm:mt-6 responsive-body" style="line-height: 1.6;">
+                    <span class="text-blue-700 font-semibold">পিইউও</span>উজ্জ্বল কান্তি দেব<br>
+                    প্লাটুন কমান্ডার<br>
+                    বিএনসিসি (<span class="text-red-600">সেনা শাখা</span>)<br>
+                    কক্সবাজার সিটি কলেজ প্লাটুন
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // DOM Elements
+            const mainText = document.getElementById('mainText');
+            const pagesContainer = document.getElementById('pages-container');
+            const pageTemplate = document.getElementById('page-template');
+            const loader = document.getElementById('loader');
+            
+            // Control elements
+            const memoNoInput = document.getElementById('memoNo');
+            const dateInput = document.getElementById('dateInput');
+            const autoDateBtn = document.getElementById('autoDateBtn');
+            
+            const fontSizeInput = document.getElementById('fontSize');
+            const lineHeightInput = document.getElementById('lineHeight');
+            const marginTopInput = document.getElementById('marginTop');
+            const marginBottomInput = document.getElementById('marginBottom');
+            const pageSizeSelect = document.getElementById('pageSize');
+            const pageCountSelect = document.getElementById('pageCount');
+            
+            // Button elements
+            const printBtn = document.getElementById('printBtn');
+            const pdfBtn = document.getElementById('pdfBtn');
+            const newPageBtn = document.getElementById('newPageBtn');
+            const addPageBtn = document.getElementById('addPageBtn');
+            
+            // Mobile elements
+            const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+            const closeControls = document.getElementById('closeControls');
+            const controlsContainer = document.getElementById('controls-container');
+            const controlsOverlay = document.getElementById('controls-overlay');
+            const mobilePrintBtn = document.getElementById('mobilePrintBtn');
+            const mobilePdfBtn = document.getElementById('mobilePdfBtn');
+
+            // Utility to convert numbers to Bengali numerals
+            const toBengaliNumber = (str) => {
+                const bengaliNumbers = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+                return String(str).replace(/\d/g, (digit) => bengaliNumbers[parseInt(digit)]);
+            };
+
+            // Create initial page
+            function createNewPage() {
+                const pageClone = pageTemplate.content.cloneNode(true);
+                const pageElement = pageClone.querySelector('.page-container');
+                pagesContainer.appendChild(pageElement);
+                return pageElement;
+            }
+
+            // Function to update all pages
+            function updateAllPages() {
+                const pages = document.querySelectorAll('.page-container');
+                const memoNo = memoNoInput.value || '____________________';
+                const date = dateInput.value || '____/____/________';
+                const content = mainText.value.replace(/\n/g, '<br>');
+                
+                pages.forEach(page => {
+                    const memoPreview = page.querySelector('.memo-preview');
+                    const datePreview = page.querySelector('.date-preview');
+                    const mainBodyPreview = page.querySelector('.main-body-preview');
+                    
+                    memoPreview.textContent = `সূত্র নং: ${memoNo}`;
+                    datePreview.textContent = `তারিখ: ${date}`;
+                    mainBodyPreview.innerHTML = content;
+                    
+                    // Apply styling for proper fit
+                    mainBodyPreview.style.fontSize = `${fontSizeInput.value}px`;
+                    mainBodyPreview.style.lineHeight = lineHeightInput.value;
+                    mainBodyPreview.style.paddingTop = `${marginTopInput.value}px`;
+                    mainBodyPreview.style.paddingBottom = `${marginBottomInput.value}px`;
+                    
+                    // Ensure content fits in the fixed height area
+                    adjustContentForSinglePage(mainBodyPreview);
+                });
+            }
+
+            // Function to adjust content to fit on one page
+            function adjustContentForSinglePage(element) {
+                const contentHeight = element.scrollHeight;
+                const containerHeight = 180; // mm
+                
+                if (contentHeight > containerHeight * 3.78) { // Convert mm to pixels (approx)
+                    // Reduce font size if content is too long
+                    const currentSize = parseInt(fontSizeInput.value);
+                    if (currentSize > 10) {
+                        fontSizeInput.value = currentSize - 1;
+                        updateAllPages();
+                    }
+                }
+            }
+
+            // Mobile menu functionality
+            function toggleMobileMenu() {
+                const isExpanded = mobileMenuToggle.getAttribute('aria-expanded') === 'true';
+                mobileMenuToggle.setAttribute('aria-expanded', !isExpanded);
+                controlsContainer.classList.toggle('active');
+                controlsOverlay.classList.toggle('active');
+                document.body.style.overflow = controlsContainer.classList.contains('active') ? 'hidden' : '';
+            }
+
+            // Initialize with one page
+            createNewPage();
+            updateAllPages();
+
+            // Event Listeners for controls
+            mainText.addEventListener('input', updateAllPages);
+            memoNoInput.addEventListener('input', updateAllPages);
+            dateInput.addEventListener('input', updateAllPages);
+            fontSizeInput.addEventListener('input', updateAllPages);
+            lineHeightInput.addEventListener('input', updateAllPages);
+            marginTopInput.addEventListener('input', updateAllPages);
+            marginBottomInput.addEventListener('input', updateAllPages);
+            
+            // Auto-date button functionality
+            autoDateBtn.addEventListener('click', () => {
+                const today = new Date();
+                const day = String(today.getDate()).padStart(2, '0');
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const year = today.getFullYear();
+                
+                const formattedDate = `${toBengaliNumber(day)}/${toBengaliNumber(month)}/${toBengaliNumber(year)}`;
+                dateInput.value = formattedDate;
+                updateAllPages();
+            });
+
+            // Add new page
+            newPageBtn.addEventListener('click', () => {
+                createNewPage();
+                updateAllPages();
+            });
+
+            // Add multiple pages
+            addPageBtn.addEventListener('click', () => {
+                const count = parseInt(pageCountSelect.value);
+                for (let i = 0; i < count; i++) {
+                    createNewPage();
+                }
+                updateAllPages();
+            });
+
+            // Print functionality
+            printBtn.addEventListener('click', () => {
+                // Ensure all content fits on one page before printing
+                updateAllPages();
+                setTimeout(() => {
+                    window.print();
+                }, 500);
+            });
+            
+            mobilePrintBtn.addEventListener('click', () => {
+                updateAllPages();
+                setTimeout(() => {
+                    window.print();
+                }, 500);
+            });
+
+            // PDF Download functionality
+            const generatePDF = async () => {
+                loader.classList.remove('hidden');
+                pdfBtn.disabled = true;
+                mobilePdfBtn.disabled = true;
+                pdfBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                mobilePdfBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                const { jsPDF } = window.jspdf;
+                
+                // Set page size based on selection
+                let pageSize;
+                switch(pageSizeSelect.value) {
+                    case 'legal':
+                        pageSize = [215.9, 355.6];
+                        break;
+                    case 'letter':
+                        pageSize = [215.9, 279.4];
+                        break;
+                    default: // A4
+                        pageSize = [210, 297];
+                }
+                
+                const pdf = new jsPDF({ 
+                    orientation: 'portrait', 
+                    unit: 'mm',
+                    format: pageSizeSelect.value === 'a4' ? 'a4' : pageSize
+                });
+                
+                const pages = document.querySelectorAll('.page-container');
+                
+                try {
+                    for (let i = 0; i < pages.length; i++) {
+                        if (i > 0) pdf.addPage();
+                        
+                        // Use exact dimensions for PDF
+                        const canvas = await html2canvas(pages[i], {
+                            scale: 2,
+                            useCORS: true,
+                            logging: false,
+                            width: pageSize[0],
+                            height: pageSize[1],
+                            windowWidth: pageSize[0] * 3.78, // Convert mm to pixels
+                            windowHeight: pageSize[1] * 3.78
+                        });
+                        
+                        const imgData = canvas.toDataURL('image/png');
+                        
+                        // Add image to fit the entire page
+                        pdf.addImage(imgData, 'PNG', 0, 0, pageSize[0], pageSize[1], undefined, 'FAST');
+                    }
+                    
+                    pdf.save('BNCC_Document.pdf');
+                } catch (err) {
+                    console.error("Error generating PDF:", err);
+                    alert("Sorry, there was an error generating the PDF.");
+                } finally {
+                    loader.classList.add('hidden');
+                    pdfBtn.disabled = false;
+                    mobilePdfBtn.disabled = false;
+                    pdfBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    mobilePdfBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            };
+            
+            pdfBtn.addEventListener('click', generatePDF);
+            mobilePdfBtn.addEventListener('click', generatePDF);
+
+            // Mobile menu event listeners
+            mobileMenuToggle.addEventListener('click', toggleMobileMenu);
+            closeControls.addEventListener('click', toggleMobileMenu);
+            controlsOverlay.addEventListener('click', toggleMobileMenu);
+            
+            // Keyboard navigation support
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    document.body.classList.add('keyboard-navigation');
+                }
+            });
+            
+            document.addEventListener('mousedown', function() {
+                document.body.classList.remove('keyboard-navigation');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadet Mohammad Fahim - Endorsement</title>
+    <link rel="stylesheet" href="styles2.css">
+    <style>
+        /* Additional styling for the certificate layout */
+        .certificate-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 40px;
+            border: 10px double #2c3e50;
+            text-align: center;
+            line-height: 1.6;
+            color: #333;
+        }
+        .cert-header { text-transform: uppercase; text-decoration: underline; margin-bottom: 20px; }
+        .cert-body { text-align: justify; margin-bottom: 30px; }
+        .download-box {
+            background: #f4f4f4;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+        .download-btn {
+            display: inline-block;
+            background: #27ae60;
+            color: white;
+            padding: 12px 25px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        .download-btn:hover { background: #219150; }
+        
+        .nav-links a {
+            text-decoration: none;
+            color: #2c3e50;
+            margin: 0 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="https://cbcc.edu.bd/"><img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo" style="height: 50px;"></a>
+        <a href="https://bncc.info/"><img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" style="height: 50px;"></a>
+        <div class="marquee-container"><div class="marquee-text">Cox's Bazar City College BNCC Platoon</div></div>
+    </header>
+
+    <div class="certificate-container">
+        <h1 class="cert-header">Certificate of Endorsement</h1>
+        
+        <div class="cert-body">
+            <p>This is to certify that <strong>Cadet Sakib Fahim</strong>, <strong>Cadet No: 25154354</strong>, is a bona fide and active member of the Bangladesh National Cadet Corps (BNCC), Cox’s Bazar City College BNCC Platoon (Army Wing).</p>
+            
+            <p>He was duly enrolled as a cadet of the 2025–2026 Batch and has actively participated in various platoon activities with sincerity, dedication, and a strong sense of commitment.</p>
+            
+            <p>Throughout his tenure in BNCC, Cadet Mohammad Fahim has consistently demonstrated commendable discipline, integrity, teamwork, leadership potential, and a high standard of personal responsibility. He has actively taken part in character-building, leadership-oriented, and national consciousness-enhancing programs conducted under the BNCC framework.</p>
+            
+            <p>This certificate is issued upon his request for submission to the Bangladesh Army recruitment process and for other relevant official purposes.</p>
+            
+            <p>We wish him every success in his future endeavors.</p>
+        </div>
+
+        <div class="download-box">
+            <h2>BNCC CERTIFICATE</h2>
+            <p>Authorization required. Click the button below to enter the password and download:</p>
+            
+            <button onclick="validateDownload()" class="download-btn">
+                Download Now
+            </button>
+        </div>
+
+        <div class="nav-links" style="margin-top: 20px;">
+            <a href="sakib.html">Prev</a>
+            <a href="next_cadet.html">Next</a>
+        </div>
+    </div>
+
+    <footer><p>&copy; 2025 Cox's Bazar City College BNCC Platoon.</p></footer>
+
+    <script>
+        function validateDownload() {
+            // Edit your password here
+            const secretKey = "BNCC2025 cadet"; 
+            
+            const userInput = prompt("Enter the password to download this certificate:");
+
+            if (userInput === secretKey) {
+                // Success: Create a hidden link and click it
+                const link = document.createElement('a');
+                link.href = 'Mohammad Sakib.pdf'; // Ensure this file exists in your folder
+                link.download = 'Mohammad_Sakib_BNCC_Certificate.pdf';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert("Download started successfully.");
+            } else if (userInput === null) {
+                // User clicked cancel
+                return;
+            } else {
+                // Wrong password
+                alert("Invalid Password! Please contact the BNCC Platoon Commander.");
+            }
+        }
+    </script>
+</body>
+</html>

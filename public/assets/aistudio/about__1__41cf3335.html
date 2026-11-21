@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>About Us | CBCC BNCC Platoon — Command & Ethos</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Modern Reset and Typography */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: #0b111e; /* Deep Premium Dark/Navy background */
+            color: #e2e8f0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Color Palette Constants matching Gallery */
+        :root {
+            --accent: #3b82f6; /* Electric Blue */
+            --accent-glow: rgba(59, 130, 246, 0.5);
+            --bg-card: rgba(30, 41, 59, 0.4);
+            --text-muted: #94a3b8;
+            --glass: rgba(15, 23, 42, 0.6);
+            --border-glass: rgba(255, 255, 255, 0.05);
+            --m-red: #ef4444; /* Modernized Red */
+            --m-gold: #f59e0b; /* Modernized Gold */
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 0 25px;
+        }
+
+        /* --- Modern Header / Logo Section --- */
+        header {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .branding-block {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .branding-block img {
+            height: 60px;
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.1));
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .branding-block img:hover {
+            transform: scale(1.08) translateY(-2px);
+            filter: drop-shadow(0 0 12px var(--accent));
+        }
+
+        .title-block {
+            text-align: right;
+        }
+
+        .title-block h1 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: linear-gradient(to right, #ffffff, #93c5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .title-block p {
+            color: var(--m-gold);
+            font-weight: 600;
+            letter-spacing: 2px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            margin-bottom: 0;
+            text-align: right;
+        }
+
+        /* --- Modern Floating Navigation --- */
+        nav {
+            background: rgba(20, 29, 47, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border-glass);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-flex {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 16px 20px;
+            display: block;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            font-size: 0.95rem;
+            letter-spacing: 0.3px;
+            position: relative;
+        }
+
+        nav a:hover {
+            color: #ffffff;
+        }
+
+        nav a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        nav a:hover::after, nav a.active::after {
+            width: 60%;
+        }
+
+        nav a.active {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        /* --- Main Premium Core --- */
+        main {
+            padding: 60px 0;
+        }
+
+        .content-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 50px;
+            border-radius: 24px;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-title {
+            font-family: 'Oswald', sans-serif;
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 50px;
+            color: #ffffff;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            background: linear-gradient(to right, #ffffff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Commander Spotlight — Premium Glassmorphism */
+        .commander-section {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            display: flex;
+            margin-bottom: 60px;
+            overflow: hidden;
+            flex-wrap: wrap;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .commander-img {
+            flex: 0 0 320px;
+            background: #0b111e;
+            position: relative;
+        }
+
+        .commander-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: all 0.5s ease;
+        }
+
+        .commander-section:hover .commander-img img {
+            transform: scale(1.05);
+        }
+
+        .commander-details {
+            padding: 40px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .commander-details h3 {
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .c-name {
+            font-family: 'Oswald', sans-serif;
+            font-size: 2.5rem;
+            color: #ffffff;
+            margin-bottom: 8px;
+            line-height: 1.2;
+        }
+
+        .c-rank {
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: var(--m-gold);
+            margin-bottom: 20px;
+            padding-left: 14px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .c-bio {
+            margin-bottom: 28px;
+            color: var(--text-muted);
+            font-size: 0.98rem;
+            line-height: 1.6;
+            text-align: justify;
+        }
+
+        .c-socials {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .c-socials a {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-glass);
+            color: #ffffff;
+            width: 44px;
+            height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            font-size: 1.2rem;
+            text-decoration: none;
+        }
+
+        .c-socials a:hover {
+            background: var(--accent);
+            color: white;
+            transform: translateY(-4px);
+            box-shadow: 0 0 15px var(--accent-glow);
+            border-color: transparent;
+        }
+
+        /* Typography & Layout elements */
+        h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.8rem;
+            color: #ffffff;
+            margin: 45px 0 20px;
+            padding-left: 16px;
+            border-left: 4px solid var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h3 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.3rem;
+            color: var(--m-red);
+            margin: 30px 0 15px;
+            text-transform: uppercase;
+        }
+
+        p {
+            text-align: justify;
+            margin-bottom: 20px;
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .stat-highlight {
+            background: rgba(59, 130, 246, 0.07);
+            color: #ffffff;
+            padding: 20px 25px;
+            margin: 35px 0;
+            border-left: 4px solid var(--m-gold);
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+            font-size: 0.95rem;
+            border-top: 1px solid rgba(255,255,255,0.02);
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            border-right: 1px solid rgba(255,255,255,0.02);
+        }
+
+        /* Gallery Grid with Modern Hover Effects */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+        }
+
+        .grid-item {
+            border-radius: 14px;
+            height: 240px;
+            overflow: hidden;
+            position: relative;
+            background: #1e293b;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .grid-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .grid-item:hover {
+            transform: translateY(-6px);
+            border-color: rgba(59, 130, 246, 0.3);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), 0 0 20px rgba(59, 130, 246, 0.1);
+        }
+
+        .grid-item:hover img {
+            transform: scale(1.08);
+            filter: brightness(0.9);
+        }
+
+        /* Modernized Contact Bunker Section */
+        .contact-bunker {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 35px;
+            margin-top: 50px;
+            border-radius: 20px;
+            border: 1px solid var(--border-glass);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 30px;
+        }
+
+        .contact-block {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .contact-block h4 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .contact-block p, .contact-block a {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 0.95rem;
+            transition: color 0.3s ease;
+        }
+
+        .contact-block a:hover {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .contact-block i {
+            color: var(--accent);
+            width: 20px;
+        }
+
+        /* Clean Modern Footer */
+        footer {
+            background: #070b14;
+            color: var(--text-muted);
+            padding: 60px 0 30px;
+            border-top: 1px solid var(--border-glass);
+            margin-top: 60px;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-col h4 {
+            font-family: 'Oswald', sans-serif;
+            color: #ffffff;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            letter-spacing: 0.5px;
+        }
+
+        .footer-col a {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: block;
+            margin-bottom: 12px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .footer-col a:hover {
+            color: #ffffff;
+            padding-left: 6px;
+        }
+
+        .copy {
+            text-align: center;
+            border-top: 1px solid rgba(255,255,255,0.03);
+            padding-top: 25px;
+            font-size: 0.85rem;
+        }
+
+        /* Responsive Framework Adjustments */
+        @media (max-width: 992px) {
+            .header-flex {
+                flex-direction: column;
+                text-align: center;
+            }
+            .title-block, .title-block p {
+                text-align: center;
+            }
+            .commander-section {
+                flex-direction: column;
+            }
+            .commander-img {
+                flex: none;
+                height: 360px;
+            }
+            .content-card {
+                padding: 35px 30px;
+            }
+            .section-title {
+                font-size: 2.2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            nav a {
+                padding: 12px 14px;
+                font-size: 0.85rem;
+            }
+            .c-name {
+                font-size: 2rem;
+            }
+            h2 {
+                font-size: 1.5rem;
+            }
+            .grid {
+                grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+                gap: 20px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .content-card {
+                padding: 25px 20px;
+            }
+            .commander-details {
+                padding: 30px 20px;
+            }
+            .contact-bunker {
+                flex-direction: column;
+                padding: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container header-flex">
+        <div class="branding-block">
+            <a href="https://cbcc.edu.bd/">
+                <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="CBCC College Crest">
+            </a>
+            <a href="https://bncc.info/">
+                <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Insignia">
+            </a>
+        </div>
+        <div class="title-block">
+            <h1>CBCC BNCC PLATOON</h1>
+            <p>ARMY WING | DISCIPLINE · VALOUR · SERVICE</p>
+        </div>
+    </div>
+</header>
+
+<nav>
+    <div class="container nav-flex">
+        <a href="index.html"><i class="fas fa-home me-1"></i> Home</a>
+        <a href="about.html" class="active"><i class="fas fa-info-circle me-1"></i> About Us</a>
+        <a href="activities.html"><i class="fas fa-bolt me-1"></i> Activities</a>
+        <a href="cadets.html"><i class="fas fa-user-graduate me-1"></i> Cadets</a>
+        <a href="gallery.html"><i class="fas fa-images me-1"></i> Gallery</a>
+        <a href="contact.html"><i class="fas fa-envelope me-1"></i> Contact</a>
+        <a href="become-cadet.html"><i class="fas fa-user-plus me-1"></i> Apply Now</a>
+    </div>
+</nav>
+
+<main>
+    <div class="container">
+        <div class="content-card">
+            <div class="section-title">
+                <i class="fas fa-shield-alt" style="color: var(--accent); margin-right: 12px;"></i> 
+                PLATOON COMMAND & HERITAGE
+            </div>
+
+            <!-- COMMANDER SPOTLIGHT -->
+            <div class="commander-section">
+                <div class="commander-img">
+                    <img src="https://i.ibb.co/dsqhP9LH/file-1-3.jpg" alt="Platoon Commander Uzzjal Kanti Dev">
+                </div>
+                <div class="commander-details">
+                    <h3><i class="fas fa-star-of-life"></i> Platoon Commander</h3>
+                    <div class="c-name">উজ্জ্বল কান্তি দেব <br> Uzzjal Kanti Dev</div>
+                    <div class="c-rank">Professor Under Officer (PUO) | Commanding Officer, CBCC BNCC Mixed Platoon</div>
+                    <div class="c-bio">
+                        Visionary leader & military educator with over 5 years of BNCC command experience. Commissioned to establish 
+                        the Cox's Bazar City College Platoon in 2020. Awarded for outstanding parade performance and cadet development. 
+                        Under his leadership, the platoon has earned battalion-level commendations and produced exceptional young leaders.
+                    </div>
+                    <div class="c-socials">
+                        <a href="https://www.facebook.com/ujjal.dev.318464" target="_blank" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://www.linkedin.com/in/ujjal-dev-b08bb71a0" target="_blank" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.facebook.com/cbcc.bncc" target="_blank" aria-label="BNCC Official Page"><i class="fab fa-facebook-square"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Platoon introduction -->
+            <h2>🇧🇩 আমাদের প্লাটুন — Our Mission & Ethos</h2>
+            <p>
+                কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC)-এর একটি অগ্রগামী শাখা। 
+                শৃঙ্খলা, নেতৃত্বের গুণাবলি, শারীরিক ও মানসিক সক্ষমতা এবং দেশপ্রেমের чеতনায় ক্যাডেটদের গড়ে তোলাই আমাদের মূল লক্ষ্য। 
+                "Service and Sacrifice" এই ব্রতকে ধারণ করে প্লাটুনটি অসামান্য প্যারেড দক্ষতা, সামাজিক সচেতনতা এবং যুদ্ধসদৃশ প্রশিক্ষণের জন্য পরিচিত।
+            </p>
+
+            <div class="stat-highlight">
+                <i class="fas fa-flag-checkered" style="margin-right: 12px; color: var(--m-gold);"></i> 
+                প্রতিষ্ঠা লাভ: ৩ সেপ্টেম্বর ২০২০ | কার্যক্রম শুরু: ১৮ নভেম্বর ২০২০ | অধিভুক্তি: ১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট
+            </div>
+
+            <h2>📜 প্রতিষ্ঠার ইতিহাস & কমান্ড স্ট্রাকচার</h2>
+            <p>
+                কক্সবাজার সিটি কলেজ BNCC মিশ্র প্লাটুন ২০২০ সালের সেপ্টেম্বরে অনুমোদন লাভ করে এবং উজ্জ্বল কান্তি দেব (প্রробнее আন্ডার অফিসার)-এর নেতৃত্বে ১৮ নভেম্বর ২০২০ থেকে আনুষ্ঠানিক যাত্রা শুরু করে। 
+                প্লাটুনটি 15 BNCC ব্যাটালিয়ন ও কর্ণফুলী রেজিমেন্টের অধীনে পরিচালিত। এ পর্যন্ত ২০০+ ক্যাডেট সফলভাবে প্রশিক্ষণ সম্পন্ন করেছে, যাদের অনেকেই সশস্ত্র বাহিনী ও বিভিন্ন পেশায় গুরুত্বপূর্ণ ভূমিকা রাখছেন।
+            </p>
+
+            <h3>🎯 প্রশিক্ষণ ও কার্যক্রমের ভিত্তি</h3>
+            <p>
+                সাপ্তাহিক ড্রিল, অস্ত্র প্রশিক্ষণ, ম্যাপ রিডিং, ফিল্ড ক্রাফট, কমিউনিটি সার্ভিস ও সেমুলেশন যুদ্ধ কৌশল — আমাদের প্রশিক্ষণ মডিউল প্রতিটি ক্যাডেটকে আত্মবিশ্বাসী ও দেশপ্রেমিক নাগরিকে পরিণত করে। 
+                প্রতি বছর ব্যাটালিয়ন লেভেল প্যারেড প্রতিযোগিতায় প্লাটুন শীর্ষ স্থান অধিকার করে আসছে।
+            </p>
+
+            <h2>🏆 সাফল্য ও স্বীকৃতি</h2>
+            <p>
+                আঞ্চলিক ও জাতীয় পর্যায়ের প্যারেড, ড্রিল প্রতিযোগিতা ও ক্রীড়া ইভেন্টে প্লাটুন একাধিকবার চ্যাম্পিয়ন হয়েছে। ২০২২ সালে সেরা প্লাটুন ব্যানার অর্জন এবং ১৫ ব্যাটালিয়নের শ্রেষ্ঠ কমান্ডার পুরস্কার লাভ করে আমাদের প্লাটুন। 
+                তাছাড়া রক্তদান শিবির, বন্যার্তদের ত্রাণ বিতরণ ও পরিবেশ সচেতনতামূলক কার্যক্রমে সক্রিয় অংশগ্রহণের জন্য জেলা প্রশাসনের কাছ থেকে প্রশংসা পেয়েছি।
+            </p>
+
+            <!-- Gallery section - Modern grid layout -->
+            <h2><i class="fas fa-images" style="margin-right: 12px; color: var(--accent);"></i> গ্যালারি — BNCC ইন অ্যাকশন</h2>
+            <div class="grid">
+                <div class="grid-item"><img src="https://i.ibb.co/p6mQ131Y/474095965-3789258914720632-3576579716385952271-n.jpg" alt="BNCC Cadets Parade"></div>
+                <div class="grid-item"><img src="https://i.ibb.co/qYq0Gs6h/473764249-3785586525087871-4631891697018064229-n.jpg" alt="Field Training Exercise"></div>
+                <div class="grid-item"><img src="https://i.ibb.co/WW2RP573/166008137-2759843050995562-1959870970963589758-n.jpg" alt="Ceremonial Guard"></div>
+                <div class="grid-item"><img src="https://i.ibb.co/xWR9QVs/164742971-2759842977662236-6584260800543282219-n.jpg" alt="Weapon Handling Session"></div>
+                <div class="grid-item"><img src="https://i.ibb.co/5WXFTsyS/162875523-2759842900995577-4951284382270833263-n.jpg" alt="Community Service"></div>
+                <div class="grid-item"><img src="https://i.ibb.co/gLFKTnVJ/153958730-2740905562889311-1628925407416791542-n.jpg" alt="Annual BNCC Summit"></div>
+            </div>
+
+            <h2>🌿 সমাজসেবা & মানবিক মূল্যবোধ</h2>
+            <p>
+                কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন শুধু ক্যাডেট প্রশিক্ষণেই সীমাবদ্ধ নয়, বরং সমাজের প্রতি দায়বদ্ধতা থেকেই প্রতিবছর রক্তদান শিবির, বৃক্ষরোপণ অভিযান, বন্যা ও দুর্যোগে ত্রাণ তহবিল সংগ্রহ এবং সচেতনতামূলক সেমিনার আয়োজন করে। 
+                করোনা মহামারি ও রোহিঙ্গা সহায়তা কার্যক্রমেও সক্রিয় ভূমিকা রেখেছে আমাদের ক্যাডেটরা।
+            </p>
+
+            <h3>📈 ক্যাডেট নিয়োগ ও ভবিষ্যৎ পরিকল্পনা</h3>
+            <p>
+                প্রতিবছর গড়ে ১৫০+ শিক্ষার্থী আবেদন করে, যার মধ্যে মেধা ও শারীরিক যোগ্যতার ভিত্তিতে ৮০-১০০ জন নির্বাচিত হয়। ভবিষ্যতে প্লাটুনের লক্ষ্য আন্তঃব্যাটালিয়ন এক্সচেঞ্জ প্রোগ্রাম, সশস্ত্র বাহিনী সফর এবং বিশেষায়িত নেতৃত্ব প্রশিক্ষণ চালু করা। 
+                BNCC থেকে উৎকীর্ণ ক্যাডেটদের জন্য ক্যারিয়ার গাইডেন্স ও মেন্টরশিপ নেটওয়ার্ক গড়ে তোলা হচ্ছে।
+            </p>
+
+            <!-- MODERN CONTACT BUNKER -->
+            <div class="contact-bunker">
+                <div class="contact-block">
+                    <h4><i class="fas fa-map-marker-alt"></i> কমান্ড ক্যাম্পাস</h4>
+                    <p><i class="fas fa-university"></i> কক্সবাজার সিটি কলেজ, BNCC <br>কক্সবাজার সদর, চট্টগ্রাম – ৪৭০০</p>
+                    <p><i class="fas fa-envelope"></i> (অফিসিয়াল)</p>
+                    <p><i class="fas fa-phone-alt"></i> প্লাটুন হটলাইন: +880 1812-345678</p>
+                </div>
+                <div class="contact-block">
+                    <h4><i class="fas fa-clock"></i> অফিস সময়</h4>
+                    <p><i class="fas fa-calendar-alt"></i> ক্যাডেট ট্রেনিং (সাপ্তাহিক সেশন)</p>
+                    <p><i class="fab fa-facebook-messenger"></i> সরাসরি যোগাযোগ: <a href="https://www.facebook.com/cbcc.bncc" target="_blank">fb.com/cbcc.bncc</a></p>
+                </div>
+            </div>
+
+            <p style="margin-top: 35px; font-style: italic; border-top: 1px solid var(--border-glass); padding-top: 25px; color: var(--m-gold);">
+                <i class="fas fa-dharmachakra" style="color: var(--m-red);"></i> <strong>“শৃঙ্খলাই শক্তি, দেশপ্রেমেই অস্তিত্ব”</strong> — কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন দেশের জন্য গঠনমূলক নেতৃত্ব তৈরি করতে প্রতিশ্রুতিবদ্ধ।
+            </p>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <div class="container footer-grid">
+        <div class="footer-col">
+            <h4>⚡ Quick Access</h4>
+            <a href="about.html"><i class="fas fa-chevron-right" style="font-size: 10px; margin-right: 5px;"></i> Mission & Vision</a>
+            <a href="activities.html"><i class="fas fa-chevron-right" style="font-size: 10px; margin-right: 5px;"></i> Training Schedule</a>
+            <a href="become-cadet.html"><i class="fas fa-chevron-right" style="font-size: 10px; margin-right: 5px;"></i> Recruitment Drive</a>
+        </div>
+        <div class="footer-col">
+            <h4>🎖️ Command Channel</h4>
+            <a href="#"><i class="fas fa-link style="margin-right: 5px;"></i> BNCC Headquarters</a>
+            <a href="#"><i class="fas fa-link style="margin-right: 5px;"></i> Karnaphuli Regiment</a>
+            <a href="#"><i class="fas fa-link style="margin-right: 5px;"></i> Directorate of Cadet Corps</a>
+        </div>
+        <div class="footer-col">
+            <h4>📡 Engage</h4>
+            <a href="https://www.facebook.com/cbcc.bncc" target="_blank"><i class="fab fa-facebook" style="margin-right: 5px;"></i> Official FB Page</a>
+            <a href="#"><i class="fas fa-user-shield" style="margin-right: 5px;"></i> Cadet Portal</a>
+            <a href="contact.html"><i class="fas fa-headset" style="margin-right: 5px;"></i> Regimental Support</a>
+        </div>
+    </div>
+    <div class="copy">
+        &copy; 2026 Cox's Bazar City College BNCC Platoon — Mixed Army Wing. সর্বস্বত্ব সংরক্ষিত। | <span>Built with Discipline.</span>
+    </div>
+</footer>
+
+</body>
+</html>

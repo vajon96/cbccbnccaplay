@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Download, Loader2, Sparkles, AlertTriangle, FileText, ExternalLink, Eye } from "lucide-react";
-import { db, collection, getDocs, query, where, limit, onSnapshot } from "../../firebase";
+import { db, collection, query, where, onSnapshot, reportFirestoreListenerError, OperationType } from "../../firebase";
 import { downloadElementAsPdf, getSafePdfUrl } from "../../lib/pdfUtils";
 import { loadCircularPdf, downloadCircularPdf } from "../../lib/circularPdfStorage";
 
@@ -42,7 +42,7 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
           setLoading(false);
         }
       }, (err) => {
-        console.error("Real-time settings fetch error:", err);
+        reportFirestoreListenerError(err, OperationType.LIST, "circular_settings");
       });
 
       // 2. Listen to active published circulars (and sort on client to load newest one reliably)
@@ -80,7 +80,7 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
         }
         setLoading(false);
       }, (err) => {
-        console.error("Real-time circular fetch error:", err);
+        reportFirestoreListenerError(err, OperationType.LIST, "circulars");
         setErrorMsg("সার্কুলার তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
         setLoading(false);
       });
@@ -119,14 +119,17 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
     }
   }, [circular?.id, circular?.fileType]);
 
+  const [downloadError, setDownloadError] = useState("");
+
   const handleDownloadPDF = async () => {
+    setDownloadError("");
     if (circular?.fileType === "pdf") {
       setIsDownloading(true);
       try {
         await downloadCircularPdf(circular, "BNCC_Official");
       } catch (e) {
         console.error(e);
-        alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
+        setDownloadError("PDF ডাউনলোড ব্যর্থ হয়েছে।");
       } finally {
         setIsDownloading(false);
       }
@@ -143,7 +146,7 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
       );
     } catch (e) {
       console.error(e);
-      alert("PDF ডাউনলোড ব্যর্থ হয়েছে। পুনরায় চেষ্টা করুন।");
+      setDownloadError("PDF ডাউনলোড ব্যর্থ হয়েছে। পুনরায় চেষ্টা করুন।");
     } finally {
       setIsDownloading(false);
     }
@@ -161,6 +164,11 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
 
       {/* Modal Card */}
       <div className="relative w-full max-w-5xl bg-white rounded-[2.5rem] p-8 shadow-2xl flex flex-col max-h-[92vh] border border-slate-100 z-10 text-black">
+        {downloadError && (
+          <div role="alert" className="mb-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
+            {downloadError}
+          </div>
+        )}
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between border-b pb-4 mb-4">
           <div className="flex items-center gap-2.5 text-primary">
@@ -255,7 +263,7 @@ export function CircularViewerModal({ isOpen, onClose }: CircularViewerModalProp
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
                       <p className="text-sm font-bold">অফিসিয়াল PDF সার্কুলার লোড হচ্ছে...</p>
                     </div>
-                  ) : pdfDataUrl ? (
+                  ) : (pdfDataUrl && getSafePdfUrl(pdfDataUrl)) ? (
                     <iframe
                       src={getSafePdfUrl(pdfDataUrl)}
                       className="w-full h-[72vh] rounded-xl shadow-inner border border-slate-300 bg-white"

@@ -1,0 +1,281 @@
+:root {
+            --bncc-green: #006400; /* Dark Green */
+            --bncc-khaki: #b5ac8f; /* Khaki/Tan */
+            --primary-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: var(--primary-font);
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+
+        /* --- Header Styling --- */
+        header {
+            background-color: var(--bncc-green);
+            padding: 10px 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-container img {
+            height: 50px;
+            margin-right: 15px;
+            background-color: white;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        .download-btn {
+            background-color: var(--bncc-khaki);
+            color: var(--bncc-green);
+            padding: 10px 15px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .download-btn:hover {
+            background-color: #9d9685;
+        }
+        
+        /* --- Main Content Layout --- */
+        main {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        h2 {
+            color: var(--bncc-green);
+            border-bottom: 2px solid var(--bncc-khaki);
+            padding-bottom: 5px;
+            margin-bottom: 25px;
+        }
+
+        .section-divider {
+            border: 0;
+            height: 1px;
+            background-image: linear-gradient(to right, rgba(0, 0, 0, 0), var(--bncc-khaki), rgba(0, 0, 0, 0));
+            margin: 50px 0;
+        }
+
+        /* --- Profile Grid Styling --- */
+        .profile-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .profile-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            padding: 15px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .profile-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .profile-photo {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .profile-card h3 {
+            margin: 5px 0;
+            color: var(--bncc-green);
+            font-size: 1.1em;
+        }
+
+        .profile-card p {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .view-id-btn {
+            display: inline-block;
+            background-color: var(--bncc-green);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: background-color 0.3s;
+        }
+
+        .view-id-btn:hover {
+            background-color: #004d00;
+        }
+
+
+        /* --- ID Card Holder/Grid Styling --- */
+        .id-card-holder {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        /* --- Individual ID Card Styling --- */
+        .id-card {
+            width: 100%;
+            max-width: 400px; /* Standard ID card width */
+            height: 250px; /* Standard ID card height */
+            background-color: white;
+            border: 3px solid var(--bncc-green);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+            background-image: url('[URL_FOR_HH.PNG]'); /* **REPLACE THIS** */
+            background-size: 80%;
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-blend-mode: soft-light;
+        }
+
+        /* Ensure content is readable over background */
+        .id-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.7); /* Subtle white overlay */
+            z-index: 1;
+            border-radius: 9px;
+        }
+
+        .id-card > * {
+            position: relative;
+            z-index: 2;
+        }
+
+
+        .id-card-header {
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid var(--bncc-khaki);
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+
+        .id-logo {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+
+        .title-block h4 {
+            margin: 0;
+            font-size: 1em;
+            color: var(--bncc-green);
+            font-weight: 700;
+        }
+
+        .title-block h5 {
+            margin: 0;
+            font-size: 0.8em;
+            color: #555;
+            font-weight: normal;
+        }
+
+        .id-card-body {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+
+        .photo-info {
+            flex-shrink: 0;
+            text-align: center;
+        }
+
+        .id-photo {
+            width: 80px;
+            height: 100px;
+            object-fit: cover;
+            border: 2px solid var(--bncc-green);
+            border-radius: 4px;
+        }
+
+        .blood-group {
+            font-weight: bold;
+            color: darkred;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+        .personal-info {
+            flex-grow: 1;
+        }
+
+        .cadet-name {
+            font-size: 1.3em;
+            color: var(--bncc-green);
+            margin: 0 0 5px 0;
+            text-transform: uppercase;
+        }
+
+        .personal-info p {
+            margin: 2px 0;
+            font-size: 0.85em;
+            color: #444;
+        }
+
+        .id-card-footer {
+            position: absolute;
+            bottom: 10px;
+            right: 15px;
+            left: 15px;
+            border-top: 1px dashed #ccc;
+            padding-top: 5px;
+            text-align: right;
+        }
+
+        .authorized-sign {
+            margin: 0;
+            font-size: 0.7em;
+            color: var(--bncc-green);
+            font-style: italic;
+        }
+
+        /* --- Media Queries for Responsiveness --- */
+        @media (max-width: 768px) {
+            .header-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .download-btn {
+                width: 100%;
+                text-align: center;
+            }
+            .id-card-holder {
+                grid-template-columns: 1fr;
+            }
+        }

@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gallery - Cox's Bazar City College BNCC Platoon</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Modern Reset and Typography */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        
+        body {
+            background-color: #0b111e; /* Deep Premium Dark/Navy background */
+            color: #e2e8f0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        /* Color Palette Constants */
+        :root {
+            --accent: #3b82f6; /* Electric Blue */
+            --accent-glow: rgba(59, 130, 246, 0.5);
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --text-muted: #94a3b8;
+            --glass: rgba(15, 23, 42, 0.6);
+            --border-glass: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Header / Logo section */
+        header {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 15px 0;
+            border-bottom: 1px solid var(--border-glass);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 0 25px;
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .logo-container img {
+            height: 55px;
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.1));
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .logo-container img:hover {
+            transform: scale(1.08) translateY(-2px);
+            filter: drop-shadow(0 0 12px var(--accent));
+        }
+        
+        .marquee-container {
+            flex: 1;
+            margin-left: 40px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px 20px;
+            border-radius: 50px;
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+        }
+        
+        marquee {
+            color: #3b82f6;
+            font-weight: 500;
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Modern Floating Navigation */
+        nav {
+            background: rgba(20, 29, 47, 0.6);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border-glass);
+            margin-bottom: 0;
+        }
+        
+        .nav-container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        
+        .nav-menu {
+            display: flex;
+            list-style: none;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .nav-menu a {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 16px 20px;
+            display: block;
+            transition: soccer 0.3s ease;
+            font-weight: 500;
+            font-size: 0.95rem;
+            letter-spacing: 0.3px;
+            position: relative;
+        }
+        
+        .nav-menu a:hover {
+            color: #ffffff;
+        }
+        
+        .nav-menu a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        .nav-menu a:hover::after, .nav-menu a.active::after {
+            width: 60%;
+        }
+
+        .nav-menu a.active {
+            color: #ffffff;
+            font-weight: 600;
+        }
+        
+        /* Premium Cinematic Banner */
+        .banner {
+            background: linear-gradient(180deg, rgba(11, 17, 30, 0.4) 0%, #0b111e 100%), 
+                        linear-gradient(rgba(11, 17, 30, 0.6), rgba(11, 17, 30, 0.85)), 
+                        url('https://images.unsplash.com/photo-1518837695005-2083093ee35b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80');
+            background-size: cover;
+            background-position: center center;
+            color: white;
+            text-align: center;
+            padding: 100px 20px 60px 20px;
+        }
+        
+        .banner h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            background: linear-gradient(to right, #ffffff, #93c5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .banner p {
+            font-size: 1.15rem;
+            max-width: 700px;
+            margin: 0 auto;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+        
+        /* Premium Gallery Architecture */
+        .gallery-container {
+            max-width: 1300px;
+            margin: 0 auto 80px;
+            padding: 0 25px;
+        }
+        
+        .gallery-header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        
+        .gallery-header h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 2.5rem;
+            letter-spacing: 1px;
+            color: #ffffff;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .gallery-header p {
+            font-size: 1rem;
+            color: var(--text-muted);
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+            gap: 28px;
+        }
+        
+        .gallery-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 16px;
+            background-color: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            height: 260px;
+        }
+        
+        .gallery-item:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(59, 130, 246, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 25px rgba(59, 130, 246, 0.15);
+        }
+        
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .gallery-item:hover img {
+            transform: scale(1.08);
+            filter: brightness(0.75) contrast(1.05);
+        }
+        
+        .gallery-caption {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.95) 80%);
+            color: #ffffff;
+            padding: 35px 20px 20px 20px;
+            font-weight: 600;
+            font-size: 1.05rem;
+            letter-spacing: 0.3px;
+            transform: translateY(10px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .gallery-caption::after {
+            content: '\f06e';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.9rem;
+            background: var(--accent);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+        
+        .gallery-item:hover .gallery-caption {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        /* Modern Clean Footer */
+        footer {
+            background: #070b14;
+            color: var(--text-muted);
+            padding: 60px 0 30px;
+            border-top: 1px solid var(--border-glass);
+            text-align: center;
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .platoon-commander {
+            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.01);
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid var(--border-glass);
+            display: inline-block;
+            backdrop-filter: blur(5px);
+        }
+        
+        .platoon-commander h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .platoon-commander img {
+            border: 3px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            margin-bottom: 15px;
+            padding: 5px;
+            background: #0b111e;
+            transition: all 0.4s ease;
+        }
+        
+        .platoon-commander img:hover {
+            transform: rotate(360deg);
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        
+        .platoon-commander h5 {
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 1.2rem;
+            margin-bottom: 4px;
+        }
+        
+        .platoon-commander h6 {
+            font-weight: 400;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 0;
+        }
+        
+        .copyright-text {
+            font-size: 0.85rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.03);
+            padding-top: 25px;
+        }
+
+        .copyright-text span {
+            color: #ffffff;
+            font-weight: 500;
+        }
+        
+        /* Modernized Elegant Modal Styling */
+        .modal-content {
+            background-color: rgba(15, 23, 42, 0.85) !important;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 24px;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            padding: 20px 30px;
+        }
+
+        .modal-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: white;
+        }
+
+        .btn-close {
+            filter: invert(1) grayscale(1) brightness(2);
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 20px;
+            background: #070b14;
+        }
+
+        .modal-body img {
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        
+        /* Responsive Framework Adjustments */
+        @media (max-width: 992px) {
+            .header-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .marquee-container {
+                margin-left: 0;
+                width: 100%;
+            }
+            .banner h2 {
+                font-size: 2.6rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .nav-menu {
+                flex-direction: row;
+                justify-content: center;
+            }
+            .nav-menu a {
+                padding: 12px 12px;
+                font-size: 0.85rem;
+            }
+            .banner {
+                padding: 60px 20px 40px;
+            }
+            .banner h2 {
+                font-size: 2rem;
+            }
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo-container">
+                <a href="https://cbcc.edu.bd/">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="Cox's Bazar City College Logo">
+                </a>
+                <a href="https://bncc.info/">
+                    <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                </a>
+            </div>
+            <div class="marquee-container">
+                <marquee behavior="scroll" scrollamount="4" direction="left" onmouseover="this.stop();" onmouseout="this.start();">
+                    <span>Cox's Bazar City College BNCC Platoon — Developing Discipline, Leadership, and Patriotism</span>
+                </marquee>
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <div class="nav-container">
+            <ul class="nav-menu">
+                <li><a href="index.html"><i class="fas fa-home me-2"></i>Home</a></li>
+                <li><a href="about.html"><i class="fas fa-info-circle me-2"></i>About Us</a></li>
+                <li><a href="activities.html"><i class="fas fa-bolt me-2"></i>Activities</a></li>
+                <li><a href="cadets.html"><i class="fas fa-user-graduate me-2"></i>Cadets</a></li>
+                <li><a href="gallery.html" class="active"><i class="fas fa-images me-2"></i>Gallery</a></li>
+                <li><a href="contact.html"><i class="fas fa-envelope me-2"></i>Contact</a></li>
+                <li><a href="hall-of-incharges.html"><i class="fas fa-award me-2"></i>In-Charges</a></li>
+                <li><a href="how-to-become-cadet.html"><i class="fas fa-question-circle me-2"></i>Requirements</a></li>
+                <li><a href="become-cadet.html"><i class="fas fa-user-plus me-2"></i>Enroll Now</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="banner">
+        <h2>Photo Gallery: Army Wing Excellence</h2>
+        <p>A collection of memorable moments from our BNCC training, activities, and ceremonial events.</p>
+    </div>
+
+     <main>
+        <section id="gallery" class="gallery-container">
+            <div class="gallery-header">
+                <h2>Our Glorious Moments</h2>
+                <p>Scroll through our journey of discipline, commitment, and national service.</p>
+            </div>
+            
+            <div class="gallery-grid">
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/YcSx9wt/IMG-20250119-WA0021.jpg', 'Training Session 2025')">
+                    <img src="https://i.ibb.co/YcSx9wt/IMG-20250119-WA0021.jpg" alt="BNCC Training Session">
+                    <div class="gallery-caption">Training Session 2025</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/Pw4Hs7f/IMG-20241221-WA0063.jpg', 'College Event 2024')">
+                    <img src="https://i.ibb.co/Pw4Hs7f/IMG-20241221-WA0063.jpg" alt="BNCC Event">
+                    <div class="gallery-caption">College Event 2024</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/1M89wXb/IMG-20250119-WA0014.jpg', 'Cadet Training')">
+                    <img src="https://i.ibb.co/1M89wXb/IMG-20250119-WA0014.jpg" alt="Cadet Training">
+                    <div class="gallery-caption">Cadet Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/9WPhNvg/Whats-App-2025-01-19-21-05-45-47b48ae8.jpg', 'Award Ceremony')">
+                    <img src="https://i.ibb.co/9WPhNvg/Whats-App-2025-01-19-21-05-45-47b48ae8.jpg" alt="Award Ceremony">
+                    <div class="gallery-caption">Award Ceremony</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/jVj4jZ2/Whats-App-2025-01-24-00-22-04-72bb6761.jpg', 'BNCC Gathering')">
+                    <img src="https://i.ibb.co/jVj4jZ2/Whats-App-2025-01-24-00-22-04-72bb6761.jpg" alt="BNCC Gathering">
+                    <div class="gallery-caption">BNCC Gathering</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/CKL5dmD/IMG-20250119-WA0009.jpg', 'Drill Practice')">
+                    <img src="https://i.ibb.co/CKL5dmD/IMG-20250119-WA0009.jpg" alt="Drill Practice">
+                    <div class="gallery-caption">Drill Practice</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/1rdjrS1/466834210-9322447471153316-3097369118261751863-n.jpg', 'Ceremonial Parade')">
+                    <img src="https://i.ibb.co/1rdjrS1/466834210-9322447471153316-3097369118261751863-n.jpg" alt="Ceremonial Parade">
+                    <div class="gallery-caption">Ceremonial Parade</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/jv3sbb8/IMG-20241221-WA0047.jpg', 'Field Training')">
+                    <img src="https://i.ibb.co/jv3sbb8/IMG-20241221-WA0047.jpg" alt="Field Training">
+                    <div class="gallery-caption">Field Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/TrKTwQX/IMG-20241221-WA0068.jpg', 'College Event')">
+                    <img src="https://i.ibb.co/TrKTwQX/IMG-20241221-WA0068.jpg" alt="College Event">
+                    <div class="gallery-caption">College Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/wyQChQR/Whats-App-2025-01-03-17-32-25-fc1df1b5.jpg', 'Group Photo')">
+                    <img src="https://i.ibb.co/wyQChQR/Whats-App-2025-01-03-17-32-25-fc1df1b5.jpg" alt="Group Photo">
+                    <div class="gallery-caption">Group Photo</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/DLhXzB3/472401311-1744520613065011-7244934293353107793-n.jpg', 'BNCC Activity')">
+                    <img src="https://i.ibb.co/DLhXzB3/472401311-1744520613065011-7244934293353107793-n.jpg" alt="BNCC Activity">
+                    <div class="gallery-caption">BNCC Activity</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/JmdS0b7/IMG-20241221-WA0042.jpg', 'Training Session')">
+                    <img src="https://i.ibb.co/JmdS0b7/IMG-20241221-WA0042.jpg" alt="Training Session">
+                    <div class="gallery-caption">Training Session</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/kXthJZQ/Whats-App-2024-12-30-15-21-59-84c91a1b.jpg', 'Cadet Meeting')">
+                    <img src="https://i.ibb.co/kXthJZQ/Whats-App-2024-12-30-15-21-59-84c91a1b.jpg" alt="Cadet Meeting">
+                    <div class="gallery-caption">Cadet Meeting</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/smvBkQX/IMG-20250119-WA0006.jpg', 'BNCC Drill')">
+                    <img src="https://i.ibb.co/smvBkQX/IMG-20250119-WA0006.jpg" alt="BNCC Drill">
+                    <div class="gallery-caption">BNCC Drill</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/pyxG3N0/IMG-20250101-WA0006.jpg', 'New Year Event')">
+                    <img src="https://i.ibb.co/pyxG3N0/IMG-20250101-WA0006.jpg" alt="New Year Event">
+                    <div class="gallery-caption">New Year Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/yhn875W/Whats-App-2025-01-03-17-29-59-684287ba.jpg', 'Cadet Gathering')">
+                    <img src="https://i.ibb.co/yhn875W/Whats-App-2025-01-03-17-29-59-684287ba.jpg" alt="Cadet Gathering">
+                    <div class="gallery-caption">Cadet Gathering</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/q1Pxf5g/IMG-20250119-WA0020.jpg', 'Leadership Training')">
+                    <img src="https://i.ibb.co/q1Pxf5g/IMG-20250119-WA0020.jpg" alt="Leadership Training">
+                    <div class="gallery-caption">Leadership Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/C7077KW/IMG-20241013-WA0113.jpg', 'October Event')">
+                    <img src="https://i.ibb.co/C7077KW/IMG-20241013-WA0113.jpg" alt="October Event">
+                    <div class="gallery-caption">October Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/Ry7DH67/IMG-20250121-WA0036.jpg', 'January Activity')">
+                    <img src="https://i.ibb.co/Ry7DH67/IMG-20250121-WA0036.jpg" alt="January Activity">
+                    <div class="gallery-caption">January Activity</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/mBHQ1gr/IMG-20250121-WA0010.jpg', 'Cadet Photo')">
+                    <img src="https://i.ibb.co/mBHQ1gr/IMG-20250121-WA0010.jpg" alt="Cadet Photo">
+                    <div class="gallery-caption">Cadet Photo</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/jHH5Jzp/IMG-20250121-WA0011.jpg', 'Team Building')">
+                    <img src="https://i.ibb.co/jHH5Jzp/IMG-20250121-WA0011.jpg" alt="Team Building">
+                    <div class="gallery-caption">Team Building</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/44THSF0/473256205-1346558109706964-8856223774951486692-n.jpg', 'BNCC Event')">
+                    <img src="https://i.ibb.co/44THSF0/473256205-1346558109706964-8856223774951486692-n.jpg" alt="BNCC Event">
+                    <div class="gallery-caption">BNCC Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/HhLrBnm/IMG-20250121-WA0044.jpg', 'Cadet Activity')">
+                    <img src="https://i.ibb.co/HhLrBnm/IMG-20250121-WA0044.jpg" alt="Cadet Activity">
+                    <div class="gallery-caption">Cadet Activity</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/tcRCkCj/IMG-20250121-WA0007.jpg', 'Training Exercise')">
+                    <img src="https://i.ibb.co/tcRCkCj/IMG-20250121-WA0007.jpg" alt="Training Exercise">
+                    <div class="gallery-caption">Training Exercise</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/zrC8XW2/IMG-20250121-WA0043.jpg', 'Group Training')">
+                    <img src="https://i.ibb.co/zrC8XW2/IMG-20250121-WA0043.jpg" alt="Group Training">
+                    <div class="gallery-caption">Group Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/zNtKj6S/IMG-20250119-WA0007.jpg', 'Drill Practice')">
+                    <img src="https://i.ibb.co/zNtKj6S/IMG-20250119-WA0007.jpg" alt="Drill Practice">
+                    <div class="gallery-caption">Drill Practice</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/PZ8s5z4/IMG-20250101-WA0006.jpg', 'New Year Celebration')">
+                    <img src="https://i.ibb.co/PZ8s5z4/IMG-20250101-WA0006.jpg" alt="New Year Celebration">
+                    <div class="gallery-caption">New Year Celebration</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/k8rqBxh/IMG-20250119-WA0012.jpg', 'Cadet Session')">
+                    <img src="https://i.ibb.co/k8rqBxh/IMG-20250119-WA0012.jpg" alt="Cadet Session">
+                    <div class="gallery-caption">Cadet Session</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/mT8MCNS/IMG-20250119-WA0013.jpg', 'BNCC Meeting')">
+                    <img src="https://i.ibb.co/mT8MCNS/IMG-20250119-WA0013.jpg" alt="BNCC Meeting">
+                    <div class="gallery-caption">BNCC Meeting</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/GWmwkdD/IMG-20250119-WA0015.jpg', 'Leadership Session')">
+                    <img src="https://i.ibb.co/GWmwkdD/IMG-20250119-WA0015.jpg" alt="Leadership Session">
+                    <div class="gallery-caption">Leadership Session</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/3RHS7j5/IMG-20241221-WA0067.jpg', 'December Event')">
+                    <img src="https://i.ibb.co/3RHS7j5/IMG-20241221-WA0067.jpg" alt="December Event">
+                    <div class="gallery-caption">December Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/xLBy2w9/IMG-20250121-WA0002.jpg', 'January Gathering')">
+                    <img src="https://i.ibb.co/xLBy2w9/IMG-20250121-WA0002.jpg" alt="January Gathering">
+                    <div class="gallery-caption">January Gathering</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/jPzV72D3/471246890-901807185458644-1408957239912321624-n.jpg', 'BNCC Training')">
+                    <img src="https://i.ibb.co/jPzV72D3/471246890-901807185458644-1408957239912321624-n.jpg" alt="BNCC Training">
+                    <div class="gallery-caption">BNCC Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/236FrGwx/470185826-1324979241864851-8657314282944911171-n.jpg', 'Cadet Program')">
+                    <img src="https://i.ibb.co/236FrGwx/470185826-1324979241864851-8657314282944911171-n.jpg" alt="Cadet Program">
+                    <div class="gallery-caption">Cadet Program</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/tMKVj3pk/470659375-1324971571865618-5099245469298781692-n.jpg', 'Team Activity')">
+                    <img src="https://i.ibb.co/tMKVj3pk/470659375-1324971571865618-5099245469298781692-n.jpg" alt="Team Activity">
+                    <div class="gallery-caption">Team Activity</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/5W8mPVJJ/473671779-3785586558421201-1944493533723569687-n.jpg', 'BNCC Ceremony')">
+                    <img src="https://i.ibb.co/5W8mPVJJ/473671779-3785586558421201-1944493533723569687-n.jpg" alt="BNCC Ceremony">
+                    <div class="gallery-caption">BNCC Ceremony</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/4nYK27vh/162965475-2759852774327923-3438455921616070028-n.jpg', 'Special Event')">
+                    <img src="https://i.ibb.co/4nYK27vh/162965475-2759852774327923-3438455921616070028-n.jpg" alt="Special Event">
+                    <div class="gallery-caption">Special Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/Qj7YzhGJ/153506234-2740905646222636-6088812475306888865-n.jpg', 'Cadet Ceremony')">
+                    <img src="https://i.ibb.co/Qj7YzhGJ/153506234-2740905646222636-6088812475306888865-n.jpg" alt="Cadet Ceremony">
+                    <div class="gallery-caption">Cadet Ceremony</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/DgPGyqXX/370510302-1657595424726405-2810851485614919590-n.jpg', 'BNCC Parade')">
+                    <img src="https://i.ibb.co/DgPGyqXX/370510302-1657595424726405-2810851485614919590-n.jpg" alt="BNCC Parade">
+                    <div class="gallery-caption">BNCC Parade</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/rKRNq4DY/370486236-1657595404726407-8951668422917801991-n.jpg', 'Group Drill')">
+                    <img src="https://i.ibb.co/rKRNq4DY/370486236-1657595404726407-8951668422917801991-n.jpg" alt="Group Drill">
+                    <div class="gallery-caption">Group Drill</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/XfrjRWxs/409684973-1717557145396899-5442061481920255543-n.jpg', 'Training Program')">
+                    <img src="https://i.ibb.co/XfrjRWxs/409684973-1717557145396899-5442061481920255543-n.jpg" alt="Training Program">
+                    <div class="gallery-caption">Training Program</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/Vp2n7VxF/481082010-2457880641221703-2378256544918132978-n.jpg', 'BNCC Activity')">
+                    <img src="https://i.ibb.co/Vp2n7VxF/481082010-2457880641221703-2378256544918132978-n.jpg" alt="BNCC Activity">
+                    <div class="gallery-caption">BNCC Activity</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/xtG4d41v/409902472-1717557448730202-8327031802434868194-n.jpg', 'Cadet Training')">
+                    <img src="https://i.ibb.co/xtG4d41v/409902472-1717557448730202-8327031802434868194-n.jpg" alt="Cadet Training">
+                    <div class="gallery-caption">Cadet Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/N24dgMS4/404699229-1708520746300539-646710487895832486-n.jpg', 'Leadership Program')">
+                    <img src="https://i.ibb.co/N24dgMS4/404699229-1708520746300539-646710487895832486-n.jpg" alt="Leadership Program">
+                    <div class="gallery-caption">Leadership Program</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/7xfz2Myj/brigadiar-nahid.webp', 'Brigadier Nahid')">
+                    <img src="https://i.ibb.co/7xfz2Myj/brigadiar-nahid.webp" alt="Brigadier Nahid">
+                    <div class="gallery-caption">Brigadier Nahid</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/twvgJFFS/bncc-coxsbazar-city-college.webp', 'BNCC Coxs Bazar City College')">
+                    <img src="https://i.ibb.co/twvgJFFS/bncc-coxsbazar-city-college.webp" alt="BNCC Cox's Bazar City College">
+                    <div class="gallery-caption">BNCC Cox's Bazar City College</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/sp1JKpkM/241667351-4425702604142521-1500686145600800148-n.webp', 'BNCC Event')">
+                    <img src="https://i.ibb.co/sp1JKpkM/241667351-4425702604142521-1500686145600800148-n.webp" alt="BNCC Event">
+                    <div class="gallery-caption">BNCC Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/vCdyf8Qx/433091392-963313278832130-6890709062933146805-n.jpg', 'Group Activity')">
+                    <img src="https://i.ibb.co/vCdyf8Qx/433091392-963313278832130-6890709062933146805-n.jpg" alt="Group Activity">
+                    <div class="gallery-caption">Group Activity</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/4RzJDywT/IMG-20250101-WA0006.jpg', 'New Year 2025')">
+                    <img src="https://i.ibb.co/4RzJDywT/IMG-20250101-WA0006.jpg" alt="New Year 2025">
+                    <div class="gallery-caption">New Year 2025</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/KjYbdRMY/IMG-20250121-WA0028.jpg', 'January Event')">
+                    <img src="https://i.ibb.co/KjYbdRMY/IMG-20250121-WA0028.jpg" alt="January Event">
+                    <div class="gallery-caption">January Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/7JkZqZ5t/IMG-20241018-WA0009.jpg', 'October Training')">
+                    <img src="https://i.ibb.co/7JkZqZ5t/IMG-20241018-WA0009.jpg" alt="October Training">
+                    <div class="gallery-caption">October Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/SDpTs56n/482130856-1190857492744373-7596453970814569630-n.jpg', 'BNCC Program')">
+                    <img src="https://i.ibb.co/SDpTs56n/482130856-1190857492744373-7596453970814569630-n.jpg" alt="BNCC Program">
+                    <div class="gallery-caption">BNCC Program</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/cKSZznny/454572881-455859957448030-2833498309488894475-n.jpg', 'Cadet Session')">
+                    <img src="https://i.ibb.co/cKSZznny/454572881-455859957448030-2833498309488894475-n.jpg" alt="Cadet Session">
+                    <div class="gallery-caption">Cadet Session</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/VWNJk1mJ/405602003-1708521046300509-4679786101358839637-n.jpg', 'Training Session')">
+                    <img src="https://i.ibb.co/VWNJk1mJ/405602003-1708521046300509-4679786101358839637-n.jpg" alt="Training Session">
+                    <div class="gallery-caption">Training Session</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/6hSrc75/Whats-App-2024-10-07-20-27-29-b1875a4b.jpg', 'October Meeting')">
+                    <img src="https://i.ibb.co/6hSrc75/Whats-App-2024-10-07-20-27-29-b1875a4b.jpg" alt="October Meeting">
+                    <div class="gallery-caption">October Meeting</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co/MyN9ZW4R/Whats-App-2024-10-27-23-39-14-d33d9559.jpg', 'October Activity')">
+                    <img src="https://i.ibb.co/MyN9ZW4R/Whats-App-2024-10-27-23-39-14-d33d9559.jpg" alt="October Activity">
+                    <div class="gallery-caption">October Activity</div>
+                </div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/rGYZsb9t/485277736-987350350029368-9080257912671696410-n.jpg', 'BNCC Training Session')">
+    <img src="https://i.ibb.co.com/rGYZsb9t/485277736-987350350029368-9080257912671696410-n.jpg" alt="BNCC Training Session">
+    <div class="gallery-caption">BNCC Training Session</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/J6XvthF/486093338-1358642928498648-4232356090262174023-n-1.jpg', 'Cadet Activity')">
+    <img src="https://i.ibb.co.com/J6XvthF/486093338-1358642928498648-4232356090262174023-n-1.jpg" alt="Cadet Activity">
+    <div class="gallery-caption">Cadet Activity</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/fY1GsM5z/486161821-1430235385008613-985252085173160469-n-1.png', 'Group Training')">
+    <img src="https://i.ibb.co.com/fY1GsM5z/486161821-1430235385008613-985252085173160469-n-1.png" alt="Group Training">
+    <div class="gallery-caption">Group Training</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/jkvmq68g/486186542-511993175087509-1767831708714530016-n.jpg', 'BNCC Program')">
+    <img src="https://i.ibb.co.com/jkvmq68g/486186542-511993175087509-1767831708714530016-n.jpg" alt="BNCC Program">
+    <div class="gallery-caption">BNCC Program</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/hxcHDfWM/486293486-668438568865865-2525865602076685558-n.jpg', 'Training Exercise')">
+    <img src="https://i.ibb.co.com/hxcHDfWM/486293486-668438568865865-2525865602076685558-n.jpg" alt="Training Exercise">
+    <div class="gallery-caption">Training Exercise</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/cKvWmf70/472993212-122129142536561064-3121880477330937471-n.jpg', 'Cadet Session')">
+    <img src="https://i.ibb.co.com/cKvWmf70/472993212-122129142536561064-3121880477330937471-n.jpg" alt="Cadet Session">
+    <div class="gallery-caption">Cadet Session</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/gbDzPyp6/473079295-122130166820561064-3358033859637751416-n.jpg', 'Leadership Program')">
+    <img src="https://i.ibb.co.com/gbDzPyp6/473079295-122130166820561064-3358033859637751416-n.jpg" alt="Leadership Program">
+    <div class="gallery-caption">Leadership Program</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/YB09n7Gy/481677861-1147996896758349-6604077495935809513-n.jpg', 'BNCC Event')">
+    <img src="https://i.ibb.co.com/YB09n7Gy/481677861-1147996896758349-6604077495935809513-n.jpg" alt="BNCC Event">
+    <div class="gallery-caption">BNCC Event</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/B56SKr5W/485202620-1005089854373420-9011643727446991187-n-1.jpg', 'Special Activity')">
+    <img src="https://i.ibb.co.com/B56SKr5W/485202620-1005089854373420-9011643727446991187-n-1.jpg" alt="Special Activity">
+    <div class="gallery-caption">Special Activity</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/HDj8yL9m/470193299-3764007373912453-3561657654793879644-n.jpg', 'Cadet Training')">
+    <img src="https://i.ibb.co.com/HDj8yL9m/470193299-3764007373912453-3561657654793879644-n.jpg" alt="Cadet Training">
+    <div class="gallery-caption">Cadet Training</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/qGrBfMT/Whats-App-2025-07-14-19-59-46-905a4843.jpg', 'July Training Session')">
+    <img src="https://i.ibb.co.com/qGrBfMT/Whats-App-2025-07-14-19-59-46-905a4843.jpg" alt="July Training Session">
+    <div class="gallery-caption">July Training Session</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/HDTYKBfy/Whats-App-2025-07-14-19-59-39-750520ca.jpg', 'July Activity')">
+    <img src="https://i.ibb.co.com/HDTYKBfy/Whats-App-2025-07-14-19-59-39-750520ca.jpg" alt="July Activity">
+    <div class="gallery-caption">July Activity</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Nd0s5295/Whats-App-Image-2025-10-21-at-11-51-58-PM.jpg', 'October Event 2025')">
+    <img src="https://i.ibb.co.com/Nd0s5295/Whats-App-Image-2025-10-21-at-11-51-58-PM.jpg" alt="October Event 2025">
+    <div class="gallery-caption">October Event 2025</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/wFmxmRVj/Whats-App-Image-2025-10-21-at-11-51-53-PM-1.jpg', 'Group Activity')">
+    <img src="https://i.ibb.co.com/wFmxmRVj/Whats-App-Image-2025-10-21-at-11-51-53-PM-1.jpg" alt="Group Activity">
+    <div class="gallery-caption">Group Activity</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/35pXwKnN/Whats-App-Image-2025-10-21-at-11-51-53-PM-2.jpg', 'Training Session')">
+    <img src="https://i.ibb.co.com/35pXwKnN/Whats-App-Image-2025-10-21-at-11-51-53-PM-2.jpg" alt="Training Session">
+    <div class="gallery-caption">Training Session</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/PZQwJprf/Whats-App-Image-2025-10-21-at-11-51-53-PM.jpg', 'Cadet Meeting')">
+    <img src="https://i.ibb.co.com/PZQwJprf/Whats-App-Image-2025-10-21-at-11-51-53-PM.jpg" alt="Cadet Meeting">
+    <div class="gallery-caption">Cadet Meeting</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/4RKDL9y9/Whats-App-Image-2025-10-21-at-11-51-54-PM-1.jpg', 'October Gathering')">
+    <img src="https://i.ibb.co.com/4RKDL9y9/Whats-App-Image-2025-10-21-at-11-51-54-PM-1.jpg" alt="October Gathering">
+    <div class="gallery-caption">October Gathering</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/rKXN3rkq/Whats-App-Image-2025-10-21-at-11-51-54-PM.jpg', 'BNCC Program')">
+    <img src="https://i.ibb.co.com/rKXN3rkq/Whats-App-Image-2025-10-21-at-11-51-54-PM.jpg" alt="BNCC Program">
+    <div class="gallery-caption">BNCC Program</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/C5j13JyR/Whats-App-Image-2025-10-21-at-11-51-55-PM-1.jpg', 'Leadership Training')">
+    <img src="https://i.ibb.co.com/C5j13JyR/Whats-App-Image-2025-10-21-at-11-51-55-PM-1.jpg" alt="Leadership Training">
+    <div class="gallery-caption">Leadership Training</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/8gfdRQzN/Whats-App-Image-2025-10-21-at-11-51-55-PM.jpg', 'Team Building')">
+    <img src="https://i.ibb.co.com/8gfdRQzN/Whats-App-Image-2025-10-21-at-11-51-55-PM.jpg" alt="Team Building">
+    <div class="gallery-caption">Team Building</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Xxscc4tt/IMG-20241113-WA0034.jpg', 'November Event')">
+    <img src="https://i.ibb.co.com/Xxscc4tt/IMG-20241113-WA0034.jpg" alt="November Event">
+    <div class="gallery-caption">November Event</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/fdBw4FKX/Whats-App-Image-2025-10-22-at-12-08-36-AM.jpg', 'October Training')">
+    <img src="https://i.ibb.co.com/fdBw4FKX/Whats-App-Image-2025-10-22-at-12-08-36-AM.jpg" alt="October Training">
+    <div class="gallery-caption">October Training</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/XZp5T2XX/Whats-App-Image-2025-10-22-at-12-08-36-AM-1.jpg', 'Group Session')">
+    <img src="https://i.ibb.co.com/XZp5T2XX/Whats-App-Image-2025-10-22-at-12-08-36-AM-1.jpg" alt="Group Session">
+    <div class="gallery-caption">Group Session</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Gf2DCPwz/Whats-App-Image-2025-10-22-at-12-55-42-AM.jpg', 'Cadet Activity')">
+    <img src="https://i.ibb.co.com/Gf2DCPwz/Whats-App-Image-2025-10-22-at-12-55-42-AM.jpg" alt="Cadet Activity">
+    <div class="gallery-caption">Cadet Activity</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/2YhM6ZFM/Whats-App-Image-2025-10-22-at-12-08-37-AM.jpg', 'Training Program')">
+    <img src="https://i.ibb.co.com/2YhM6ZFM/Whats-App-Image-2025-10-22-at-12-08-37-AM.jpg" alt="Training Program">
+    <div class="gallery-caption">Training Program</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/SDqdFqSt/Whats-App-Image-2025-10-22-at-12-08-38-AM-1.jpg', 'BNCC Session')">
+    <img src="https://i.ibb.co.com/SDqdFqSt/Whats-App-Image-2025-10-22-at-12-08-38-AM-1.jpg" alt="BNCC Session">
+    <div class="gallery-caption">BNCC Session</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/B5djbbnB/Whats-App-Image-2025-10-22-at-12-08-38-AM-2.jpg', 'Leadership Development')">
+    <img src="https://i.ibb.co.com/B5djbbnB/Whats-App-Image-2025-10-22-at-12-08-38-AM-2.jpg" alt="Leadership Development">
+    <div class="gallery-caption">Leadership Development</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/h17fjJ7g/Whats-App-Image-2025-10-22-at-12-08-38-AM.jpg', 'Team Activity')">
+    <img src="https://i.ibb.co.com/h17fjJ7g/Whats-App-Image-2025-10-22-at-12-08-38-AM.jpg" alt="Team Activity">
+    <div class="gallery-caption">Team Activity</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/G3p66Dqw/Whats-App-Image-2025-10-22-at-12-08-40-AM-1.jpg', 'Cadet Training')">
+    <img src="https://i.ibb.co.com/G3p66Dqw/Whats-App-Image-2025-10-22-at-12-08-40-AM-1.jpg" alt="Cadet Training">
+    <div class="gallery-caption">Cadet Training</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/60BxBMRZ/Whats-App-Image-2025-10-22-at-12-08-40-AM-2.jpg', 'Group Exercise')">
+    <img src="https://i.ibb.co.com/60BxBMRZ/Whats-App-Image-2025-10-22-at-12-08-40-AM-2.jpg" alt="Group Exercise">
+    <div class="gallery-caption">Group Exercise</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/DgVxjyX6/Whats-App-Image-2025-10-22-at-12-08-40-AM.jpg', 'BNCC Activity')">
+    <img src="https://i.ibb.co.com/DgVxjyX6/Whats-App-Image-2025-10-22-at-12-08-40-AM.jpg" alt="BNCC Activity">
+    <div class="gallery-caption">BNCC Activity</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Vctmfn3D/Whats-App-Image-2025-10-22-at-12-08-41-AM.jpg', 'Training Session')">
+    <img src="https://i.ibb.co.com/Vctmfn3D/Whats-App-Image-2025-10-22-at-12-08-41-AM.jpg" alt="Training Session">
+    <div class="gallery-caption">Training Session</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/JNRwwqj/Whats-App-Image-2025-10-22-at-12-08-42-AM.jpg', 'Cadet Program')">
+    <img src="https://i.ibb.co.com/JNRwwqj/Whats-App-Image-2025-10-22-at-12-08-42-AM.jpg" alt="Cadet Program">
+    <div class="gallery-caption">Cadet Program</div>
+</div>
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/MkmFH5JF/Whats-App-Image-2025-10-22-at-12-08-43-AM.jpg', 'BNCC Event')">
+    <img src="https://i.ibb.co.com/MkmFH5JF/Whats-App-Image-2025-10-22-at-12-08-43-AM.jpg" alt="BNCC Event">
+    <div class="gallery-caption">BNCC Event</div>
+</div><div class="gallery-item" onclick="openModal('https://i.ibb.co/YcSx9wt/IMG-20250119-WA0021.jpg', 'Training Session 2025')">
+                    <img src="https://i.ibb.co/YcSx9wt/IMG-20250119-WA0021.jpg" alt="BNCC Training Session">
+                    <div class="gallery-caption">Training Session 2025</div>
+                </div>
+
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/VYqmbF1z/583889110-122154095918843184-6067516104923571539-n.jpg', 'Activity Photo')">
+                    <img src="https://i.ibb.co.com/VYqmbF1z/583889110-122154095918843184-6067516104923571539-n.jpg" alt="Activity Photo">
+                    <div class="gallery-caption">Activity Photo</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Rk251gqd/581223234-122154095216843184-1338102693468699314-n.jpg', 'Training Moment')">
+                    <img src="https://i.ibb.co.com/Rk251gqd/581223234-122154095216843184-1338102693468699314-n.jpg" alt="Training Moment">
+                    <div class="gallery-caption">Training Moment</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/mVzXLMxb/582446524-122154095198843184-3036602485509866628-n.jpg', 'Cadet Event')">
+                    <img src="https://i.ibb.co.com/mVzXLMxb/582446524-122154095198843184-3036602485509866628-n.jpg" alt="Cadet Event">
+                    <div class="gallery-caption">Cadet Event</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/3bgWm3m/584905212-122155614248843184-2356529885425185011-n.jpg', 'Ceremonial Parade')">
+                    <img src="https://i.ibb.co.com/3bgWm3m/584905212-122155614248843184-2356529885425185011-n.jpg" alt="Ceremonial Parade">
+                    <div class="gallery-caption">Ceremonial Parade</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/HD7sq1yd/586252766-122155614794843184-3683019640992711245-n.jpg', 'Drill Practice')">
+                    <img src="https://i.ibb.co.com/HD7sq1yd/586252766-122155614794843184-3683019640992711245-n.jpg" alt="Drill Practice">
+                    <div class="gallery-caption">Drill Practice</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/CpWG64jM/588308257-122155614752843184-5770232762646507369-n.jpg', 'BNCC Activity')">
+                    <img src="https://i.ibb.co.com/CpWG64jM/588308257-122155614752843184-5770232762646507369-n.jpg" alt="BNCC Activity">
+                    <div class="gallery-caption">BNCC Activity</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/SwgMnK0M/hh.jpg', 'Platoon Moment')">
+                    <img src="https://i.ibb.co.com/SwgMnK0M/hh.jpg" alt="Platoon Moment">
+                    <div class="gallery-caption">Platoon Moment</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/84MZcQ9p/598805134-122159667092843184-3506908722754698512-n.jpg', 'Field Training')">
+                    <img src="https://i.ibb.co.com/84MZcQ9p/598805134-122159667092843184-3506908722754698512-n.jpg" alt="Field Training">
+                    <div class="gallery-caption">Field Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Pz6t5GYy/598829699-122160379358843184-8610356639461664535-n.jpg', 'Cadet Training')">
+                    <img src="https://i.ibb.co.com/Pz6t5GYy/598829699-122160379358843184-8610356639461664535-n.jpg" alt="Cadet Training">
+                    <div class="gallery-caption">Cadet Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/TqTB1pGD/599926273-122160379238843184-1737480723652602497-n.jpg', 'Evening Parade')">
+                    <img src="https://i.ibb.co.com/TqTB1pGD/599926273-122160379238843184-1737480723652602497-n.jpg" alt="Evening Parade">
+                    <div class="gallery-caption">Evening Parade</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/r2RTDdLz/599931027-122160379178843184-4175090134217549532-n.jpg', 'Group Gathering')">
+                    <img src="https://i.ibb.co.com/r2RTDdLz/599931027-122160379178843184-4175090134217549532-n.jpg" alt="Group Gathering">
+                    <div class="gallery-caption">Group Gathering</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/q40pzgk/599962420-122160379130843184-1426842226128117401-n.jpg', 'Team Drill')">
+                    <img src="https://i.ibb.co.com/q40pzgk/599962420-122160379130843184-1426842226128117401-n.jpg" alt="Team Drill">
+                    <div class="gallery-caption">Team Drill</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/1JJ62Tw0/630865320-122168857010843184-8535765906706419881-n.jpg', 'Annual Training')">
+                    <img src="https://i.ibb.co.com/1JJ62Tw0/630865320-122168857010843184-8535765906706419881-n.jpg" alt="Annual Training">
+                    <div class="gallery-caption">Annual Training</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/yB5CHHSt/635175826-122169637358843184-1783206854483407541-n.jpg', 'Cadet Life')">
+                    <img src="https://i.ibb.co.com/yB5CHHSt/635175826-122169637358843184-1783206854483407541-n.jpg" alt="Cadet Life">
+                    <div class="gallery-caption">Cadet Life</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/57W8RwM/634770612-122169637256843184-8196007873951487036-n.jpg', 'Instructional Session')">
+                    <img src="https://i.ibb.co.com/57W8RwM/634770612-122169637256843184-8196007873951487036-n.jpg" alt="Instructional Session">
+                    <div class="gallery-caption">ত্রয়োদশ জাতীয় সংসদ নির্বাচন ও গণভোট উপলক্ষে</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/DgV8NR1Y/634374408-122169637208843184-847521327072498395-n.jpg', 'Outdoor Training')">
+                    <img src="https://i.ibb.co.com/DgV8NR1Y/634374408-122169637208843184-847521327072498395-n.jpg" alt="Outdoor Training">
+                    <div class="gallery-caption">ত্রয়োদশ জাতীয় সংসদ নির্বাচন ও গণভোট উপলক্ষে</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/ksxKZKqm/636702893-122169637070843184-6953741581922065352-n.jpg', 'Official Event')">
+                    <img src="https://i.ibb.co.com/ksxKZKqm/636702893-122169637070843184-6953741581922065352-n.jpg" alt="Official Event">
+                    <div class="gallery-caption">ত্রয়োদশ জাতীয় সংসদ নির্বাচন ও গণভোট উপলক্ষে</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Gf2qqxty/634470376-122169636752843184-8729533212533853441-n.jpg', 'Presentation Ceremony')">
+                    <img src="https://i.ibb.co.com/Gf2qqxty/634470376-122169636752843184-8729533212533853441-n.jpg" alt="Presentation Ceremony">
+                    <div class="gallery-caption">ত্রয়োদশ জাতীয় সংসদ নির্বাচন ও গণভোট উপলক্ষে</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/Q3WqkqKq/637413887-122169636650843184-9195268457959598584-n.jpg', 'Leadership Camp')">
+                    <img src="https://i.ibb.co.com/Q3WqkqKq/637413887-122169636650843184-9195268457959598584-n.jpg" alt="Leadership Camp">
+                    <div class="gallery-caption">ত্রয়োদশ জাতীয় সংসদ নির্বাচন ও গণভোট উপলক্ষে</div>
+                </div>
+                <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/XfTFzM2m/635161956-122169642230843184-2858454404549651088-n.jpg', 'Ceremonial Gathering')">
+                    <img src="https://i.ibb.co.com/XfTFzM2m/635161956-122169642230843184-2858454404549651088-n.jpg" alt="Ceremonial Gathering">
+                    <div class="gallery-caption">ত্রয়োদশ জাতীয় সংসদ নির্বাচন ও গণভোট উপলক্ষে</div>
+                </div> <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/GQcqDVj9/658599353-122174269484843184-6799228961391792817-n.jpg', 'BNCC Activity')">
+    <img src="https://i.ibb.co.com/GQcqDVj9/658599353-122174269484843184-6799228961391792817-n.jpg" alt="BNCC Activity">
+    <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/ynTB8w4L/657846774-122174269442843184-1204411450833066027-n.jpg', 'Cadet Training')">
+    <img src="https://i.ibb.co.com/ynTB8w4L/657846774-122174269442843184-1204411450833066027-n.jpg" alt="Cadet Training">
+    <div class="gallery-caption">ক্যাডেট প্রশিক্ষণ</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/1Jf9Djy3/659194889-122174269358843184-8579964237440622421-n.jpg', 'Parade Session')">
+    <img src="https://i.ibb.co.com/1Jf9Djy3/659194889-122174269358843184-8579964237440622421-n.jpg" alt="Parade Session">
+    <div class="gallery-caption">প্যারেড সেশন</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/W4V3HkSt/684958226-122178982340843184-2659958406120205695-n.jpg', 'Field Activity')">
+    <img src="https://i.ibb.co.com/W4V3HkSt/684958226-122178982340843184-2659958406120205695-n.jpg" alt="Field Activity">
+    <div class="gallery-caption">মাঠ কার্যক্রম</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/pBgHMt4y/681680246-122178982172843184-5140346271805718327-n.jpg', 'Group Photo')">
+    <img src="https://i.ibb.co.com/pBgHMt4y/681680246-122178982172843184-5140346271805718327-n.jpg" alt="Group Photo">
+    <div class="gallery-caption">গ্রুপ ছবি</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/YBcvvfXY/684533521-122178982076843184-6608970920560502791-n.jpg', 'Official Duty')">
+    <img src="https://i.ibb.co.com/YBcvvfXY/684533521-122178982076843184-6608970920560502791-n.jpg" alt="Official Duty">
+    <div class="gallery-caption">ক্যাডেট প্রশিক্ষণ</div>
+</div>
+
+<div class="gallery-item" onclick="openModal('https://i.ibb.co.com/NdqyTkJK/684922424-122178982034843184-3508718010332053278-n.jpg', 'Community Service')">
+    <img src="https://i.ibb.co.com/NdqyTkJK/684922424-122178982034843184-3508718010332053278-n.jpg" alt="Community Service">
+    <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+</div>
+
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/NdqyTkJK/684922424-122178982034843184-3508718010332053278-n.jpg', 'Community Service')">
+        <img src="https://i.ibb.co.com/NdqyTkJK/684922424-122178982034843184-3508718010332053278-n.jpg" alt="Community Service" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co.com/jkw69DSG/684949240-122178981992843184-4024681547130263044-n.jpg', 'BNCC Event')">
+        <img src="https://i.ibb.co.com/jkw69DSG/684949240-122178981992843184-4024681547130263044-n.jpg" alt="BNCC Event" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/BHXCbNB5/742929970-122187461756843184-7316349475812887247-n.jpg', 'BNCC Event 03')">
+        <img src="https://i.ibb.co/BHXCbNB5/742929970-122187461756843184-7316349475812887247-n.jpg" alt="BNCC Event 03" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/tMdsLXM1/743252172-122187461474843184-6102830551891706848-n.jpg', 'BNCC Event 04')">
+        <img src="https://i.ibb.co/tMdsLXM1/743252172-122187461474843184-6102830551891706848-n.jpg" alt="BNCC Event 04" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/6qZWCY8/743386678-122187461522843184-1022106733016327581-n.jpg', 'BNCC Cadet 05')">
+        <img src="https://i.ibb.co/6qZWCY8/743386678-122187461522843184-1022106733016327581-n.jpg" alt="BNCC Cadet 05" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি ক্যাডেট</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/xKZFQchT/743386973-122187461432843184-2123479442206188986-n.jpg', 'BNCC Activity 06')">
+        <img src="https://i.ibb.co/xKZFQchT/743386973-122187461432843184-2123479442206188986-n.jpg" alt="BNCC Activity 06" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/KjZBKvzB/744739852-122187461612843184-3987751431330392341-n.jpg', 'BNCC Event 07')">
+        <img src="https://i.ibb.co/KjZBKvzB/744739852-122187461612843184-3987751431330392341-n.jpg" alt="BNCC Event 07" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/JWHbgFB6/746026711-122187461948843184-2153006977781741132-n.jpg', 'BNCC Activity 08')">
+        <img src="https://i.ibb.co/JWHbgFB6/746026711-122187461948843184-2153006977781741132-n.jpg" alt="BNCC Activity 08" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/nNBfM8mM/746026976-122187462008843184-7349458829897597238-n.jpg', 'BNCC Cadet 09')">
+        <img src="https://i.ibb.co/nNBfM8mM/746026976-122187462008843184-7349458829897597238-n.jpg" alt="BNCC Cadet 09" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি ক্যাডেট</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/DfbBFJcj/756345074-122189481824843184-6066909332435929173-n.jpg', 'BNCC Activity 10')">
+        <img src="https://i.ibb.co/DfbBFJcj/756345074-122189481824843184-6066909332435929173-n.jpg" alt="BNCC Activity 10" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/9MzWWGp/795430620-122194844198843184-1231605149774386095-n.jpg', 'BNCC Event 11')">
+        <img src="https://i.ibb.co/9MzWWGp/795430620-122194844198843184-1231605149774386095-n.jpg" alt="BNCC Event 11" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/Zz8L40mQ/797625282-122194844408843184-2171148089973765679-n.jpg', 'BNCC Training 12')">
+        <img src="https://i.ibb.co/Zz8L40mQ/797625282-122194844408843184-2171148089973765679-n.jpg" alt="BNCC Training 12" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি প্রশিক্ষণ</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/M5B50Lh8/799487150-122194844366843184-8515091928422533793-n.jpg', 'BNCC Activity 13')">
+        <img src="https://i.ibb.co/M5B50Lh8/799487150-122194844366843184-8515091928422533793-n.jpg" alt="BNCC Activity 13" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/jk0PG4FC/800484475-122194844282843184-1501621629440662420-n.jpg', 'BNCC Event 14')">
+        <img src="https://i.ibb.co/jk0PG4FC/800484475-122194844282843184-1501621629440662420-n.jpg" alt="BNCC Event 14" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/hJPtGgjs/807909532-122194844240843184-5133010528437597304-n.jpg', 'BNCC Cadet 15')">
+        <img src="https://i.ibb.co/hJPtGgjs/807909532-122194844240843184-5133010528437597304-n.jpg" alt="BNCC Cadet 15" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি ক্যাডেট</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/nqk31nqq/Whats-App-Image-2026-09-24-at-8-17-33-PM.jpg', 'BNCC Event 16')">
+        <img src="https://i.ibb.co/nqk31nqq/Whats-App-Image-2026-09-24-at-8-17-33-PM.jpg" alt="BNCC Event 16" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/YBNLy0JK/Whats-App-Image-2026-09-24-at-8-17-34-PM-1.jpg', 'BNCC Event 17')">
+        <img src="https://i.ibb.co/YBNLy0JK/Whats-App-Image-2026-09-24-at-8-17-34-PM-1.jpg" alt="BNCC Event 17" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/39N7g6h8/Whats-App-Image-2026-09-24-at-8-17-34-PM.jpg', 'BNCC Cadet 18')">
+        <img src="https://i.ibb.co/39N7g6h8/Whats-App-Image-2026-09-24-at-8-17-34-PM.jpg" alt="BNCC Cadet 18" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি ক্যাডেট কার্যক্রম</div>
+    </div>
+
+    <div class="gallery-item" onclick="openModal('https://i.ibb.co/840P7rzh/Whats-App-Image-2026-09-24-at-8-17-35-PM.jpg', 'BNCC Event 19')">
+        <img src="https://i.ibb.co/840P7rzh/Whats-App-Image-2026-09-24-at-8-17-35-PM.jpg" alt="BNCC Event 19" loading="lazy">
+        <div class="gallery-caption">বিএনসিসি অনুষ্ঠান</div>
+    </div><div class="cadet-gallery">
+
+
+</div>
+
+
+
+</section> </main>
+
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="modalImage" src="" alt="Enlarged View" class="img-fluid">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="platoon-commander">
+                <h3>Platoon Commander</h3>
+                <img src="POU.png" alt="Ujjwal Kanti Deb" width="100" height="100">
+                <h5>Ujjwal Kanti Deb</h5>
+                <h6>Military Training Officer & Lecturer</h6>
+            </div>
+            <p class="copyright-text"><i class="fas fa-copyright me-1"></i> 2026 Cox's Bazar City College BNCC Platoon. All Rights Reserved. | <span>Built with Discipline.</span></p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Gallery Modal Functionality with check safe initialization
+        function openModal(imageSrc, caption) {
+            const imageModalElement = document.getElementById('imageModal');
+            let imageModal = bootstrap.Modal.getInstance(imageModalElement);
+            if (!imageModal) {
+                 imageModal = new bootstrap.Modal(imageModalElement);
+            }
+            
+            document.getElementById('modalImage').src = imageSrc;
+            document.getElementById('imageModalLabel').textContent = caption;
+            imageModal.show();
+        }
+    </script>
+</body>
+</html>

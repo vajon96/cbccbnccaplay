@@ -1,12 +1,48 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
-import { CheckCircle, Users, Award, ShieldCheck, ArrowRight, Info, FileText, Activity, Phone, Sparkles, BrainCircuit, Send, Loader2, BookOpen, Camera } from "lucide-react";
+import {
+  Users, Award, ArrowRight, FileText, Phone,
+  Sparkles, Send, Loader2, BookOpen, Camera,
+  Shield, CheckCircle, Bell, Scan, ChevronRight, HelpCircle
+} from "lucide-react";
 import { getQuickFAQ } from "../services/geminiService";
 import { CircularViewerModal } from "../components/modular/CircularViewerModal";
 import { AdmissionGuideModal } from "../components/AdmissionGuideModal";
+import { useCMS } from "../context/CMSContext";
+import { useLanguage } from "../context/LanguageContext";
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 
 export function Home() {
+  const cms = useCMS();
+  const { lang, t } = useLanguage();
+
+  useDocumentMeta({
+    title:
+      lang === "bn"
+        ? "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন | অফিসিয়াল পোর্টাল"
+        : "Cox's Bazar City College BNCC Platoon | Official Portal",
+    description:
+      "Official digital command portal of Cox's Bazar City College BNCC Platoon (Army Wing, 15 BNCC Battalion, Karnaphuli Regiment, E Company).",
+  });
+
+  const heroSection = cms.sections.find((s) => s.id === "home.hero");
+  const bgImage = heroSection?.customData?.bgImage || "/assets/aistudio/dddf__1__7ebcab35.jpg";
+  const titlePre = cms.getText(
+    "home.hero.title_pre",
+    lang === "bn" ? "কক্সবাজার সিটি কলেজ" : "Cox's Bazar City College",
+    lang
+  );
+  const titlePost = cms.getText(
+    "home.hero.title_post",
+    lang === "bn" ? "বিএনসিসি প্লাটুন" : "BNCC Platoon",
+    lang
+  );
+  const heroSubtitle = cms.getText("home.hero.subtitle", "DISCIPLINE. LEADERSHIP. SERVICE.", lang);
+  const heroDesc = cms.getText("home.hero.description", t("heroSubtitle"), lang);
+  const latestNotice = cms.notices.find((n) => n.status === "Active") || cms.notices[0];
+  const commander = cms.commander;
+
   const [faqQuestion, setFaqQuestion] = useState("");
   const [faqAnswer, setFaqAnswer] = useState("");
   const [isFaqLoading, setIsFaqLoading] = useState(false);
@@ -21,495 +57,557 @@ export function Home() {
     setIsFaqLoading(false);
   };
 
+  const verifiedStats = [
+    {
+      label: t("statsFounded"),
+      value: lang === "bn" ? "২০২০" : "2020",
+      desc: "ESTD. 03 Sep 2020 · Official Approval",
+    },
+    {
+      label: lang === "bn" ? "রেজিমেন্ট" : "Regiment",
+      value: lang === "bn" ? "কর্ণফুলী" : "Karnaphuli",
+      desc: "Karnaphuli Regiment HQ",
+    },
+    {
+      label: t("statsBattalion"),
+      value: lang === "bn" ? "১৫ বিএনসিসি" : "15 BNCC",
+      desc: "15 BNCC Battalion · Army Wing",
+    },
+    {
+      label: lang === "bn" ? "কোম্পানি ও উইং" : "Company & Wing",
+      value: lang === "bn" ? "ই কোম্পানি" : "E Company",
+      desc: "Army Wing · Mixed Platoon",
+    },
+  ];
+
+  const portalServices = [
+    {
+      to: "/cadets",
+      icon: Users,
+      title: lang === "bn" ? "ক্যাডেট ডিরেক্টরি" : t("serviceDirectoryTitle"),
+      desc:
+        lang === "bn"
+          ? "ব্যাচভিত্তিক ক্যাডেট প্রোফাইল, রক্তের গ্রুপ ও একাডেমিক বিভাগ।"
+          : t("serviceDirectoryDesc"),
+      cta: lang === "bn" ? "ডিরেক্টরি দেখুন" : "View Roster",
+    },
+    {
+      to: "/hall-of-incharges",
+      icon: Award,
+      title: lang === "bn" ? "হল অব ইন-চার্জেস" : t("navIncharges"),
+      desc:
+        lang === "bn"
+          ? "ব্যাচ ১ থেকে বর্তমান পর্যন্ত সকল প্লাটুন ইন-চার্জদের নেতৃত্বের ইতিহাস।"
+          : "Chronicle of Cadet In-Charges and platoon commanders from Batch 1 onward.",
+      cta: lang === "bn" ? "ইতিহাস দেখুন" : "View Archive",
+    },
+    {
+      to: "/notices",
+      icon: Bell,
+      title: t("serviceNoticesTitle"),
+      desc: t("serviceNoticesDesc"),
+      cta: lang === "bn" ? "বিজ্ঞপ্তি দেখুন" : "Read Dispatches",
+    },
+    {
+      to: "/qr-scan",
+      icon: Scan,
+      title: t("serviceQrTitle"),
+      desc: t("serviceQrDesc"),
+      cta: lang === "bn" ? "স্ক্যান শুরু করুন" : "Launch Scanner",
+    },
+    ...(cms.settings.examPortalOpen !== false
+      ? [
+          {
+            to: "/exam",
+            icon: BookOpen,
+            title: t("serviceExamTitle"),
+            desc: t("serviceExamDesc"),
+            cta: lang === "bn" ? "পরীক্ষা পোর্টালে যান" : "Enter Exam Hub",
+          },
+        ]
+      : []),
+    {
+      to: "/gallery",
+      icon: Camera,
+      title: t("navGallery"),
+      desc:
+        lang === "bn"
+          ? "প্যারেড, ড্রিল, বাৎসরিক প্রশিক্ষণ ক্যাম্প ও ক্যাডেটদের আলোকচিত্র সম্ভার।"
+          : "Curated parade ground photography, battalion camps, and national observances.",
+      cta: lang === "bn" ? "গ্যালারি দেখুন" : "Browse Archive",
+    },
+    {
+      to: "/offline-application",
+      icon: FileText,
+      title: t("serviceOfflineTitle"),
+      desc: t("serviceOfflineDesc"),
+      cta: lang === "bn" ? "ফর্ম প্রিন্ট করুন" : "Print Forms",
+    },
+    {
+      to: "/how-to-become-cadet",
+      icon: HelpCircle,
+      title: t("navGuide"),
+      desc:
+        lang === "bn"
+          ? "শারীরিক পরিমাপ, শিক্ষাগত যোগ্যতা ও ৫ ধাপের নির্বাচন প্রক্রিয়া।"
+          : "Physical standards, academic eligibility, and step-by-step selection protocol.",
+      cta: lang === "bn" ? "নির্দেশিকা দেখুন" : "Read Guide",
+    },
+  ];
+
   return (
-    <div className="space-y-24 pb-24 bg-[#d1a2a2]">
-      {/* Hero Section */}
-      <section className="relative h-[90vh] flex items-center justify-center overflow-hidden">
+    <div className="space-y-20 pb-24 bg-[#F5F7FA] text-[#172033]">
+      {/* 1. ASYMMETRIC INSTITUTIONAL EDITORIAL HERO */}
+      <section className="relative overflow-hidden bg-[#002147] border-b border-[#C5A059]/25">
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/20 via-bg-light/80 to-bg-light z-10" />
-          <img 
-            src="https://picsum.photos/seed/army-training/1920/1080?blur=2" 
-            className="w-full h-full object-cover"
-            alt="BNCC Background"
+          <img
+            src={bgImage}
+            className="w-full h-full object-cover object-center opacity-20 filter brightness-75"
+            alt="Cox's Bazar City College BNCC Platoon in Parade"
             referrerPolicy="no-referrer"
           />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#00152e] via-[#002147]/92 to-[#002147]/80" />
         </div>
 
-        <div className="relative z-20 max-w-5xl mx-auto px-4 text-center space-y-8">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            <span className="inline-block px-4 py-1.5 mb-6 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-[0.2em]">
-              Bangladesh National Cadet Corps
-            </span>
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold text-white leading-tight">
-              বাংলাদেশ ন্যাশনাল ক্যাডেট কোর <br />
-              <span className="text-primary">BNCC</span>
-            </h1>
-            <p className="mt-6 text-lg md:text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed font-medium">
-              দেশপ্রেম ও শৃঙ্খলা
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 1 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
-          >
-            <Link
-              to="/enroll"
-              className="group px-8 py-4 bg-accent text-white font-bold rounded-xl flex items-center gap-2 hover:bg-accent/90 transition-all transform hover:scale-105 shadow-lg shadow-accent/20 cursor-pointer"
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            {/* Editorial Copy Column */}
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="lg:col-span-7 space-y-6 text-left"
             >
-              আবেদন করুন <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <button
-              onClick={() => setIsCircularOpen(true)}
-              className="group px-8 py-4 bg-slate-900/60 hover:bg-slate-900 text-white font-bold rounded-xl border border-white/10 flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg cursor-pointer"
-            >
-              <FileText className="w-5 h-5 text-primary" />
-              সার্কুলার ডাউনলোড
-            </button>
-          </motion.div>
-        </div>
-      </section>
+              {/* Crisp unboxed typographic eyebrow (zero pill clutter) */}
+              <div className="flex items-center gap-3 text-[#C5A059] text-xs font-bold uppercase tracking-[0.2em]">
+                <span className="h-px w-8 bg-[#C5A059]" aria-hidden="true" />
+                <span>{cms.settings.regimentInfo || t("heroKicker")}</span>
+              </div>
 
-      {/* Dynamic Admission Guide Card */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-white/5 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-          
-          <div className="grid grid-cols-1 gap-12 items-center relative z-10">
-            {/* Guide Info Left */}
-            <div className="space-y-6">
-              <span className="inline-block px-4 py-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-black uppercase tracking-widest rounded-full">
-                ভর্তি নির্দেশিকা / Guide Summary
-              </span>
-              <h2 className="text-3xl md:text-4xl font-black text-[#406dc5] leading-tight">
-                অনলাইন আবেদন করবেন যেভাবে এবং প্রয়োজনীয় শর্তাবলি
-              </h2>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                আমাদের পোর্টালে সম্পূর্ণ ডিজিটাল প্রক্রিয়ায় বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC) ভর্তি আবেদন সম্পন্ন করা যায়। আবেদন করার পূর্বে প্রয়োজনীয় শর্তাবলি এবং ধাপসমূহ নিচে দেওয়া হলো:
+              <h1 className="text-3xl sm:text-5xl lg:text-[3.35rem] font-extrabold text-white leading-[1.12] font-display tracking-tight text-balance">
+                {titlePre}{" "}
+                <span className="text-[#C5A059] block sm:inline">{titlePost}</span>
+              </h1>
+
+              <p className="text-xs sm:text-sm font-bold text-[#e5c784] tracking-[0.18em] uppercase font-mono">
+                {heroSubtitle} · {cms.settings.motto || "জ্ঞান ও শৃঙ্খলা"}
               </p>
 
-              {/* Steps overview */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div className="flex gap-3 items-start">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
-                    ১
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">ছবি আপলোড ও এআই চেক</h4>
-                    <p className="text-xs text-slate-500 mt-1">Gemini AI দ্বারা ছবির ব্যাকগ্রাউন্ড ও ভঙ্গিমা অটো-ভেরিফাই করা হবে।</p>
-                  </div>
-                </div>
+              <p className="text-sm sm:text-base text-slate-200 max-w-2xl leading-relaxed">
+                {heroDesc}
+              </p>
 
-                <div className="flex gap-3 items-start">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
-                    ২
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">ব্যক্তিগত ও শারীরিক তথ্য</h4>
-                    <p className="text-xs text-slate-500 mt-1">নামের বানান, উচ্চতা, ওজন, বুক এবং রক্তের গ্রুপ সঠিকভাবে লিখুন।</p>
-                  </div>
-                </div>
+              {/* High-contrast CTAs */}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Link
+                  to="/enroll"
+                  className="px-7 py-3.5 bg-[#C5A059] hover:bg-[#b59048] text-[#00152e] font-extrabold text-xs uppercase tracking-wider rounded-xl flex items-center gap-2 transition-colors shadow-xl"
+                >
+                  <span>{cms.getText("home.hero.cta_online", t("ctaEnroll"), lang)}</span>
+                  <ArrowRight size={16} />
+                </Link>
 
-                <div className="flex gap-3 items-start">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
-                    ৩
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">সুরক্ষিত পাসওয়ার্ড</h4>
-                    <p className="text-xs text-slate-500 mt-1">আবেদন সাবমিট শেষে স্ক্রিনে দৃশ্যমান সুরক্ষিত পাসওয়ার্ডটি সংরক্ষণ করুন।</p>
-                  </div>
-                </div>
+                {cms.settings.examPortalOpen !== false && (
+                  <Link
+                    to="/exam"
+                    className="px-6 py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-white/20 flex items-center gap-2 transition-colors"
+                  >
+                    <BookOpen size={16} className="text-[#C5A059]" />
+                    <span>{t("ctaExamPortal")}</span>
+                  </Link>
+                )}
 
-                <div className="flex gap-3 items-start">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-xs mt-0.5 shrink-0">
-                    ৪
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white">অনুমোদিত প্রবেশপত্র</h4>
-                    <p className="text-xs text-slate-500 mt-1">অ্যাডমিন অনুমোদন করলে ড্যাশবোর্ড থেকে কিউআর সম্বলিত প্রবেশপত্র ডাউনলোড করুন।</p>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCircularOpen(true)}
+                  className="px-5 py-3.5 bg-[#00152e]/80 hover:bg-[#00152e] text-slate-200 hover:text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-white/15 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileText size={16} className="text-[#C5A059]" />
+                  <span>{cms.getText("home.hero.cta_circular", t("navCircular"), lang)}</span>
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Eligibility Section */}
-      <section id="eligibility" className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">ভর্তির যোগ্যতা ও শর্তাবলী</h2>
-          <div className="w-24 h-1 bg-primary mx-auto rounded-full" />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            { icon: Users, title: "শিক্ষাগত যোগ্যতা", desc: "একাদশ শ্রেণি অথবা স্নাতক (সম্মান) ১ম বর্ষের নিয়মিত শিক্ষার্থী হতে হবে।" },
-            { icon: Award, title: "ফলাফল", desc: "এসএসসি বা সমমান পরীক্ষায় ন্যূনতম জিপিএ ৩.০০ থাকতে হবে।" },
-            { icon: ShieldCheck, title: "অন্যান্য", desc: "অবিবাহিত হতে হবে এবং সুস্বাস্থ্যের অধিকারী হতে হবে।" }
-          ].map((item, i) => (
-            <motion.div
-              key={i}
-              whileHover={{ y: -10 }}
-              className="bg-slate-900/50 backdrop-blur-sm p-8 rounded-3xl space-y-4 shadow-xl border border-white/5"
-            >
-              <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center">
-                <item.icon className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-bold text-white">{item.title}</h3>
-              <p className="text-slate-400 leading-relaxed">{item.desc}</p>
+              {/* Latest Dispatch Strip */}
+              {latestNotice && (
+                <div className="mt-6 p-3.5 bg-[#00152e]/80 rounded-xl border border-white/15 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <span className="px-2.5 py-1 bg-[#C5A059] text-[#00152e] rounded-md text-[10px] font-black uppercase tracking-wider shrink-0">
+                      {lang === "bn" ? "সর্বশেষ নোটিশ" : "Latest Notice"}
+                    </span>
+                    <span className="text-xs text-slate-100 truncate font-medium">
+                      {latestNotice.title}
+                    </span>
+                  </div>
+                  <Link
+                    to="/notices"
+                    className="text-xs font-bold text-[#C5A059] hover:underline shrink-0 flex items-center gap-1"
+                  >
+                    <span>{lang === "bn" ? "সব দেখুন" : "View all"}</span>
+                    <ChevronRight size={14} />
+                  </Link>
+                </div>
+              )}
             </motion.div>
-          ))}
-        </div>
-      </section>
 
-      {/* Physical Standards */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="bg-slate-900/50 backdrop-blur-sm rounded-[2rem] overflow-hidden shadow-2xl border border-white/5">
-          <div className="grid grid-cols-1 lg:grid-cols-2">
-            <div className="p-12 space-y-8 bg-[#2a3646]">
-              <div className="flex items-center gap-3">
-                <Activity className="w-8 h-8 text-primary" />
-                <h2 className="text-3xl font-bold text-white">শারীরিক মানদণ্ড</h2>
+            {/* Right Photographic Institutional Dossier Frame */}
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.15 }}
+              className="lg:col-span-5"
+            >
+              <div className="rounded-2xl overflow-hidden border border-[#C5A059]/35 bg-[#061830] shadow-2xl">
+                <div className="relative h-64 sm:h-72 overflow-hidden bg-[#00152e]">
+                  <img
+                    src="/assets/aistudio/dd__1__02ef1095.jpg"
+                    alt="Cox's Bazar City College BNCC Platoon Parade Drill"
+                    className="w-full h-full object-cover object-center"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#061830] via-transparent to-transparent" />
+                </div>
+                <div className="p-6 space-y-3 border-t border-white/10">
+                  <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-[#C5A059]">
+                    <span>{lang === "bn" ? "প্যারেড গ্রাউন্ড · কক্সবাজার" : "Parade Square · Cox's Bazar"}</span>
+                    <span className="tabular-nums text-slate-300">Fri &amp; Sat · 07:00 AM</span>
+                  </div>
+                  <h2 className="text-base font-bold text-white font-display">
+                    {lang === "bn"
+                      ? "সাপ্তাহিক ড্রিল, শৃঙ্খলা ও গার্ড অব অনার"
+                      : "Weekly Ceremonial Drill & Guard of Honour"}
+                  </h2>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {lang === "bn"
+                      ? "প্রতি শুক্রবার ও শনিবার সকাল ৭:০০ টায় কলেজ প্যারেড গ্রাউন্ডে নিয়মিত সামরিক ড্রিল, পিটি ও ক্যাডেট প্রশিক্ষণ অনুষ্ঠিত হয়।"
+                      : "Regular foot drill, physical training, and platoon leadership exercises take place every Friday and Saturday at 07:00 AM."}
+                  </p>
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800">
-                      <th className="py-4 text-primary font-semibold">বিবরণ</th>
-                      <th className="py-4 text-primary font-semibold">পুরুষ</th>
-                      <th className="py-4 text-primary font-semibold">মহিলা</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-slate-400">
-                    <tr className="border-b border-slate-800/30">
-                      <td className="py-4">উচ্চতা (ন্যূনতম)</td>
-                      <td className="py-4">৫ ফুট ৬ ইঞ্চি</td>
-                      <td className="py-4">৫ ফুট ২ ইঞ্চি</td>
-                    </tr>
-                    <tr className="border-b border-slate-800/30">
-                      <td className="py-4">বুক (স্বাভাবিক)</td>
-                      <td className="py-4">৩০ ইঞ্চি</td>
-                      <td className="py-4">N/A</td>
-                    </tr>
-                    <tr>
-                      <td className="py-4">বুক (প্রসারিত)</td>
-                      <td className="py-4">৩২ ইঞ্চি</td>
-                      <td className="py-4">N/A</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর বিশেষ যোগ্যতা */}
-              <div className="p-5 rounded-2xl bg-primary/10 border border-primary/20 space-y-3">
-                <h4 className="text-sm font-bold text-primary uppercase tracking-wide">নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর প্রার্থীদের জন্য বিশেষ যোগ্যতা</h4>
-                <ul className="space-y-1.5 text-xs text-slate-300">
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span><strong>পুরুষ (নৃতাত্ত্বিক জনগোষ্ঠী):</strong> অনেক নিয়োগে ন্যূনতম উচ্চতা ৫ ফুট ৪ ইঞ্চি পর্যন্ত শিথিলযোগ্য।</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span><strong>নারী (নৃতাত্ত্বিক জনগোষ্ঠী):</strong> অনেক নিয়োগে ন্যূনতম উচ্চতা ৫ ফুট পর্যন্ত শিথিলযোগ্য।</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div className="bg-[#823b3b] p-12 flex items-center justify-center">
-              <div className="space-y-6">
-                <h3 className="text-2xl font-bold text-white">প্রয়োজনীয় কাগজপত্র</h3>
-                <ul className="space-y-4">
-                  {[
-                    "এসএসসি ও এইচএসসি সনদপত্র, নম্বরপত্র, প্রশংসাপত্র – ২ কপি করে ফটোকপি",
-                    "কলেজ ভর্তির রশিদ/OK Wallet প্রিন্ট কপি",
-                    "পাসপোর্ট সাইজ ছবি – ২ কপি",
-                    "ব্লাড গ্রুপ রিপোর্টের ফটোকপি – ২ কপি",
-                    "জাতীয় পরিচয়পত্র/জন্ম নিবন্ধনের ফটোকপি",
-                    "পিতামাতার জাতীয় পরিচয়পত্রের ফটোকপি",
-                    "নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর প্রার্থী হলে সংশ্লিষ্ট কর্তৃপক্ষ কর্তৃক প্রদত্ত বৈধ নৃতাত্ত্বিক (ক্ষুদ্র) জনগোষ্ঠীর সনদপত্র জমা দিতে হবে।"
-                  ].map((doc, i) => (
-                    <li key={i} className="flex items-center gap-3 text-slate-400">
-                      <CheckCircle className="w-5 h-5 text-primary shrink-0" />
-                      <span className="text-sm">{doc}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      {/* Selection Process */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-white mb-4">নির্বাচন প্রক্রিয়া</h2>
-          <div className="w-24 h-1 bg-primary mx-auto rounded-full" />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[
-            { step: "০১", title: "অনলাইন আবেদন", icon: FileText },
-            { step: "০২", title: "শারীরিক পরীক্ষা", icon: Activity },
-            { step: "০৩", title: "লিখিত পরীক্ষা", icon: Info },
-            { step: "০৪", title: "চূড়ান্ত ভাইভা", icon: Users }
-          ].map((item, i) => (
-            <div key={i} className="relative p-8 bg-slate-900/50 backdrop-blur-sm rounded-2xl text-center space-y-4 shadow-lg border border-white/5">
-              <span className="absolute top-4 right-4 text-4xl font-black text-white/5">{item.step}</span>
-              <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-primary/20">
-                <item.icon className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">{item.title}</h3>
+      {/* 2. VERIFIED STATISTICS STRIP */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-20">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {verifiedStats.map((st, i) => (
+            <div
+              key={i}
+              className="bg-white p-6 rounded-xl shadow-md border border-slate-200 text-left space-y-1.5 hover:border-[#C5A059] transition-colors"
+            >
+              <span className="text-[11px] uppercase font-bold text-slate-500 tracking-wider block">
+                {st.label}
+              </span>
+              <h3 className="text-2xl font-extrabold text-[#002147] font-display tabular-nums">
+                {st.value}
+              </h3>
+              <p className="text-xs text-slate-600 font-medium">{st.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Benefits */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="bg-[#4e7ad8] backdrop-blur-sm p-12 rounded-[2rem] shadow-2xl border border-white/5">
-          <div className="max-w-3xl">
-            <h2 className="text-3xl font-bold text-white mb-8">বিএনসিসি ক্যাডেট হওয়ার সুবিধাসমূহ</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* 3. CORE PILLARS & INSTITUTIONAL INTRODUCTION */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="lg:col-span-7 space-y-5">
+            <div className="flex items-center gap-3 text-[#002147] text-xs font-bold uppercase tracking-[0.18em]">
+              <span className="h-px w-6 bg-[#C5A059]" aria-hidden="true" />
+              <span>{t("pillarsHeading")}</span>
+            </div>
+
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002147] leading-tight font-display text-balance">
+              {lang === "bn"
+                ? "শৃঙ্খলা ও দেশপ্রেমের অনন্য বিদ্যাপীঠ"
+                : "A Distinguished Corps of Discipline & Service"}
+            </h2>
+
+            <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
+              {lang === "bn"
+                ? "বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC) দেশের সর্বোচ্চ বিদ্যাপীঠসমূহের শিক্ষার্থীদের সামরিক প্রশিক্ষণ, শারীরিক কসরত, শৃঙ্খলা ও নেতৃত্বের গুণাবলি অর্জনের জন্য প্রস্তুত করে।"
+                : "The Bangladesh National Cadet Corps (BNCC) trains college students in military drill, endurance, leadership, and responsible citizenship as a disciplined second line of defence."}
+            </p>
+
+            <p className="text-slate-600 text-sm leading-relaxed">
+              {lang === "bn"
+                ? "কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন (আর্মি উইং) কর্ণফুলী রেজিমেন্টের অধীনস্থ ১৫ বিএনসিসি ব্যাটালিয়নের অন্যতম সুশৃঙ্খল দল। নিয়মিত ড্রিল, অস্ত্র চালনা, বাৎসরিক প্রশিক্ষণ ক্যাম্প (ATC), জাতীয় দিবসের কুচকাওয়াজ এবং মানবিক দুর্যোগে স্বেচ্ছাসেবা প্রদানের মাধ্যমে আমাদের ক্যাডেটরা দেশের সুনাগরিক হিসেবে নিজেদের প্রতিষ্ঠিত করছে।"
+                : "Our mixed Army Wing Platoon operates under 15 BNCC Battalion, Karnaphuli Regiment, excelling in annual training camps (ATC), national parades, and coastal disaster response."}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               {[
-                "সেনা, নৌ ও বিমান বাহিনীতে যোগদানে অগ্রাধিকার",
-                "আইএসএসবি (ISSB) পরীক্ষায় বিশেষ সুবিধা",
-                "বিনামূল্যে সামরিক প্রশিক্ষণ ও ইউনিফর্ম",
-                "সরকারি চাকরিতে কোটা সুবিধা",
-                "বিদেশ ভ্রমণের সুযোগ (ক্যাডেট এক্সচেঞ্জ প্রোগ্রাম)",
-                "নেত্বৃত্ব ও ব্যক্তিত্ব বিকাশের সুযোগ"
-              ].map((benefit, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="mt-1.5 w-2 h-2 bg-primary rounded-full shrink-0" />
-                  <p className="text-slate-400 text-sm">{benefit}</p>
+                {
+                  title: lang === "bn" ? "সামরিক প্রশিক্ষণ ও শুটিং" : "Drill & Small Arms Training",
+                  desc:
+                    lang === "bn"
+                      ? "ফুট ড্রিল, অস্ত্র প্রশিক্ষণ ও রেজিমেন্টাল ফায়ারিং ক্যাম্প।"
+                      : "Foot drill, ceremonial parades, and regimental firing camps.",
+                },
+                {
+                  title: lang === "bn" ? "সশস্ত্র বাহিনীতে অগ্রাধিকার" : "Armed Forces Pathway",
+                  desc:
+                    lang === "bn"
+                      ? "সেনা, নৌ ও বিমানবাহিনীতে অফিসার নিয়োগ পরীক্ষায় বিশেষ সুবিধা।"
+                      : "Merit recognition and preparation for officer selection boards.",
+                },
+                {
+                  title: lang === "bn" ? "আন্তর্জাতিক পরিভ্রমণ (YEP)" : "Youth Exchange Program",
+                  desc:
+                    lang === "bn"
+                      ? "ইয়ুথ এক্সচেঞ্জ প্রোগ্রামে রাষ্ট্রীয় সফরে বিভিন্ন দেশ ভ্রমণ।"
+                      : "Opportunities to represent Bangladesh in bilateral cadet delegations.",
+                },
+                {
+                  title: lang === "bn" ? "দুর্যোগ ব্যবস্থাপনা ও রক্তদান" : "Disaster Relief & Blood Drives",
+                  desc:
+                    lang === "bn"
+                      ? "উপকূলীয় উদ্ধারকাজ ও মানবকল্যাণে আত্মনিয়োগ।"
+                      : "Coastal cyclone preparedness, first aid, and humanitarian service.",
+                },
+              ].map((pillar) => (
+                <div
+                  key={pillar.title}
+                  className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-start gap-3"
+                >
+                  <CheckCircle className="text-[#002147] shrink-0 mt-0.5" size={18} />
+                  <div>
+                    <h4 className="text-xs font-bold text-[#002147]">{pillar.title}</h4>
+                    <p className="text-xs text-slate-600 mt-0.5">{pillar.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+
+          <div className="lg:col-span-5">
+            <div className="rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white">
+              <img
+                src="/assets/aistudio/dddf__1__7ebcab35.jpg"
+                alt="Cox's Bazar City College BNCC Platoon Formation"
+                className="w-full h-80 object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="p-6 bg-[#002147] text-white space-y-2">
+                <span className="text-[11px] font-bold uppercase text-[#C5A059] tracking-widest block">
+                  {lang === "bn" ? "বাৎসরিক প্রশিক্ষণ ও সামাজিক দায়িত্ব" : "Annual Training & Civic Duty"}
+                </span>
+                <h4 className="text-base font-bold font-display">
+                  {lang === "bn"
+                    ? "১৫ বিএনসিসি ব্যাটালিয়ন · ই কোম্পানি"
+                    : "15 BNCC Battalion · E Company"}
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {t("pillarsSubheading")}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* About the Platoon Section */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">প্লাটুন পরিচিতি</h2>
-          <div className="w-24 h-1 bg-primary mx-auto rounded-full" />
+      {/* 4. DIGITAL PORTAL SERVICES GRID (Disciplined Navy / Brass Palette — Zero Rainbow Slop) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center space-y-2 mb-10 max-w-2xl mx-auto">
+          <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#C5A059] block">
+            CBCC BNCC Digital Command Hub
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-[#002147] font-display text-balance">
+            {t("servicesHeading")}
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-600">{t("servicesSubheading")}</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <motion.div 
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="space-y-6"
-          >
-            <div className="inline-block px-4 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-widest">
-              কক্সবাজার সিটি কলেজ BNCC মিশ্র প্লাটুন
-            </div>
-            <h3 className="text-3xl font-bold text-white leading-tight">
-              শৃঙ্খলা, দেশপ্রেম এবং নেতৃত্বের গুণাবলি বিকাশে আমাদের অঙ্গীকার
-            </h3>
-            <p className="text-[#0071ff] leading-relaxed">
-              কক্সবাজার সিটি কলেজ BNCC মিশ্র প্লাটুন বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC)-এর একটি গুরুত্বপূর্ণ শাখা। এটি শিক্ষার্থীদের শৃঙ্খলা, নেতৃত্বের দক্ষতা, শারীরিক সক্ষমতা এবং দেশপ্রেমে উদ্বুদ্ধ করতে প্রশিক্ষণ প্রদান করে। ৩ সেপ্টেম্বর ২০২০ তারিখে প্লাটুনটি প্রতিষ্ঠার অনুমোদন পায় এবং ১৮ নভেম্বর ২০২০ তারিখে উজ্জ্বল কান্তি দেব-এর নেতৃত্বে কার্যক্রম শুরু করে।
-            </p>
-            
-            <div className="grid grid-cols-2 gap-6">
-              <div className="p-4 bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-white/10 shadow-sm">
-                <p className="text-[10px] uppercase text-white/40 font-bold mb-1">প্রতিষ্ঠা</p>
-                <p className="text-sm font-bold text-white">৩ সেপ্টেম্বর ২০২০</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {portalServices.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="p-6 bg-white rounded-xl border border-slate-200 hover:border-[#002147] shadow-sm hover:shadow-md transition-all group flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="w-11 h-11 rounded-lg bg-[#002147]/8 border border-[#002147]/15 text-[#002147] flex items-center justify-center group-hover:bg-[#002147] group-hover:text-[#C5A059] transition-colors">
+                  <item.icon size={20} />
+                </div>
+                <h3 className="text-base font-bold text-[#002147] font-display">{item.title}</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">{item.desc}</p>
               </div>
-              <div className="p-4 bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-white/10 shadow-sm">
-                <p className="text-[10px] uppercase text-white/40 font-bold mb-1">কমান্ড</p>
-                <p className="text-sm font-bold text-white">১৫ বিএনসিসি ব্যাটালিয়ন</p>
+              <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#002147] group-hover:text-[#C5A059]">
+                <span>{item.cta}</span>
+                <ChevronRight size={14} />
               </div>
-            </div>
-          </motion.div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
-          <motion.div 
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="bg-primary p-8 md:p-12 rounded-[3rem] text-white shadow-2xl space-y-8"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 bg-slate-900/50 rounded-2xl overflow-hidden border-2 border-accent/40 flex items-center justify-center shadow-lg shrink-0">
-                <img 
-                  src="https://cbccbncc.netlify.app/POU.png" 
-                  alt="উজ্জ্বল কান্তি দেব" 
-                  className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-300"
+      {/* 5. PLATOON COMMANDER SECTION */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-[#002147] text-white rounded-2xl p-8 md:p-12 border border-[#C5A059]/30 shadow-2xl relative overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+            <div className="md:col-span-4 flex justify-center">
+              <div className="w-48 h-60 rounded-xl overflow-hidden border-2 border-[#C5A059] shadow-2xl bg-[#00152e]">
+                <img
+                  src={commander.photoUrl || "/assets/aistudio/POU_7647ec14.png"}
+                  alt={commander.name || "Platoon Commander"}
+                  className="w-full h-full object-cover object-top"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
-                    // Fallback to placeholder avatar indicator
-                    e.currentTarget.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
+                    (e.target as HTMLImageElement).src = "/assets/aistudio/POU_7647ec14.png";
                   }}
                 />
               </div>
-              <div>
-                <h4 className="text-xl font-bold flex items-center gap-1.5 text-white">উজ্জ্বল কান্তি দেব</h4>
-                <p className="text-accent text-xs font-black uppercase tracking-widest mt-0.5">প্রফেসর আন্ডার অফিসার ও প্লাটুন কমান্ডার</p>
-                <span className="inline-block mt-1 bg-white/10 text-white/90 text-[10px] px-2 py-0.5 rounded-full font-bold">PUO & Platoon Commander</span>
-              </div>
             </div>
 
-            <div className="space-y-4">
-              <h5 className="font-bold text-accent uppercase tracking-widest text-xs">আমাদের কার্যক্রম</h5>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  "জাতীয় ও আঞ্চলিক প্যারেড",
-                  "রক্তদান কর্মসূচি",
-                  "ত্রাণ বিতরণ",
-                  "পরিবেশ রক্ষা কার্যক্রম",
-                  "নেতৃত্ব প্রশিক্ষণ",
-                  "শারীরিক সক্ষমতা বৃদ্ধি"
-                ].map((act, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-white/80">
-                    <CheckCircle className="w-4 h-4 text-accent shrink-0" />
-                    <span>{act}</span>
+            <div className="md:col-span-8 space-y-4 text-center md:text-left">
+              <div className="flex items-center justify-center md:justify-start gap-2.5 text-[#C5A059] text-xs font-bold uppercase tracking-[0.2em]">
+                <span className="h-px w-6 bg-[#C5A059]" aria-hidden="true" />
+                <span>{t("commanderKicker")}</span>
+              </div>
+
+              <h3 className="text-2xl sm:text-3xl font-extrabold text-white font-display">
+                {commander.name} ({commander.banglaName})
+              </h3>
+
+              <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                {commander.rank} · {commander.designation}
+              </p>
+
+              <blockquote className="p-4 rounded-xl bg-white/5 border border-white/10 text-xs sm:text-sm text-slate-200 leading-relaxed italic">
+                &ldquo;{commander.message || t("commanderBody")}&rdquo;
+              </blockquote>
+
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-1 text-xs">
+                <a
+                  href={`tel:${commander.phone}`}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-[#C5A059] hover:text-[#00152e] rounded-lg font-bold transition-colors flex items-center gap-2 tabular-nums"
+                >
+                  <Phone size={14} />
+                  <span>{commander.phone}</span>
+                </a>
+
+                <Link
+                  to="/hall-of-incharges"
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-bold transition-colors flex items-center gap-2"
+                >
+                  <Award size={14} className="text-[#C5A059]" />
+                  <span>{t("commanderBtn")}</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. INTERACTIVE FAQ ASSISTANT */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-2xl p-8 md:p-12 border border-slate-200 shadow-sm space-y-6">
+          <div className="text-center space-y-2 max-w-xl mx-auto">
+            <div className="inline-flex items-center gap-2 text-[#002147] text-xs font-bold uppercase tracking-[0.18em]">
+              <Sparkles size={14} className="text-[#C5A059]" />
+              <span>BNCC Information Assistant</span>
+            </div>
+            <h3 className="text-2xl font-extrabold text-[#002147] font-display">{t("faqTitle")}</h3>
+            <p className="text-xs sm:text-sm text-slate-600">{t("faqSubheading")}</p>
+          </div>
+
+          <div className="max-w-2xl mx-auto space-y-4">
+            <div className="relative">
+              <input
+                type="text"
+                value={faqQuestion}
+                onChange={(e) => setFaqQuestion(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleFaqSubmit()}
+                aria-label="Ask a question about BNCC enrollment"
+                placeholder={
+                  lang === "bn"
+                    ? "যেমন: আবেদনের জন্য নূন্যতম উচ্চতা কত? বা কী কী সুবিধা পাওয়া যায়?"
+                    : "e.g., What are the height & academic requirements for BNCC enrollment?"
+                }
+                className="w-full bg-[#F5F7FA] border border-slate-300 rounded-xl px-5 py-4 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#002147] pr-14"
+              />
+              <button
+                type="button"
+                onClick={handleFaqSubmit}
+                disabled={!faqQuestion.trim() || isFaqLoading}
+                aria-label="Submit FAQ question"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-[#002147] text-white rounded-lg hover:bg-[#0B2545] transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {isFaqLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <AnimatePresence mode="wait">
+              {faqAnswer && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="p-5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm space-y-1.5"
+                >
+                  <div className="flex items-center gap-1.5 text-[#002147] font-bold">
+                    <Shield size={14} className="text-[#C5A059]" />
+                    <span>{lang === "bn" ? "তথ্য সহায়িকা উত্তর:" : "Platoon Assistant Response:"}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-6 border-t border-white/10">
-              <p className="text-sm text-white/70 italic">
-                "প্রতিবছর প্রায় ১৫০ জন শিক্ষার্থী আমাদের প্লাটুনে যোগদানের জন্য আবেদন করে, যা আমাদের কার্যক্রমের প্রতি তাদের গভীর আগ্রহ প্রকাশ করে।"
-              </p>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Smart AI FAQ Section */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="bg-primary p-8 md:p-16 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-12 opacity-10">
-            <BrainCircuit size={200} className="text-white" />
-          </div>
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <Sparkles className="text-accent" size={32} />
-                <h2 className="text-3xl md:text-5xl font-bold text-white">Smart AI FAQ</h2>
-              </div>
-              <p className="text-white/70 text-lg leading-relaxed">
-                ভর্তি সংক্রান্ত যেকোনো প্রশ্ন সরাসরি এআই-কে জিজ্ঞাসা করুন। আমাদের ইন্টেলিজেন্ট অ্যাসিস্ট্যান্ট আপনাকে তাৎক্ষণিক উত্তর দেবে।
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {["ভর্তির শেষ সময় কবে?", "উচ্চতা কত লাগবে?", "কি কি কাগজ লাগবে?"].map((q) => (
-                  <button 
-                    key={q}
-                    onClick={() => setFaqQuestion(q)}
-                    className="px-4 py-2 bg-white/10 border border-white/20 rounded-full text-xs font-medium hover:bg-white/20 transition-all"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-2xl">
-              <div className="space-y-4">
-                <div className="relative">
-                  <input 
-                    type="text"
-                    value={faqQuestion}
-                    onChange={(e) => setFaqQuestion(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && handleFaqSubmit()}
-                    placeholder="আপনার প্রশ্নটি এখানে লিখুন..."
-                    className="w-full bg-sand/20 border border-primary/10 rounded-2xl px-6 py-4 text-black focus:border-primary outline-none transition-colors pr-14"
-                  />
-                  <button 
-                    onClick={handleFaqSubmit}
-                    disabled={!faqQuestion.trim() || isFaqLoading}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
-                  >
-                    {isFaqLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                  </button>
-                </div>
-
-                <AnimatePresence mode="wait">
-                  {faqAnswer && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="p-6 bg-primary/5 border border-primary/10 rounded-2xl"
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles className="text-primary" size={16} />
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest">AI Response</span>
-                      </div>
-                      <p className="text-black/80 text-sm leading-relaxed italic">"{faqAnswer}"</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
+                  <p className="text-slate-700 leading-relaxed">{faqAnswer}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </section>
-      {/* Partners Section */}
-      <section className="max-w-7xl mx-auto px-4 py-12 border-t border-primary/10">
-        <div className="flex flex-col md:flex-row items-center justify-center gap-12 opacity-60 hover:opacity-100 transition-opacity">
-          <a href="https://cbcc.edu.bd/" target="_blank" rel="noopener noreferrer" className="grayscale hover:grayscale-0 transition-all">
-            <img 
-              src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" 
-              alt="Cox's Bazar City College Logo" 
-              className="h-20 w-auto"
+
+      {/* 7. INSTITUTIONAL PARTNERS BANNER */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 border-t border-slate-200">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-12 opacity-85 hover:opacity-100 transition-opacity">
+          <a
+            href={cms.settings.collegeWebsite || "https://cbcc.edu.bd/"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3"
+          >
+            <img
+              src={cms.settings.collegeLogoUrl || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png"}
+              alt="Cox's Bazar City College"
+              className="h-14 w-auto"
               referrerPolicy="no-referrer"
             />
+            <div className="text-left">
+              <span className="text-xs font-bold text-[#002147] block font-display">
+                Cox's Bazar City College
+              </span>
+              <span className="text-[11px] text-slate-600">কক্সবাজার সিটি কলেজ (স্থাপিত ১৯৯৩)</span>
+            </div>
           </a>
-          <a href="https://bncc.info/" target="_blank" rel="noopener noreferrer" className="grayscale hover:grayscale-0 transition-all">
-            <img 
-              src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
-              alt="BNCC Logo" 
-              className="h-20 w-auto"
+
+          <div className="hidden sm:block w-px h-8 bg-slate-300" />
+
+          <a
+            href={cms.settings.bnccCentralWebsite || "https://bncc.info/"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3"
+          >
+            <img
+              src={cms.settings.bnccLogoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
+              alt="BNCC"
+              className="h-14 w-auto"
               referrerPolicy="no-referrer"
             />
+            <div className="text-left">
+              <span className="text-xs font-bold text-[#002147] block font-display">
+                Bangladesh National Cadet Corps
+              </span>
+              <span className="text-[11px] text-slate-600">বাংলাদেশ ন্যাশনাল ক্যাডেট কোর</span>
+            </div>
           </a>
         </div>
       </section>
 
-      {/* Contact / Urgent Inquiries */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="bg-slate-900/50 backdrop-blur-sm p-8 rounded-3xl border border-white/10 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
-              <Phone className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-white">জরুরি প্রয়োজনে</h3>
-              <p className="text-white/40 text-sm">প্লাটুন কমান্ডারের সাথে সরাসরি কথা বলতে কল করুন</p>
-            </div>
-          </div>
-          <div className="text-center md:text-right">
-            <a 
-              href="tel:+8801812430454" 
-              className="text-2xl md:text-3xl font-black text-primary hover:text-primary/80 transition-colors"
-            >
-              +880 1812-430454
-            </a>
-            <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1 font-bold">Platoon Commander</p>
-          </div>
-        </div>
-      </section>
+      {/* Modals */}
+      <CircularViewerModal isOpen={isCircularOpen} onClose={() => setIsCircularOpen(false)} />
 
-      <CircularViewerModal 
-        isOpen={isCircularOpen} 
-        onClose={() => setIsCircularOpen(false)} 
-      />
-
-      <AdmissionGuideModal 
-        isOpen={isGuideOpen} 
-        onClose={() => setIsGuideOpen(false)} 
-      />
+      <AdmissionGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 }

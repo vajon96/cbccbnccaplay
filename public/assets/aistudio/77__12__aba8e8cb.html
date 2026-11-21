@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Official Profile for BNCC Platoon In-Charge Wazed Hoque Tasin, Cox's Bazar City College.">
+    <title>In-Charge Profile | Wazed Hoque Tasin - BNCC</title>
+    <link rel="icon" type="image/png" href="https://i.ibb.co/Fb3R6wR/Bncc-logo.png">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&family=Oswald:wght@400;700&display=swap">
+    <style>
+        /* Modernized & Professional Color Palette */
+        :root {
+            --bncc-red: #D32F2F; /* Deep Red for main elements */
+            --bncc-dark: #263238; /* Dark Slate Grey for text/dark sections */
+            --bncc-light: #f5f5f5; /* Light background */
+            --bncc-accent: #FFC107; /* Gold/Amber for highlights */
+            --font-main: 'Roboto', sans-serif;
+            --font-heading: 'Oswald', sans-serif;
+        }
+
+        /* General Styles */
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bncc-light);
+            color: var(--bncc-dark);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header - Clean and Unified */
+        header {
+            background-color: var(--bncc-dark);
+            color: white;
+            padding: 10px 0;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        header .logo {
+            height: 60px;
+            margin: 0 15px;
+            filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+        }
+        header h1 {
+            font-family: var(--font-heading);
+            font-size: 1.5rem;
+            color: white;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+        /* Marquee removed as it's unprofessional */
+
+        /* Navigation - Sleek Link Bar */
+        nav {
+            background-color: var(--bncc-red);
+            text-align: center;
+            padding: 5px 0;
+        }
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 8px 15px;
+            transition: background 0.3s ease-in-out;
+            font-family: var(--font-main);
+            font-weight: 500;
+        }
+        nav a:hover {
+            background-color: #9a0007;
+        }
+
+        /* Banner - Strong Visual Element */
+        .banner {
+            background: linear-gradient(135deg, var(--bncc-red) 0%, #a52727 100%);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .banner h2 {
+            font-family: var(--font-heading);
+            font-size: 2.2rem;
+            margin: 0;
+            text-transform: uppercase;
+        }
+        .banner p {
+            margin: 0;
+            font-style: italic;
+            opacity: 0.9;
+        }
+
+        /* Main Content */
+        main {
+            flex-grow: 1; /* Ensures footer stays at the bottom */
+            padding: 40px 20px;
+            background-color: var(--bncc-light);
+        }
+        
+        /* Profile Card - Enhanced ID Card Design */
+        .profile-card {
+            background-color: white;
+            max-width: 400px; /* Standardized width */
+            margin: 20px auto;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            transition: transform 0.3s ease;
+            border-top: 5px solid var(--bncc-red); /* Institutional border */
+            animation: fadeIn 1s ease-out;
+        }
+        .profile-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .profile-card img {
+            width: 150px; /* Larger, more prominent image */
+            height: 150px;
+            border-radius: 8px; /* Slightly rounded corners for a modern military-style photo */
+            border: 4px solid var(--bncc-accent);
+            margin-bottom: 25px;
+            object-fit: cover;
+        }
+
+        .profile-card h2 {
+            font-family: var(--font-heading);
+            margin: 0 0 5px 0;
+            font-size: 1.8rem;
+            color: var(--bncc-dark);
+            text-transform: uppercase;
+        }
+
+        .rank-title {
+            color: var(--bncc-red);
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: block;
+            font-size: 1.1rem;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #eee;
+            font-size: 0.95rem;
+        }
+        .info-row strong {
+            color: var(--bncc-red);
+            font-weight: 500;
+        }
+        .info-row span {
+            color: var(--bncc-dark);
+            font-weight: 400;
+        }
+
+        /* Footer */
+        footer {
+            background-color: var(--bncc-dark);
+            color: white;
+            text-align: center;
+            padding: 20px 0;
+            margin-top: auto;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-content d-flex justify-content-between align-items-center flex-wrap">
+            <div class="d-flex align-items-center">
+                <a href="https://cbcc.edu.bd/" aria-label="Visit Cox's Bazar City College website">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo" class="logo">
+                </a>
+                <h1 class="d-none d-md-block">Cox's Bazar City College BNCC Platoon</h1>
+            </div>
+            <a href="https://bncc.info/" aria-label="Visit BNCC official website">
+                <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" class="logo">
+            </a>
+        </div>
+    </header>
+
+    <div class="banner">
+        <h2>Cadet Profile &amp; Appointment</h2>
+        <p>BNCC Platoon (Army Wing) | Developing Discipline, Leadership, and Patriotism</p>
+    </div>
+
+    <nav class="d-flex justify-content-center flex-wrap">
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="about.html"><i class="fas fa-info-circle"></i> About</a>
+        <a href="cadets.html"><i class="fas fa-users"></i> Cadets</a>
+        <a href="hall-of-incharges.html"><i class="fas fa-trophy"></i> Hall of In-Charges</a>
+    </nav>
+
+    <main class="container">
+        <div class="profile-card">
+            <div class="mb-3 text-center">
+                <span class="badge bg-danger text-uppercase p-2">
+                    Platoon In-Charge
+                </span>
+                <p class="small text-muted mt-1 mb-0">TERM: March - October 2025</p>
+            </div>
+            
+            <img src="https://i.ibb.co/9HcXXSxn/122-3-7.jpg" alt="Wazed Hoque Tasin">
+            
+            <h2>Wazed Hoque Tasin</h2>
+            <span class="rank-title">Cadet </span>
+
+            <div class="personal-info w-100">
+                <div class="info-row">
+                    <strong><i class="fas fa-envelope me-2"></i>Email:</strong>
+                    <span>obaidulhoque791001@gmail.com</span>
+                </div>
+                <div class="info-row">
+                    <strong><i class="fas fa-phone-alt me-2"></i>Mobile:</strong>
+                    <span>0186381019</span>
+                </div>
+                <div class="info-row">
+                    <strong><i class="fas fa-birthday-cake me-2"></i>Date of Birth:</strong>
+                    <span>16.05.2007</span>
+                </div>
+                <div class="info-row">
+                    <strong><i class="fas fa-venus-mars me-2"></i>Gender:</strong>
+                    <span>Male</span>
+                </div>
+                <div class="info-row">
+                    <strong><i class="fas fa-tint me-2"></i>Blood Group:</strong>
+                    <span class="text-danger fw-bold">AB+</span>
+                </div>
+                <div class="info-row" style="border-bottom: none;">
+                    <strong><i class="fas fa-map-marker-alt me-2"></i>Address:</strong>
+                    <span>Cox's Bazar</span>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <a href="cadets.html" class="btn btn-danger btn-lg text-uppercase">
+                    <i class="fas fa-arrow-left me-2"></i> Back to Cadets List
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p class="mb-0">Cox's Bazar City College BNCC Platoon. &copy; 2025. All Rights Reserved.</p>
+    </footer>
+</body>
+</html>

@@ -30,6 +30,7 @@ export function TakeExam() {
   const [showMobileNavDrawer, setShowMobileNavDrawer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [examError, setExamError] = useState("");
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -67,11 +68,11 @@ export function TakeExam() {
 
     const initExam = async () => {
       setLoading(true);
+      setExamError("");
       try {
         const eData = await getExamById(examId);
         if (!eData) {
-          alert("Exam not found");
-          navigate("/exam/dashboard");
+          setExamError("পরীক্ষাটি খুঁজে পাওয়া যায়নি। অনুগ্রহ করে ড্যাশবোর্ডে ফিরে যান।");
           return;
         }
         setExam(eData);
@@ -80,8 +81,7 @@ export function TakeExam() {
         const activeAttempt = myAtts.find(a => a.examId === examId && a.status === "in_progress");
 
         if (!activeAttempt) {
-          alert("Active attempt session not found. Please start exam from dashboard.");
-          navigate("/exam/dashboard");
+          setExamError("সক্রিয় পরীক্ষার সেশন পাওয়া যায়নি। অনুগ্রহ করে ড্যাশবোর্ড থেকে পরীক্ষা শুরু করুন।");
           return;
         }
 
@@ -110,8 +110,9 @@ export function TakeExam() {
 
         setTimeLeftSeconds(remaining);
 
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error initializing exam:", err);
+        setExamError(err?.message || "পরীক্ষা লোড করতে সমস্যা হয়েছে।");
       } finally {
         setLoading(false);
       }
@@ -179,24 +180,47 @@ export function TakeExam() {
   const handleFinalSubmit = async (autoSubmitted = false) => {
     if (!attempt || submitting) return;
     setSubmitting(true);
+    setExamError("");
     try {
       const result: ExamResult = await submitExamAttempt(attempt.id, autoSubmitted);
-      navigate(`/exam/result/${attempt.id}`);
+      if (result) {
+        navigate(`/exam/result/${attempt.id}`);
+      }
     } catch (err: any) {
       console.error("Submission failed:", err);
-      alert("Submission error: " + err.message);
+      setExamError("পরীক্ষা সাবমিট করতে সমস্যা হয়েছে: " + (err?.message || "পুনরায় চেষ্টা করুন।"));
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading || !attempt || !exam) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center space-y-4">
-        <RefreshCw size={36} className="animate-spin text-primary" />
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+      <div className="min-h-screen bg-[#020B18] text-white flex flex-col items-center justify-center space-y-4">
+        <RefreshCw size={36} className="animate-spin text-[#C5A059]" />
+        <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">
           Loading Secure Examination Room...
         </span>
+      </div>
+    );
+  }
+
+  if (!attempt || !exam) {
+    return (
+      <div className="min-h-screen bg-[#020B18] text-white flex flex-col items-center justify-center px-4 text-center space-y-4">
+        <div role="alert" className="max-w-md w-full bg-[#061830] border border-white/15 rounded-2xl p-6 space-y-4 shadow-2xl">
+          <h2 className="text-lg font-extrabold text-white">পরীক্ষার সেশন পাওয়া যায়নি</h2>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {examError || "Active attempt session not found. Please start the exam from your dashboard."}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/exam/dashboard")}
+            className="w-full py-3 bg-[#C5A059] hover:bg-[#b59048] text-[#00152e] font-extrabold text-xs uppercase tracking-wider rounded-xl cursor-pointer transition-colors"
+          >
+            পরীক্ষা ড্যাশবোর্ডে ফিরে যান
+          </button>
+        </div>
       </div>
     );
   }
@@ -219,7 +243,14 @@ export function TakeExam() {
 
   return (
     <div className="min-h-screen bg-[#0b1329] text-white font-sans flex flex-col selection:bg-primary selection:text-white pb-20 lg:pb-0">
-      
+      {examError && (
+        <div role="alert" className="bg-red-950/90 border-b border-red-500/40 px-4 py-2.5 text-center text-xs font-semibold text-red-200 flex items-center justify-center gap-3">
+          <span>{examError}</span>
+          <button type="button" onClick={() => setExamError("")} className="underline text-white cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Top Fixed Exam Banner Header */}
       <header className="bg-[#131f3d] border-b border-slate-700/60 sticky top-0 z-40 px-4 sm:px-8 py-3 flex items-center justify-between shadow-2xl">
         <div className="flex items-center gap-3">

@@ -319,8 +319,8 @@ export function AnswerScriptsList({ onSelectAttempt, onViewResult }: AnswerScrip
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-amber-400 overflow-hidden shrink-0">
-                            {att.candidatePhoto ? (
-                              <img src={att.candidatePhoto} alt={att.candidateName} className="w-full h-full object-cover" />
+                            {att.candidatePhoto && att.candidatePhoto.trim() !== "" ? (
+                              <img src={att.candidatePhoto} alt={att.candidateName || "Candidate"} className="w-full h-full object-cover" />
                             ) : (
                               att.candidateName ? att.candidateName.substring(0, 2).toUpperCase() : "C"
                             )}

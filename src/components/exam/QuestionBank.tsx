@@ -31,6 +31,7 @@ export function QuestionBank({ actorId = "admin" }: QuestionBankProps) {
   const [editingItem, setEditingItem] = useState<QuestionBankItem | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [previewItem, setPreviewItem] = useState<QuestionBankItem | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [notification, setNotification] = useState("");
 
@@ -58,9 +59,9 @@ export function QuestionBank({ actorId = "admin" }: QuestionBankProps) {
   }, [search, subjectFilter, typeFilter, difficultyFilter]);
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("আপনি কি নিশ্চিতভাবে এই প্রশ্নটি মুছে ফেলতে চান?")) return;
     try {
       await deleteQuestion(id, actorId, true);
+      setConfirmDeleteId(null);
       showNotice("প্রশ্নটি সফলভাবে মুছে ফেলা হয়েছে।");
       loadQuestions();
     } catch (err) {
@@ -305,13 +306,30 @@ export function QuestionBank({ actorId = "admin" }: QuestionBankProps) {
                           <Copy size={15} />
                         </button>
 
-                        <button
-                          onClick={() => handleDelete(q.id)}
-                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-lg transition-all"
-                          title="Delete Question"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {confirmDeleteId === q.id ? (
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => handleDelete(q.id)}
+                              className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              নিশ্চিত
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              বাতিল
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(q.id)}
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-lg transition-all cursor-pointer"
+                            title="Delete Question"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </td>
 

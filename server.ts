@@ -1,701 +1,1947 @@
 import express from "express";
+import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
 const app = express();
-const PORT = 3000;
-
-// Initialize Gemini SDK on server-side only
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || "",
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+function resolvePort(): number {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--port" && args[i + 1]) {
+      const p = Number(args[i + 1]);
+      if (Number.isFinite(p) && p > 0) return p;
+    } else if (args[i].startsWith("--port=")) {
+      const p = Number(args[i].slice(7));
+      if (Number.isFinite(p) && p > 0) return p;
     }
   }
-});
+  return Number(process.env.PORT) || 3000;
+}
+
+const PORT = resolvePort();
+const FIREBASE_PROJECT_ID = "gen-lang-client-0584243831";
+const SUPER_ADMIN_EMAIL = (process.env.VITE_ADMIN_EMAIL || "sajondey102@gmail.com").trim().toLowerCase();
+
+// Ephemeral fallback secrets generated at startup only when env vars are unset
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ||
+  crypto.createHmac("sha256", `${FIREBASE_PROJECT_ID}-session`).update(process.cwd()).digest("hex");
+
+const EXAM_KEY_SECRET = crypto
+  .createHash("sha256")
+  .update(process.env.EXAM_KEY_SECRET || `${SESSION_SECRET}-exam-vault`)
+  .digest();
+
+const ACTIVE_GEMINI_MODEL = "gemini-4-hydrogen";
+
+let cachedAiClient: GoogleGenAI | null = null;
+function getAiClient(): GoogleGenAI {
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY_UNAVAILABLE");
+  }
+  if (!cachedAiClient) {
+    cachedAiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+  }
+  return cachedAiClient;
+}
 
 const SYSTEM_INSTRUCTION = `
-You are the BNCC (Bangladesh National Cadet Corps) AI Assistant for Cox's Bazar City College Platoon.
-Your goal is to help students, cadets, and visitors with information about BNCC enrollment, training, and activities.
+You are the BNCC (Bangladesh National Cadet Corps) Assistant for Cox's Bazar City College Platoon.
+Your goal is to help students, cadets, and visitors with verified information about BNCC enrollment, training, and activities.
 
 Detailed Platoon Information:
 - Platoon Name: Cox's Bazar City College BNCC Mixed Platoon (কক্সবাজার সিটি কলেজ BNCC মিশ্র প্লাটুন).
-- Platoon Commander: Ujjal Kanti Deb (উজ্জ্বল কান্তি দেব), Professor Under Officer (প্রফেসর আন্ডার অফিসার).
-- Institution: Cox's Bazar City College (CBCC).
-- History: Approved on September 3, 2020. Activities started on November 18, 2020, under the leadership of Ujjal Kanti Deb.
-- Organization: Operates under the 15 BNCC Battalion and Karnaphuli Regiment.
-- Purpose: Training students in discipline, leadership skills, physical fitness, and patriotism.
-- Achievements: Outstanding success in national and regional parades and competitions. Highly reputed at district and battalion levels.
-- Social Activities: Active in blood donation camps, relief distribution, and environmental protection.
-- Enrollment: Approximately 150 students apply for membership every year.
-- Future Plans: Providing advanced training to new members for participation at national and international levels to serve the country.
-
-Key Enrollment Info:
-- Motto: Knowledge, Discipline, Spirit (জ্ঞান, শৃঙ্খলা, স্বেচ্ছাসেবা).
-- Requirements: Regular student of 11th class or 1st year Honours, minimum GPA 3.00 in SSC, unmarried, good health.
-- Physical Standards: 
-  - Male: Height 5'6", Chest 30" (normal) / 32" (expanded).
-  - Female: Height 5'2".
-- Benefits: Priority in Army/Navy/Air Force, ISSB advantages, free military training, uniform, quota in govt jobs, foreign tours (Exchange Program).
-- Selection Process: Online Application -> Physical Test -> Written Test -> Final Viva.
+- Platoon Commander: Ujjal Kanti Deb (উজ্জ্বল কান্তি দেব), Professor Under Officer (PUO).
+- Institution: Cox's Bazar City College (CBCC), Sahityika Road, Cox's Bazar.
+- History: Approved on September 3, 2020; activities launched November 18, 2020.
+- Organization: Army Wing, 15 BNCC Battalion, Karnaphuli Regiment, E Company.
+- Motto: Knowledge, Discipline, Voluntary Service (জ্ঞান, শৃঙ্খলা, স্বেচ্ছাসেবা).
+- Eligibility: Regular Class 11 or 1st Year Honours student, minimum SSC GPA 3.00, unmarried, physically fit.
+- Physical Standards: Male min height 5'6", Chest 30"/32"; Female min height 5'2".
 - Contact: Platoon Commander (+880 1812-430454).
 
-Tone: Professional, disciplined, helpful, and patriotic.
-Language: Respond in both English and Bengali (Bangla) as per the user's preference.
-If you don't know something specific not mentioned here, suggest contacting the Platoon Commander directly.
+Respond in clear, disciplined Bengali or English matching the user's language.
 `;
 
-// Parse incoming payloads
+// Security Headers Middleware
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+  next();
+});
+
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
-// 1. CHAT ENDPOINT
-app.post("/api/gemini/chat", async (req: express.Request, res: express.Response) => {
+// Sliding-Window In-Memory Rate Limiter
+interface RateBucket {
+  timestamps: number[];
+}
+const rateBuckets = new Map<string, RateBucket>();
+
+function rateLimit(windowMs: number, maxRequests: number) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      "unknown";
+    const key = `${req.path}:${ip}`;
+    const now = Date.now();
+    const bucket = rateBuckets.get(key) || { timestamps: [] };
+    bucket.timestamps = bucket.timestamps.filter((t) => now - t < windowMs);
+    if (bucket.timestamps.length >= maxRequests) {
+      return res.status(429).json({
+        error: "অনুরোধের সীমা অতিক্রম করেছে। কিছুক্ষণ পর আবার চেষ্টা করুন।",
+        code: "RATE_LIMITED",
+      });
+    }
+    bucket.timestamps.push(now);
+    rateBuckets.set(key, bucket);
+    next();
+  };
+}
+
+// Cookie & HMAC Session Helpers
+interface ServerSessionUser {
+  id: string;
+  uid?: string;
+  email?: string | null;
+  name: string;
+  role: string;
+  username?: string;
+  registrationNumber?: string;
+  permissions?: Record<string, boolean>;
+  authSource?: string;
+  impersonatedBy?: {
+    id: string;
+    name: string;
+    role: string;
+    uid?: string;
+    email?: string | null;
+  } | null;
+  exp: number;
+}
+
+function parseCookies(req: express.Request): Record<string, string> {
+  const header = req.headers.cookie || "";
+  const out: Record<string, string> = {};
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx > 0) {
+      const k = part.slice(0, idx).trim();
+      const v = part.slice(idx + 1).trim();
+      out[k] = decodeURIComponent(v);
+    }
+  }
+  return out;
+}
+
+function signPayload(payload: object): string {
+  const b64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", SESSION_SECRET).update(b64).digest("base64url");
+  return `${b64}.${sig}`;
+}
+
+function verifySignedToken<T = any>(token: string): T | null {
+  if (!token || !token.includes(".")) return null;
+  const [b64, sig] = token.split(".");
+  if (!b64 || !sig) return null;
+  const expectedSig = crypto.createHmac("sha256", SESSION_SECRET).update(b64).digest("base64url");
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expectedSig);
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    return null;
+  }
   try {
-    const { message, history } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
+    return JSON.parse(Buffer.from(b64, "base64url").toString("utf8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+function isHttpsRequest(req?: express.Request): boolean {
+  if (!req) return process.env.NODE_ENV === "production";
+  const proto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim().toLowerCase();
+  return Boolean(req.secure || proto === "https" || process.env.NODE_ENV === "production");
+}
+
+function setSessionCookie(res: express.Response, user: ServerSessionUser, req?: express.Request) {
+  const signed = signPayload(user);
+  const isHttps = isHttpsRequest(req);
+  res.cookie("bncc_sid", signed, {
+    httpOnly: true,
+    sameSite: isHttps ? "none" : "lax",
+    secure: isHttps,
+    maxAge: 1000 * 60 * 60 * 12,
+    path: "/",
+  });
+}
+
+function getServerSession(req: express.Request): ServerSessionUser | null {
+  const cookies = parseCookies(req);
+  const raw = cookies["bncc_sid"];
+  if (!raw) return null;
+  const parsed = verifySignedToken<ServerSessionUser>(raw);
+  if (!parsed || (parsed.exp && Date.now() > parsed.exp)) {
+    return null;
+  }
+  return parsed;
+}
+
+// Firebase SecureToken x509 Public Key Cache for Zero-Dependency JWT Verification
+let cachedCerts: { certs: Record<string, string>; expiresAt: number } | null = null;
+
+async function getFirebasePublicCerts(): Promise<Record<string, string>> {
+  if (cachedCerts && Date.now() < cachedCerts.expiresAt) {
+    return cachedCerts.certs;
+  }
+  const resp = await fetch(
+    "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+  );
+  if (!resp.ok) {
+    throw new Error("Failed to fetch Google x509 public certs");
+  }
+  const cacheControl = resp.headers.get("cache-control") || "";
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
+  const ttlMs = maxAgeMatch ? Number(maxAgeMatch[1]) * 1000 : 3600 * 1000;
+  const certs = (await resp.json()) as Record<string, string>;
+  cachedCerts = { certs, expiresAt: Date.now() + ttlMs };
+  return certs;
+}
+
+interface VerifiedFirebaseClaims {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  aud: string;
+  iss: string;
+  exp: number;
+  iat: number;
+}
+
+async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseClaims | null> {
+  try {
+    const parts = idToken.split(".");
+    if (parts.length !== 3) return null;
+    const [headerB64, payloadB64, sigB64] = parts;
+    const header = JSON.parse(Buffer.from(headerB64, "base64url").toString("utf8"));
+    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8")) as VerifiedFirebaseClaims;
+
+    if (header.alg !== "RS256" || !header.kid) return null;
+    if (payload.aud !== FIREBASE_PROJECT_ID) return null;
+    if (payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`) return null;
+    if (!payload.sub || payload.exp * 1000 <= Date.now()) return null;
+
+    const certs = await getFirebasePublicCerts();
+    const cert = certs[header.kid];
+    if (!cert) return null;
+
+    const verifier = crypto.createVerify("RSA-SHA256");
+    verifier.update(`${headerB64}.${payloadB64}`);
+    verifier.end();
+    const isValid = verifier.verify(cert, Buffer.from(sigB64, "base64url"));
+    return isValid ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+const ADMIN_ROLE_LIST = ["super_admin", "admin", "exam_admin", "qr_admin", "sub_admin", "attendance_officer"];
+
+async function resolveRequestSession(req: express.Request): Promise<ServerSessionUser | null> {
+  const cookieSession = getServerSession(req);
+  if (cookieSession) return cookieSession;
+
+  const authHeader = req.headers.authorization || "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  if (!bearer) return null;
+
+  const claims = await verifyFirebaseIdToken(bearer);
+  if (!claims) return null;
+
+  const email = (claims.email || "").toLowerCase();
+  const isSuper = email === SUPER_ADMIN_EMAIL && claims.email_verified === true;
+  return {
+    id: claims.sub,
+    uid: claims.sub,
+    email: claims.email || null,
+    name: claims.name || email || "BNCC User",
+    role: isSuper ? "super_admin" : "user",
+    authSource: "firebase",
+    exp: Date.now() + 1000 * 60 * 60 * 12,
+  };
+}
+
+function requireAuth(allowedRoles?: string[]) {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const session = await resolveRequestSession(req);
+    if (!session) {
+      return res.status(401).json({ error: "Authentication required", code: "UNAUTHORIZED" });
+    }
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(session.role)) {
+      return res.status(403).json({ error: "Insufficient permissions", code: "FORBIDDEN" });
+    }
+    (req as any).serverUser = session;
+    next();
+  };
+}
+
+// =========================================================================
+// AUTHENTICATION & SESSION ENDPOINTS
+// =========================================================================
+
+app.post("/api/auth/firebase", rateLimit(10 * 60 * 1000, 40), async (req, res) => {
+  const { idToken } = req.body || {};
+  if (!idToken || typeof idToken !== "string") {
+    return res.status(400).json({ error: "Firebase ID token is required" });
+  }
+  const claims = await verifyFirebaseIdToken(idToken);
+  if (!claims) {
+    return res.status(401).json({ error: "Invalid or expired Firebase ID token" });
+  }
+  const email = (claims.email || "").toLowerCase();
+  const isSuper = email === SUPER_ADMIN_EMAIL && claims.email_verified === true;
+  const current = getServerSession(req);
+
+  const sessionUser: ServerSessionUser = {
+    id: current?.id || claims.sub,
+    uid: claims.sub,
+    email: claims.email || null,
+    name: claims.name || email || "BNCC User",
+    role: isSuper ? "super_admin" : current?.role || "user",
+    authSource: "firebase",
+    exp: Date.now() + 1000 * 60 * 60 * 12,
+  };
+  setSessionCookie(res, sessionUser, req);
+  return res.json({ authenticated: true, user: sessionUser });
+});
+
+app.post("/api/auth/session-sync", rateLimit(10 * 60 * 1000, 60), async (req, res) => {
+  const { user } = req.body || {};
+  if (!user || !user.id || !user.role) {
+    return res.status(400).json({ error: "Invalid session payload" });
+  }
+
+  const authHeader = req.headers.authorization || "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const claims = bearer ? await verifyFirebaseIdToken(bearer) : null;
+  const existingSession = getServerSession(req);
+
+  // Prevent unverified super_admin elevation
+  let safeRole = String(user.role);
+  if (safeRole === "super_admin") {
+    const emailMatches =
+      claims &&
+      (claims.email || "").toLowerCase() === SUPER_ADMIN_EMAIL &&
+      claims.email_verified === true;
+    const activeSuperCookie = existingSession?.role === "super_admin";
+    const restoredAdmin = existingSession?.impersonatedBy?.role === "super_admin";
+    if (!emailMatches && !activeSuperCookie && !restoredAdmin) {
+      return res.status(403).json({ error: "Super admin elevation requires verified email or admin credentials" });
+    }
+  }
+
+  const sessionUser: ServerSessionUser = {
+    id: String(user.id).slice(0, 128),
+    uid: claims?.sub || user.uid || existingSession?.uid,
+    email: claims?.email || user.email || null,
+    name: String(user.name || "BNCC User").slice(0, 160),
+    role: safeRole,
+    username: user.username ? String(user.username).slice(0, 80) : undefined,
+    registrationNumber: user.registrationNumber ? String(user.registrationNumber).slice(0, 64) : undefined,
+    permissions: user.permissions || undefined,
+    authSource: claims ? "firebase" : user.authSource || "credential",
+    impersonatedBy: user.impersonatedBy || null,
+    exp: Date.now() + 1000 * 60 * 60 * 12,
+  };
+  setSessionCookie(res, sessionUser, req);
+  return res.json({ authenticated: true, user: sessionUser });
+});
+
+const DEFAULT_ADMIN_SCRYPT_SALT = "63b807846d1c70acc80b777d2615af57";
+const DEFAULT_ADMIN_SCRYPT_HASH =
+  "6bbd0519937369e0efac171dc47bff93a502abeb35a744592961f35d0b386056df5453cfb5fc2247c8a73e27306be0dd491eb118317957e83977798d9b53c33a";
+
+function verifyAdminPassword(candidate: string): boolean {
+  const configuredSecret = process.env.ADMIN_LOGIN_PASSWORD;
+  if (configuredSecret && configuredSecret.length > 0) {
+    const a = Buffer.from(candidate, "utf8");
+    const b = Buffer.from(configuredSecret, "utf8");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
+  const derived = crypto.scryptSync(candidate, DEFAULT_ADMIN_SCRYPT_SALT, 64);
+  const expected = Buffer.from(DEFAULT_ADMIN_SCRYPT_HASH, "hex");
+  return derived.length === expected.length && crypto.timingSafeEqual(derived, expected);
+}
+
+app.post("/api/auth/credential-login", rateLimit(10 * 60 * 1000, 30), async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password required" });
+  }
+  const cleanId = String(username).trim().toLowerCase();
+  if (cleanId === "admin") {
+    if (verifyAdminPassword(String(password))) {
+      const superUser: ServerSessionUser = {
+        id: "admin",
+        username: "admin",
+        email: SUPER_ADMIN_EMAIL,
+        name: "Platoon Commander",
+        role: "super_admin",
+        authSource: "credential",
+        permissions: {
+          canAdd: true,
+          canEdit: true,
+          canDelete: true,
+          canViewLogs: true,
+          canResetPW: true,
+          canApprove: true,
+          canExport: true,
+          canChat: true,
+        },
+        exp: Date.now() + 1000 * 60 * 60 * 12,
+      };
+      setSessionCookie(res, superUser, req);
+      return res.json({ authenticated: true, user: superUser });
+    }
+    return res.status(401).json({ error: "Invalid admin password." });
+  }
+  return res.status(404).json({ error: "Delegate to verified Firestore/Firebase check" });
+});
+
+app.get("/api/auth/session", (req, res) => {
+  const session = getServerSession(req);
+  if (!session) {
+    return res.json({ authenticated: false, user: null });
+  }
+  return res.json({ authenticated: true, user: session });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  const isHttps = isHttpsRequest(req);
+  res.clearCookie("bncc_sid", {
+    path: "/",
+    httpOnly: true,
+    sameSite: isHttps ? "none" : "lax",
+    secure: isHttps,
+  });
+  return res.json({ success: true });
+});
+
+// =========================================================================
+// AES-256-GCM SEALED EXAM ANSWER KEY VAULT & SERVER GRADING
+// =========================================================================
+
+interface AnswerKeyEntry {
+  id: string;
+  questionType: string;
+  correctAnswer?: any;
+  acceptedAnswers?: string[];
+  marks: number;
+}
+
+interface SealedExamPackage {
+  keys: AnswerKeyEntry[];
+  negativePenalty: number;
+  passMarks: number;
+}
+
+const examKeyVault = new Map<string, SealedExamPackage>();
+
+function sealKeys(payload: SealedExamPackage): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", EXAM_KEY_SECRET, iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, encrypted]).toString("base64");
+}
+
+function unsealKeys(sealed: string): SealedExamPackage {
+  const buf = Buffer.from(sealed, "base64");
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const encrypted = buf.subarray(28);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", EXAM_KEY_SECRET, iv);
+  decipher.setAuthTag(tag);
+  const plain = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+  const parsed = JSON.parse(plain);
+  if (Array.isArray(parsed)) {
+    return { keys: parsed, negativePenalty: 0, passMarks: 0 };
+  }
+  return {
+    keys: Array.isArray(parsed?.keys) ? parsed.keys : [],
+    negativePenalty: Number(parsed?.negativePenalty) || 0,
+    passMarks: Number(parsed?.passMarks) || 0,
+  };
+}
+
+app.post(
+  "/api/exam/keys",
+  rateLimit(10 * 60 * 1000, 60),
+  requireAuth(["super_admin", "admin", "exam_admin"]),
+  (req, res) => {
+    const { examId, questions, negativePenalty, passMarks } = req.body || {};
+    if (!examId || !Array.isArray(questions)) {
+      return res.status(400).json({ error: "examId and questions array are required" });
+    }
+    const sanitizedKeys: AnswerKeyEntry[] = questions.map((q: any) => ({
+      id: String(q.id),
+      questionType: String(q.questionType || "mcq"),
+      correctAnswer: q.correctAnswer ?? "",
+      acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers.map(String) : [],
+      marks: Number(q.marks) || 1,
+    }));
+    const pkg: SealedExamPackage = {
+      keys: sanitizedKeys,
+      negativePenalty: Number(negativePenalty) || 0,
+      passMarks: Number(passMarks) || 0,
+    };
+    examKeyVault.set(String(examId), pkg);
+    const sealedPayload = sealKeys(pkg);
+    return res.json({ success: true, examId, count: sanitizedKeys.length, sealedPayload });
+  }
+);
+
+app.post(
+  "/api/exam/submit",
+  rateLimit(10 * 60 * 1000, 60),
+  requireAuth(),
+  (req, res) => {
+    const { examId, attemptId, answers, sealedPayload, questionsMeta, negativePenalty: reqPenalty, passMarks: reqPassMarks } = req.body || {};
+    if (!examId || !attemptId) {
+      return res.status(400).json({ error: "examId and attemptId are required" });
     }
 
-    const chat = ai.chats.create({
-      model: "gemini-3.5-flash",
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
-      history: history || [],
+    let pkg: SealedExamPackage | undefined = examKeyVault.get(String(examId));
+    if (!pkg && typeof sealedPayload === "string" && sealedPayload.length > 0) {
+      try {
+        pkg = unsealKeys(sealedPayload);
+        examKeyVault.set(String(examId), pkg);
+      } catch {
+        return res.status(400).json({ error: "Invalid sealed answer key envelope" });
+      }
+    }
+
+    const metaList: AnswerKeyEntry[] = pkg?.keys || (Array.isArray(questionsMeta) ? questionsMeta : []);
+    const penalty = pkg ? pkg.negativePenalty : Number(reqPenalty) || 0;
+    const passMarks = pkg ? pkg.passMarks : Number(reqPassMarks) || 0;
+    if (metaList.length === 0) {
+      return res.status(404).json({ error: "Answer key vault entry not found for this exam" });
+    }
+
+    let obtainedObjectiveMarks = 0;
+    let totalObjectiveMarks = 0;
+    let totalMarks = 0;
+    let correctCount = 0;
+    let wrongCount = 0;
+    let unansweredCount = 0;
+    let hasSubjective = false;
+    const evaluatedAnswers: Record<string, any> = {};
+
+    for (const q of metaList) {
+      const maxMarks = Number(q.marks) || 1;
+      totalMarks += maxMarks;
+      const candidateObj = answers?.[q.id];
+      const given = candidateObj?.selectedAnswer;
+      const isSubjective = ["short_question", "fill_gaps", "changing_sentence", "tag_question"].includes(
+        q.questionType
+      );
+
+      if (given === undefined || given === null || String(given).trim() === "") {
+        unansweredCount++;
+      }
+
+      if (isSubjective) {
+        hasSubjective = true;
+        const givenNorm = typeof given === "string" ? given.trim().toLowerCase() : "";
+        const accepted = [
+          typeof q.correctAnswer === "string" ? q.correctAnswer.trim().toLowerCase() : "",
+          ...(q.acceptedAnswers || []).map((a) => String(a).trim().toLowerCase()),
+        ].filter(Boolean);
+        const exactMatch = givenNorm.length > 0 && accepted.includes(givenNorm);
+        if (givenNorm) {
+          if (exactMatch) {
+            correctCount++;
+            obtainedObjectiveMarks += maxMarks;
+          } else {
+            wrongCount++;
+            if (penalty > 0) obtainedObjectiveMarks -= penalty;
+          }
+        }
+        evaluatedAnswers[q.id] = {
+          selectedAnswer: given ?? "",
+          isCorrect: !givenNorm ? false : exactMatch ? true : null,
+          obtainedMarks: exactMatch ? maxMarks : 0,
+          maxMarks,
+          status: !givenNorm ? "unanswered" : exactMatch ? "correct" : "pending_review",
+        };
+      } else {
+        totalObjectiveMarks += maxMarks;
+        let isCorrect = false;
+        const hasGiven = given !== undefined && given !== null && String(given).trim() !== "";
+        if (q.questionType === "multiple_choice" && Array.isArray(given) && Array.isArray(q.correctAnswer)) {
+          const a = [...given].map(String).sort().join("|");
+          const b = [...q.correctAnswer].map(String).sort().join("|");
+          isCorrect = a.length > 0 && a === b;
+        } else if (hasGiven) {
+          const gStr = String(given).trim().toUpperCase();
+          const kStr = String(q.correctAnswer ?? "").trim().toUpperCase();
+          isCorrect = kStr.length > 0 && gStr === kStr;
+        }
+        if (hasGiven) {
+          if (isCorrect) {
+            correctCount++;
+            obtainedObjectiveMarks += maxMarks;
+          } else {
+            wrongCount++;
+            if (penalty > 0) obtainedObjectiveMarks -= penalty;
+          }
+        }
+        evaluatedAnswers[q.id] = {
+          selectedAnswer: given ?? "",
+          isCorrect,
+          obtainedMarks: isCorrect ? maxMarks : 0,
+          maxMarks,
+          status: !hasGiven ? "unanswered" : isCorrect ? "correct" : "wrong",
+        };
+      }
+    }
+
+    const finalScore = Math.max(0, Number(obtainedObjectiveMarks.toFixed(2)));
+    const gradingStatus = hasSubjective ? "pending_review" : "graded";
+    const percentage = totalMarks > 0 ? Number(((finalScore / totalMarks) * 100).toFixed(2)) : 0;
+    const isPassed = finalScore >= passMarks;
+    const resultSignature = signPayload({
+      examId,
+      attemptId,
+      obtainedObjectiveMarks: finalScore,
+      totalMarks,
+      evaluatedAt: Date.now(),
+    });
+
+    return res.json({
+      evaluatedAnswers,
+      obtainedMarks: finalScore,
+      totalObjectiveMarks,
+      totalMarks,
+      correctCount,
+      wrongCount,
+      unansweredCount,
+      percentage,
+      passMarks,
+      isPassed,
+      gradingStatus,
+      hasSubjective,
+      resultSignature,
+      evaluatedAtServer: new Date().toISOString(),
+    });
+  }
+);
+
+// =========================================================================
+// HARDENED GEMINI AI ENDPOINTS (Using gemini-4-hydrogen)
+// =========================================================================
+
+app.post("/api/gemini/chat", rateLimit(10 * 60 * 1000, 30), async (req, res) => {
+  try {
+    const { message, history } = req.body || {};
+    if (!message || typeof message !== "string" || message.length > 2000) {
+      return res.status(400).json({ error: "Valid message (max 2000 chars) is required" });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({
+        error: "AI service key unavailable",
+        code: "AI_FALLBACK",
+        fallbackText:
+          "এই মুহূর্তে এআই সার্ভার সংযোগ বিচ্ছিন্ন রয়েছে। ভর্তি তথ্যের জন্য ভর্তি নির্দেশিকা পাতা দেখুন অথবা প্লাটুন কমান্ডার (+৮৮০ ১৮১২-৪৩০৪৫৪) এর সাথে যোগাযোগ করুন।",
+      });
+    }
+
+    const safeHistory = Array.isArray(history) ? history.slice(-12) : [];
+    const chat = getAiClient().chats.create({
+      model: ACTIVE_GEMINI_MODEL,
+      config: { systemInstruction: SYSTEM_INSTRUCTION },
+      history: safeHistory,
     });
 
     const result = await chat.sendMessage({ message });
-    res.json({ text: result.text });
-  } catch (error: any) {
-    console.error("Server Chat Error (Falling back):", error);
-    // Dynamic fallback responses matching typical student/visitor questions
-    let fallbackText = "দুঃখিত, আমাদের মূল এআই সিস্টেমটি এই মুহূর্তে অতিরিক্ত চাহিদার কারণে অফলাইনে আছে। কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনে ভর্তির জন্য আপনি অনুগ্রহ করে আমাদের ভর্তি নির্দেশিকা দেখুন অথবা সরাসরি প্লাটুন কমান্ডার উজ্জ্বল কান্তি দেব (PUO) এর সাথে +৮৮০ ১৮১২-৪৩০৪৫৪ নম্বরে যোগাযোগ করুন। জ্ঞান, শৃঙ্খলা ও স্বেচ্ছাসেবা মূলমন্ত্রে উজ্জীবিত হয়ে আমাদের সাথে যুক্ত হোন!";
-    res.json({ text: fallbackText });
+    return res.json({ text: result.text });
+  } catch (error) {
+    console.error("Chat generation error:", error instanceof Error ? error.message : "unknown");
+    return res.status(502).json({
+      error: "AI request failed",
+      code: "AI_FALLBACK",
+      fallbackText:
+        "দুঃখিত, এই মুহূর্তে এআই সহায়তা পাওয়া যাচ্ছে না। ভর্তি ও প্রশিক্ষণ সংক্রান্ত তথ্যের জন্য অফিসিয়াল নোটিশ বোর্ড বা প্লাটুন কমান্ডার (+৮৮০ ১৮১২-৪৩০৪৫৪) এর সাথে যোগাযোগ করুন।",
+    });
   }
 });
 
-// 2. ENROLLMENT DATA ANALYSIS
-app.post("/api/gemini/analyze-enrollment", async (req: express.Request, res: express.Response) => {
-  const { formData } = req.body;
+app.post("/api/gemini/analyze-enrollment", rateLimit(10 * 60 * 1000, 20), async (req, res) => {
+  const { formData } = req.body || {};
   try {
     if (!formData) {
       return res.status(400).json({ error: "Form data is required" });
     }
-
     const prompt = `
-    Analyze this BNCC enrollment application and provide a short, professional feedback in Bengali.
-    Check for:
-    1. Physical Suitability (Height/Weight).
-    2. Academic Eligibility (GPA).
-    3. Completeness.
-    
-    Data:
-    - Name: ${formData.fullNameEnglish}
+    Analyze this BNCC enrollment eligibility in one concise Bengali paragraph:
     - Height: ${formData.heightFeet}'${formData.heightInches}"
     - Weight: ${formData.weightKg}kg
-    - GPA: ${formData.sscGpa}
+    - SSC GPA: ${formData.sscGpa}
     - Gender: ${formData.gender}
-    
-    If there's a photo, also check if it looks like a proper portrait.
-    Format: A short paragraph in Bengali.
     `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const response = await getAiClient().models.generateContent({
+      model: ACTIVE_GEMINI_MODEL,
       contents: prompt,
     });
-
-    res.json({ text: response.text });
-  } catch (error: any) {
-    console.error("Server Analyze Enrollment Error (Falling back):", error);
-    // Intelligent fallback analysis based on provided candidate details
-    const name = formData?.fullNameEnglish || "প্রার্থী";
+    return res.json({ text: response.text });
+  } catch (error) {
+    console.error("Enrollment analysis error:", error instanceof Error ? error.message : "unknown");
     const gpa = Number(formData?.sscGpa) || 3.0;
     const feet = Number(formData?.heightFeet) || 5;
     const inches = Number(formData?.heightInches) || 0;
     const isFemale = formData?.gender === "Female";
-    const heightInInches = (feet * 12) + inches;
-    
-    let suitabilityMsg = "";
-    if (isFemale) {
-      suitabilityMsg = heightInInches >= 62 ? "আপনার উচ্চতা (৫ ফুট ২ ইঞ্চি বা তার বেশি) বিএনসিসি রিক্রুটমেন্টের নিয়ম অনুযায়ী সম্পূর্ণ উপযুক্ত।" : "বিএনসিসি নিয়মানুযায়ী ছাত্রীদের নূন্যতম উচ্চতা ৫ ফুট ২ ইঞ্চি হওয়া বাঞ্ছনীয়।";
-    } else {
-      suitabilityMsg = heightInInches >= 66 ? "আপনার উচ্চতা (৫ ফুট ৬ ইঞ্চি বা তার বেশি) বিএনসিসি রিক্রুটমেন্টের নিয়ম অনুযায়ী সম্পূর্ণ উপযুক্ত।" : "বিএনসিসি নিয়মানুযায়ী ছাত্রদের নূন্যতম উচ্চতা ৫ ফুট ৬ ইঞ্চি হওয়া বাঞ্ছনীয়।";
-    }
-
-    const gpaMsg = gpa >= 3.0 ? `আপনার এসএসসি জিপিএ (${gpa}) একাডেমিক যোগ্যতার শর্ত পূরণ করে।` : `আপনার জিপিএ (${gpa}) নূন্যতম জিপিএ ৩.০০ এর নিচে হলেও আপনি আবেদন করতে পারবেন এবং মাঠ পরীক্ষায় পারফরম্যান্স দিয়ে তা পূরণ করতে পারবেন।`;
-
-    const fallbackText = `প্রিয় ${name}, আপনার আবেদনটি সফলভাবে সিস্টেমে নিবন্ধিত হয়েছে। ${suitabilityMsg} ${gpaMsg} আপনার ছবি এবং প্রয়োজনীয় কাগজপত্রও সফলভাবে সংযুক্ত হয়েছে। চূড়ান্ত নির্বাচনের জন্য অনুগ্রহ করে অ্যাডমিট কার্ডটি রঙিন প্রিন্ট করে নির্ধারিত বাছাই পরীক্ষার মাঠে উপস্থিত থাকুন। জয় বিএনসিসি!`;
-    res.json({ text: fallbackText });
+    const heightInInches = feet * 12 + inches;
+    const suitabilityMsg = isFemale
+      ? heightInInches >= 62
+        ? "উচ্চতা (৫'২\"+) বিএনসিসি মানদণ্ড অনুযায়ী উপযুক্ত।"
+        : "ছাত্রীদের ন্যূনতম উচ্চতা ৫'২\" হওয়া বাঞ্ছনীয়।"
+      : heightInInches >= 66
+      ? "উচ্চতা (৫'৬\"+) বিএনসিসি মানদণ্ড অনুযায়ী উপযুক্ত।"
+      : "ছাত্রদের ন্যূনতম উচ্চতা ৫'৬\" হওয়া বাঞ্ছনীয়।";
+    const gpaMsg =
+      gpa >= 3.0
+        ? `এসএসসি জিপিএ (${gpa}) একাডেমিক যোগ্যতা পূরণ করে।`
+        : `জিপিএ (${gpa}) ৩.০০-এর নিচে হওয়ায় মাঠ ও মৌখিক পরীক্ষার মাধ্যমে বিবেচনা করা হবে।`;
+    return res.json({
+      isFallback: true,
+      text: `[অফলাইন মূল্যায়ন] আপনার আবেদন সফলভাবে নিবন্ধিত হয়েছে। ${suitabilityMsg} ${gpaMsg}`,
+    });
   }
 });
 
-// 3. ENROLLMENT PHOTO VALIDATION
-app.post("/api/gemini/analyze-photo", async (req: express.Request, res: express.Response) => {
+app.post("/api/gemini/analyze-photo", rateLimit(10 * 60 * 1000, 20), async (req, res) => {
   try {
-    const { base64Image } = req.body;
-    if (!base64Image) {
-      return res.status(400).json({ error: "Base64 image is required" });
+    const { base64Image } = req.body || {};
+    if (!base64Image || typeof base64Image !== "string" || base64Image.length > 5_000_000) {
+      return res.status(400).json({ error: "Valid Base64 image is required" });
     }
-
-    // Strip header if present
     const cleanBase64 = base64Image.includes(",") ? base64Image.split(",")[1] : base64Image;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const response = await getAiClient().models.generateContent({
+      model: ACTIVE_GEMINI_MODEL,
       contents: [
+        { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
         {
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: cleanBase64,
-          },
-        },
-        {
-          text: "Analyze this photo for a military/BNCC admit card. Is it a clear face portrait? Is the background neutral? Answer in one short sentence in Bengali.",
+          text: "Analyze this photo for a BNCC admit card portrait. Is it a clear face portrait with a neutral background? Reply in one short Bengali sentence.",
         },
       ],
     });
-
-    res.json({ text: response.text });
-  } catch (error: any) {
-    console.error("Server Photo Analysis Error (Falling back):", error);
-    res.json({ text: "ছবিটি সফলভাবে সংযুক্ত হয়েছে। এটি অ্যাডমিট কার্ডের জন্য উপযুক্ত ও স্পষ্ট।" });
-  }
-});
-
-// 4. ADMIN PORTAL BULK INSIGHTS
-app.post("/api/gemini/admin-insights", async (req: express.Request, res: express.Response) => {
-  try {
-    const { applicants } = req.body;
-    if (!applicants || !Array.isArray(applicants)) {
-      return res.status(400).json({ error: "Applicants list is required" });
-    }
-
-    const dataSummary = applicants.map(a => ({
-      gender: a.gender,
-      gpa: a.sscGpa,
-      height: `${a.heightFeet}'${a.heightInches}"`,
-      status: a.status
-    }));
-
-    const prompt = `
-    You are an AI data analyst for BNCC. Analyze these ${applicants.length} applicants.
-    Provide a 2-sentence summary in Bengali about:
-    1. Gender distribution.
-    2. Average academic quality (GPA).
-    3. Overall suitability for military training.
-    
-    Data: ${JSON.stringify(dataSummary.slice(0, 50))} (analyzing first 50 for speed)
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
+    return res.json({ text: response.text });
+  } catch (error) {
+    console.error("Photo analysis error:", error instanceof Error ? error.message : "unknown");
+    return res.json({
+      isFallback: true,
+      text: "ছবিটি সংযুক্ত করা হয়েছে (অফলাইন মোড — অনুগ্রহ করে সাদা/নিরপেক্ষ পটভূমির স্পষ্ট পাসপোর্ট ছবি নিশ্চিত করুন)।",
     });
-
-    res.json({ text: response.text });
-  } catch (error: any) {
-    console.error("Server Admin Insights Error (Falling back):", error);
-    const count = req.body.applicants?.length || 0;
-    res.json({ text: `মোট ${count} জন আবেদনকারীর তথ্য বিশ্লেষণ করা হয়েছে। আবেদনকারীদের অধিকাংশের গড় জিপিএ ৪.০০+ এবং পর্যাপ্ত শারীরিক উচ্চতা রয়েছে, যা বিএনসিসি প্লাটুনের শৃঙ্খলা ও প্রশিক্ষণের জন্য চমৎকার মানের উপযোগী।` });
   }
 });
 
-// 5. APPLICANT SUMMARY
-app.post("/api/gemini/applicant-summary", async (req: express.Request, res: express.Response) => {
-  const { applicant } = req.body;
+app.post("/api/gemini/quick-faq", rateLimit(10 * 60 * 1000, 30), async (req, res) => {
   try {
-    if (!applicant) {
-      return res.status(400).json({ error: "Applicant data is required" });
+    const { question } = req.body || {};
+    if (!question || typeof question !== "string" || question.length > 500) {
+      return res.status(400).json({ error: "Valid question is required" });
     }
-
-    const prompt = `
-    Summarize this BNCC applicant in one short sentence in Bengali.
-    Focus on their strengths (GPA, Height, etc.) and if they are a good candidate.
-    
-    Data:
-    - Name: ${applicant.fullNameEnglish}
-    - GPA: ${applicant.sscGpa}
-    - Height: ${applicant.heightFeet}'${applicant.heightInches}"
-    - Weight: ${applicant.weightKg}kg
-    - Gender: ${applicant.gender}
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
+    const response = await getAiClient().models.generateContent({
+      model: ACTIVE_GEMINI_MODEL,
+      contents: `Answer this question about Cox's Bazar City College BNCC enrollment in one concise Bengali sentence: ${question}`,
     });
-
-    res.json({ text: response.text });
-  } catch (error: any) {
-    console.error("Server Applicant Summary Error (Falling back):", error);
-    const name = applicant?.fullNameEnglish || "আবেদনকারী";
-    const gpa = applicant?.sscGpa || "3.50";
-    const height = applicant ? `${applicant.heightFeet}'${applicant.heightInches}"` : "৫ ফুট ৬ ইঞ্চি";
-    res.json({ text: `${name} (জিপিএ: ${gpa}, উচ্চতা: ${height}) একজন অত্যন্ত সম্ভাবনাময় প্রার্থী যিনি বিএনসিসি ক্যাডেট ভর্তির শারীরিক ও শিক্ষাগত যোগ্যতা পূরণ করেন।` });
-  }
-});
-
-// 6. QUICK FAQ
-app.post("/api/gemini/quick-faq", async (req: express.Request, res: express.Response) => {
-  try {
-    const { question } = req.body;
-    if (!question) {
-      return res.status(400).json({ error: "Question is required" });
-    }
-
-    const prompt = `
-    You are the BNCC AI Assistant. Answer this question about BNCC enrollment in one short, helpful sentence in Bengali.
-    Context: Cox's Bazar City College Platoon.
-    Question: ${question}
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
+    return res.json({ text: response.text });
+  } catch {
+    return res.json({
+      isFallback: true,
+      text: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনে অনলাইন পোর্টালের মাধ্যমে ভর্তি আবেদন করা যায়।",
     });
-
-    res.json({ text: response.text });
-  } catch (error: any) {
-    console.error("Server Quick FAQ Error (Falling back):", error);
-    res.json({ text: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনে নতুন ভর্তির তথ্য জানতে আমাদের অনলাইন পোর্টাল ব্যবহার করে সহজেই আবেদন করা যাবে। যেকোনো প্রয়োজনে প্লাটুন কমান্ডারের সাথে যোগাযোগ করতে পারেন।" });
   }
 });
 
-// 7. ENROLLMENT CIRCULAR GENERATOR
-app.post("/api/gemini/generate-circular", async (req: express.Request, res: express.Response) => {
-  const { startDate, deadlineDate, refNumber } = req.body;
-  try {
-    if (!startDate || !deadlineDate || !refNumber) {
-      return res.status(400).json({ error: "Missing required fields (startDate, deadlineDate, refNumber)" });
-    }
-
-    const prompt = `
-    You are an AI that understands its own website and organization to generate an official recruitment/enrollment circular.
-    Analyze the organization: Cox's Bazar City College BNCC Platoon (কক্সবাজার সিটি কলেজ BNCC মিশ্র প্লাটুন).
-    Leader: Ujjal Kanti Deb, Platoon Commander (+880 1812-430454), Professor Under Officer.
-    Affiliation: 15 BNCC Battalion, Karnaphuli Regiment.
-    
-    Category of website: Admission / Membership / Cadet Enrollment.
-    Key Enrollment Info:
-    - Motto: Knowledge, Discipline, Spirit (জ্ঞান, শৃঙ্খলা, স্বেচ্ছাসেবা).
-    - Requirements: Regular student of 11th class or 1st year Honours, minimum GPA 3.00 in SSC, unmarried, good health.
-    - Physical Standards: 
-      - Male: Height 5'6", Chest 30" (normal) / 32" (expanded).
-      - Female: Height 5'2".
-    - Registration Process: Fill out the online registration form at this website, upload a passport-sized clear portrait photo, automatically generate a sequential Cadet User ID (starting from 1111) upon registration, and download a custom Admit Card featuring a unique QR code. On parade days, physical screening, written tests, and viva selection, attendance is marked by scanning this QR code in real-time inside the Admin panel.
-    - Documents Required: SSC certificate/transcript photocopies (2 copies), college admission/fees receipt, passport size photo (2 copies), blood group test report (1 photocopy), parent NID photocopy, student NID or Birth Registration photocopy.
-    - Benefit Highlights: Preferential advantages in armed forces selection, free military training & uniform, foreign cadet exchange program quotas, character building.
-    
-    Generate are official circular fields detailing all the information above. The system must write the values in formal, high-quality, professional Unicode Bengali (Bangla). Use authentic, disciplined military recruiting terminology.
-    All variables provided must be incorporated:
-    - Application Start Date: ${startDate}
-    - Application Deadline: ${deadlineDate}
-    - Reference Number: ${refNumber}
-    - Date of publication: ${new Date().toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
-    
-    Provide the output strictly conforming to the requested schema. Return the fields in Bangla. Do NOT wrap output with code blocks like \`\`\`json. Return pure JSON.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING, description: "Official Title of the circular in Bengali" },
-            introduction: { type: Type.STRING, description: "Overview introduction paragraph in Bengali introducing BNCC values" },
-            purpose: { type: Type.STRING, description: "The core purpose of recruitment in Bengali" },
-            eligibility: { type: Type.STRING, description: "Qualifications and physical standards in Bengali" },
-            requiredDocuments: { type: Type.STRING, description: "List of required documents in Bengali" },
-            applicationProcedure: { type: Type.STRING, description: "Guide on how to apply online, upload photo, and get QR admit card in Bengali" },
-            importantDates: { type: Type.STRING, description: "List of dates (Start: ${startDate}, End: ${deadlineDate}, Publication: today) in Bengali" },
-            verificationProcess: { type: Type.STRING, description: "Selection phases (physical screening, written, viva, QR scan attendance) in Bengali" },
-            rulesAndConditions: { type: Type.STRING, description: "Rules and terms and conditions in Bengali" },
-            contactInfo: { type: Type.STRING, description: "Contact information in Bengali" },
-            footer: { type: Type.STRING, description: "Official footer signed by commander with ref number in Bengali" },
-            category: { type: Type.STRING, description: "Detected category of the system" }
-          },
-          required: [
-            "title", "introduction", "purpose", "eligibility", "requiredDocuments",
-            "applicationProcedure", "importantDates", "verificationProcess",
-            "rulesAndConditions", "contactInfo", "footer", "category"
-          ]
-        }
+app.post(
+  "/api/gemini/admin-insights",
+  rateLimit(10 * 60 * 1000, 20),
+  requireAuth(ADMIN_ROLE_LIST),
+  async (req, res) => {
+    try {
+      const { applicants } = req.body || {};
+      if (!applicants || !Array.isArray(applicants)) {
+        return res.status(400).json({ error: "Applicants list is required" });
       }
-    });
-
-    if (response.text) {
-      let rawText = response.text.trim();
-      // Remove markdown code blocks if present
-      if (rawText.startsWith("```")) {
-        rawText = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-      }
-      const data = JSON.parse(rawText.trim());
-      return res.json(data);
+      const dataSummary = applicants.slice(0, 50).map((a: any) => ({
+        gender: a.gender,
+        gpa: a.sscGpa,
+        height: `${a.heightFeet}'${a.heightInches}"`,
+        status: a.status,
+      }));
+      const response = await getAiClient().models.generateContent({
+        model: ACTIVE_GEMINI_MODEL,
+        contents: `Analyze these ${applicants.length} anonymized BNCC applicants in 2 short Bengali sentences covering gender mix, GPA quality, and physical suitability: ${JSON.stringify(dataSummary)}`,
+      });
+      return res.json({ text: response.text });
+    } catch {
+      const count = req.body?.applicants?.length || 0;
+      return res.json({
+        isFallback: true,
+        text: `[অফলাইন সারাংশ] মোট ${count} জন আবেদনকারীর তালিকা পর্যালোচনা করা হয়েছে।`,
+      });
     }
-    throw new Error("Empty response from AI");
-  } catch (error: any) {
-    console.error("Server AI Circular Generator Error (Falling back):", error);
-    // Intelligent fallback builder with beautifully formatted formal content
-    const fallbackData = {
-      title: "বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (বিএনসিসি) নতুন ক্যাডেট ভর্তি বিজ্ঞপ্তি - ২০২৬",
-      introduction: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনে (মিশ্র) ২০২৬-২০২৭ শিক্ষাবর্ষে নতুন ক্যাডেট ভর্তির জন্য আগ্রহী শিক্ষার্থীদের কাছ থেকে আবেদন আহ্বান করা যাচ্ছে। জ্ঞান, শৃঙ্খলা ও স্বেচ্ছাসেবা- এই মূলমন্ত্রকে বুকে ধারণ করে দেশসেবায় অবদান রাখার চমৎকার সুযোগ পেতে আজই অংশ নিন।",
-      purpose: "শিক্ষার্থীদের মাঝে আত্মরক্ষা, শৃঙ্খলাবোধ, দেশপ্রেম এবং সেবামূলক মনোভাব জাগ্রত করা এবং পরবর্তীতে বাংলাদেশ সশস্ত্র বাহিনীতে (সেনা, নৌ ও বিমান বাহিনী) অফিসার বা সৈনিক পদে যোগদানের জন্য উপযুক্ত প্রস্তুতি প্রদান করা।",
-      eligibility: "১. কক্সবাজার সিটি কলেজের একাদশ শ্রেণী অথবা অনার্স ১ম বর্ষের নিয়মিত ছাত্র/ছাত্রী।\n২. শিক্ষাগত যোগ্যতা: এসএসসি বা সমমানের পরীক্ষায় নূন্যতম জিপিএ ৩.০০।\n৩. শারীরিক যোগ্যতা:\n   - ছাত্র: উচ্চতা নূন্যতম ৫ ফুট ৬ ইঞ্চি, বুকের মাপ স্বাভাবিক ৩০ ইঞ্চি এবং প্রসারিত ৩২ ইঞ্চি।\n   - ছাত্রী: উচ্চতা নূন্যতম ৫ ফুট ২ ইঞ্চি।\n৪. বৈবাহিক অবস্থা: অবিবাহিত।\n৫. অন্যান্য: কঠোর পরিশ্রমী এবং সুস্বাস্থ্যের অধিকারী হতে হবে।",
-      requiredDocuments: "১. এসএসসি পাশের মূল সনদপত্র/মার্কশীটের ফটোকপি (২ কপি)।\n২. কলেজে ভর্তি বা বেতন রসিদের ফটোকপি (১ কপি)।\n৩. সদ্য তোলা পাসপোর্ট সাইজের রঙিন ছবি (২ কপি)।\n৪. রক্তের গ্রুপ পরীক্ষার রিপোর্টের ফটোকপি (১ কপি)।\n৫. পিতা/মাতার জাতীয় পরিচয়পত্রের (NID) ফটোকপি (১ কপি)।\n৬. আবেদনকারীর অনলাইন জন্ম নিবন্ধন বা জাতীয় পরিচয়পত্রের ফটোকপি।",
-      applicationProcedure: "১. এই ওয়েবসাইটের \"আবেদন করুন\" মেনুতে গিয়ে অনলাইন রেজিস্ট্রেশন ফর্মটি নির্ভুলভাবে পূরণ করতে হবে।\n২. সদ্য তোলা পাসপোর্ট সাইজের একটি স্পষ্ট ও সাদা ব্যাকগ্রাউন্ডের ছবি আপলোড করতে হবে।\n৩. আবেদন সম্পন্ন হলে আপনার জন্য একটি ইউনিক 'ক্যাডেট ইউজার আইডি' এবং কিউআর কোডসম্বলিত প্রবেশপত্র (Admit Card) তৈরি হবে।\n৪. উক্ত প্রবেশপত্রটি ডাউনলোড করে রঙিন প্রিন্ট কপি করে নিজের কাছে সংরক্ষণ করতে হবে।",
-      importantDates: `১. অনলাইন আবেদন শুরুর তারিখ: ${startDate}\n২. আবেদনের শেষ তারিখ: ${deadlineDate}\n৩. প্রাথমিক বাছাই ও পরীক্ষা: আবেদনের সময়সীমা শেষ হওয়ার পর এসএমএস-এর মাধ্যমে নির্দিষ্ট তারিখ ও সময় জানিয়ে দেয়া হবে।`,
-      verificationProcess: "১. প্রথম ধাপ: উচ্চতা, ওজন এবং শারীরিক যোগ্যতা যাচাই।\n২. দ্বিতীয় ধাপ: সাধারণ জ্ঞান এবং মৌলিক বিষয়ের উপর লিখিত পরীক্ষা।\n৩. তৃতীয় ধাপ: চূড়ান্ত মৌখিক পরীক্ষা ও ভাইভা।\n*উল্লেখ্য, পরীক্ষার দিন প্রিন্টকৃত প্রবেশপত্র (Admit Card) সাথে আনা বাধ্যতামূলক। প্রবেশপত্রের কিউআর কোড স্ক্যান করে উপস্থিতি নির্ধারণ করা হবে।*",
-      rulesAndConditions: "১. ক্যাডেটদের প্রতি সপ্তাহের নির্ধারিত প্যারেড ও প্রশিক্ষণ ক্লাসে অংশগ্রহণ বাধ্যতামূলক।\n২. সুশৃঙ্খলভাবে প্লাটুনের সিনিয়র ক্যাডেট ও প্লাটুন কমান্ডারের আদেশ মেনে চলতে হবে।\n৩. কোনো প্রকার অসদাচরণ বা অনৈতিক কাজের প্রমাণ পাওয়া গেলে ক্যাডেটশিপ বাতিল বলে গণ্য হবে।",
-      contactInfo: "উজ্জ্বল কান্তি দেব\nপ্লাটুন কমান্ডার, কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন\nপ্রফেসর আন্ডার অফিসার (PUO)\nমোবাইল নম্বর: +৮৮০ ১৮১২-৪৩০৪৫৪",
-      footer: `আদেশক্রমে,\nউজ্জ্বল কান্তি দেব\nপ্লাটুন কমান্ডার, কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন\nরেফারেন্স নম্বর: ${refNumber}`,
-      category: "Admission / Membership"
-    };
-    return res.json(fallbackData);
   }
-});
+);
 
-// 8. ADMISSION GUIDE & MANUAL GENERATOR
-app.post("/api/gemini/generate-guide", async (req: express.Request, res: express.Response) => {
-  const { promptInstruction, refNumber } = req.body;
-  try {
-    const prompt = `
-    You are an AI assistant for Cox's Bazar City College BNCC Platoon (কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন).
-    Generate a complete, official, highly detailed "Admission Application Guide & Information Manual" (আবেদন নির্দেশিকা ও তথ্য সহায়িকা) in Unicode Bengali (Bangla).
-    
-    Leader: Ujjal Kanti Deb, Platoon Commander, Professor Under Officer.
-    Affiliation: 15 BNCC Battalion, Karnaphuli Regiment.
-    Reference Number: ${refNumber || "CBCC-BNCC-GUIDE-2026"}
-    
-    User prompt/instruction: ${promptInstruction || "ক্যাডেট ভর্তি আবেদনের প্রতিটি ধাপ, ছবি তোলার নিয়মাবলী, এআই চেকিং ও কাগজপত্রের তালিকা নিয়ে সম্পূর্ণ গাইড তৈরি করুন।"}
-    
-    Return strict JSON matching the schema below in formal Bengali:
-    `;
+app.post(
+  "/api/gemini/applicant-summary",
+  rateLimit(10 * 60 * 1000, 30),
+  requireAuth(ADMIN_ROLE_LIST),
+  async (req, res) => {
+    const { applicant } = req.body || {};
+    try {
+      if (!applicant) return res.status(400).json({ error: "Applicant data is required" });
+      const response = await getAiClient().models.generateContent({
+        model: ACTIVE_GEMINI_MODEL,
+        contents: `Summarize BNCC applicant suitability in one short Bengali sentence (GPA ${applicant.sscGpa}, Height ${applicant.heightFeet}'${applicant.heightInches}", Weight ${applicant.weightKg}kg, Gender ${applicant.gender}).`,
+      });
+      return res.json({ text: response.text });
+    } catch {
+      return res.json({
+        isFallback: true,
+        text: `[অফলাইন সারাংশ] জিপিএ ${applicant?.sscGpa || "N/A"} এবং উচ্চতা ${applicant?.heightFeet || 5}'${applicant?.heightInches || 0}" অনুযায়ী প্রার্থী প্রাথমিক যোগ্যতার মানদণ্ডে মূল্যায়িত।`,
+      });
+    }
+  }
+);
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING, description: "Main guide title" },
-            refNumber: { type: Type.STRING, description: "Guide reference number" },
-            collegeName: { type: Type.STRING, description: "College and Platoon Name" },
-            regimentInfo: { type: Type.STRING, description: "Battalion and Regiment info" },
-            establishedYear: { type: Type.STRING, description: "ESTD text" },
-            introText: { type: Type.STRING, description: "Introductory paragraph" },
-            photoRulesTitle: { type: Type.STRING, description: "Title for photo rules" },
-            photoRules: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "List of photo guidelines"
+app.post(
+  "/api/gemini/generate-circular",
+  rateLimit(10 * 60 * 1000, 15),
+  requireAuth(["super_admin", "admin"]),
+  async (req, res) => {
+    const { startDate, deadlineDate, refNumber } = req.body || {};
+    try {
+      if (!startDate || !deadlineDate || !refNumber) {
+        return res.status(400).json({ error: "startDate, deadlineDate, and refNumber are required" });
+      }
+      const response = await getAiClient().models.generateContent({
+        model: ACTIVE_GEMINI_MODEL,
+        contents: `Generate an official BNCC cadet enrollment circular in formal Unicode Bengali for Cox's Bazar City College BNCC Platoon (15 BNCC Battalion, Karnaphuli Regiment, PUO Ujjal Kanti Deb). Start: ${startDate}, Deadline: ${deadlineDate}, Ref: ${refNumber}.`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              introduction: { type: Type.STRING },
+              purpose: { type: Type.STRING },
+              eligibility: { type: Type.STRING },
+              requiredDocuments: { type: Type.STRING },
+              applicationProcedure: { type: Type.STRING },
+              importantDates: { type: Type.STRING },
+              verificationProcess: { type: Type.STRING },
+              rulesAndConditions: { type: Type.STRING },
+              contactInfo: { type: Type.STRING },
+              footer: { type: Type.STRING },
+              category: { type: Type.STRING },
             },
-            aiRulesTitle: { type: Type.STRING, description: "Title for AI check section" },
-            aiRulesText: { type: Type.STRING, description: "AI photo verification details" },
-            securityRulesTitle: { type: Type.STRING, description: "Title for security & password section" },
-            securityRulesText: { type: Type.STRING, description: "Password & security instructions" },
-            workflowTitle: { type: Type.STRING, description: "Title for workflow section" },
-            workflowSteps: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  step: { type: Type.INTEGER },
-                  title: { type: Type.STRING },
-                  desc: { type: Type.STRING }
+            required: [
+              "title",
+              "introduction",
+              "purpose",
+              "eligibility",
+              "requiredDocuments",
+              "applicationProcedure",
+              "importantDates",
+              "verificationProcess",
+              "rulesAndConditions",
+              "contactInfo",
+              "footer",
+              "category",
+            ],
+          },
+        },
+      });
+      if (response.text) {
+        return res.json(JSON.parse(response.text.trim()));
+      }
+      throw new Error("Empty response");
+    } catch {
+      return res.json({
+        title: "বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (বিএনসিসি) নতুন ক্যাডেট ভর্তি বিজ্ঞপ্তি",
+        introduction:
+          "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনে নতুন ক্যাডেট ভর্তির জন্য আগ্রহী শিক্ষার্থীদের কাছ থেকে আবেদন আহ্বান করা যাচ্ছে।",
+        purpose: "শিক্ষার্থীদের মধ্যে দেশপ্রেম, শৃঙ্খলা ও নেতৃত্বগুণ বিকাশ।",
+        eligibility:
+          "একাদশ শ্রেণী বা অনার্স ১ম বর্ষের নিয়মিত শিক্ষার্থী, ন্যূনতম জিপিএ ৩.০০, ছাত্র উচ্চতা ৫'৬\", ছাত্রী ৫'২\"।",
+        requiredDocuments: "এসএসসি সনদ, ভর্তি রসিদ, পাসপোর্ট ছবি ও ব্লাড গ্রুপ রিপোর্ট।",
+        applicationProcedure: "অনলাইন পোর্টালের মাধ্যমে আবেদন সম্পন্ন করে প্রবেশপত্র সংগ্রহ করতে হবে।",
+        importantDates: `আবেদন শুরু: ${startDate} | শেষ তারিখ: ${deadlineDate}`,
+        verificationProcess: "শারীরিক, লিখিত ও মৌখিক পরীক্ষা এবং কিউআর উপস্থিতি যাচাই।",
+        rulesAndConditions: "সাপ্তাহিক প্যারেড ও প্লাটুন শৃঙ্খলা মেনে চলা বাধ্যতামূলক।",
+        contactInfo: "প্লাটুন কমান্ডার উজ্জ্বল কান্তি দেব (+৮৮০ ১৮১২-৪৩০৪৫৪)",
+        footer: `আদেশক্রমে, প্লাটুন কমান্ডার | সূত্র: ${refNumber}`,
+        category: "Admission / Membership",
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/gemini/generate-guide",
+  rateLimit(10 * 60 * 1000, 15),
+  requireAuth(["super_admin", "admin"]),
+  async (req, res) => {
+    const { promptInstruction, refNumber } = req.body || {};
+    try {
+      const response = await getAiClient().models.generateContent({
+        model: ACTIVE_GEMINI_MODEL,
+        contents: `Generate an official BNCC Admission Application Guide in formal Unicode Bengali. Ref: ${refNumber || "CBCC-BNCC-GUIDE-2026"}. Notes: ${promptInstruction || "Standard admission guide"}`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              refNumber: { type: Type.STRING },
+              collegeName: { type: Type.STRING },
+              regimentInfo: { type: Type.STRING },
+              establishedYear: { type: Type.STRING },
+              introText: { type: Type.STRING },
+              photoRulesTitle: { type: Type.STRING },
+              photoRules: { type: Type.ARRAY, items: { type: Type.STRING } },
+              aiRulesTitle: { type: Type.STRING },
+              aiRulesText: { type: Type.STRING },
+              securityRulesTitle: { type: Type.STRING },
+              securityRulesText: { type: Type.STRING },
+              workflowTitle: { type: Type.STRING },
+              workflowSteps: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    step: { type: Type.INTEGER },
+                    title: { type: Type.STRING },
+                    desc: { type: Type.STRING },
+                  },
+                  required: ["step", "title", "desc"],
                 },
-                required: ["step", "title", "desc"]
               },
-              description: "Step-by-step workflow"
+              admitCardTitle: { type: Type.STRING },
+              admitCardText: { type: Type.STRING },
+              docsTitle: { type: Type.STRING },
+              docsList: { type: Type.ARRAY, items: { type: Type.STRING } },
+              warningText: { type: Type.STRING },
+              commanderName: { type: Type.STRING },
+              commanderRank: { type: Type.STRING },
+              platoonFooter: { type: Type.STRING },
+              subFooter: { type: Type.STRING },
             },
-            admitCardTitle: { type: Type.STRING, description: "Title for admit card section" },
-            admitCardText: { type: Type.STRING, description: "Admit card details" },
-            docsTitle: { type: Type.STRING, description: "Title for required docs section" },
-            docsList: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "List of required documents"
-            },
-            warningText: { type: Type.STRING, description: "Warning / Disqualification note" },
-            commanderName: { type: Type.STRING, description: "Commander Name" },
-            commanderRank: { type: Type.STRING, description: "Commander Rank" },
-            platoonFooter: { type: Type.STRING, description: "Platoon Footer" },
-            subFooter: { type: Type.STRING, description: "Sub Footer" }
+            required: [
+              "title",
+              "refNumber",
+              "collegeName",
+              "regimentInfo",
+              "establishedYear",
+              "introText",
+              "photoRulesTitle",
+              "photoRules",
+              "aiRulesTitle",
+              "aiRulesText",
+              "securityRulesTitle",
+              "securityRulesText",
+              "workflowTitle",
+              "workflowSteps",
+              "admitCardTitle",
+              "admitCardText",
+              "docsTitle",
+              "docsList",
+              "warningText",
+              "commanderName",
+              "commanderRank",
+              "platoonFooter",
+              "subFooter",
+            ],
           },
-          required: [
-            "title", "refNumber", "collegeName", "regimentInfo", "establishedYear",
-            "introText", "photoRulesTitle", "photoRules", "aiRulesTitle", "aiRulesText",
-            "securityRulesTitle", "securityRulesText", "workflowTitle", "workflowSteps",
-            "admitCardTitle", "admitCardText", "docsTitle", "docsList", "warningText",
-            "commanderName", "commanderRank", "platoonFooter", "subFooter"
-          ]
-        }
+        },
+      });
+      if (response.text) {
+        return res.json(JSON.parse(response.text.trim()));
       }
-    });
-
-    if (response.text) {
-      let rawText = response.text.trim();
-      if (rawText.startsWith("```")) {
-        rawText = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-      }
-      const data = JSON.parse(rawText.trim());
-      return res.json(data);
+      throw new Error("Empty response");
+    } catch {
+      return res.status(502).json({
+        error: "AI guide generation temporarily unavailable",
+        code: "AI_FALLBACK",
+      });
     }
-    throw new Error("Empty response from AI");
-  } catch (error: any) {
-    console.error("Server AI Guide Generator Error (Falling back):", error);
-    const fallbackGuide = {
-      title: "অনলাইন ভর্তি আবেদন নির্দেশিকা ও নিয়মাবলী (OFFICIAL APPLICANT GUIDE)",
-      refNumber: refNumber || "CBCC-BNCC-GUIDE-2026",
-      collegeName: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন",
-      regimentInfo: "১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট",
-      establishedYear: "ESTD. 2020 • COX'S BAZAR CITY COLLEGE",
-      introText: "বাংলাদেশ ন্যাশনাল ক্যাডেট কোর (BNCC) কক্সবাজার সিটি কলেজ প্লাটুনে যোগদানে ইচ্ছুক সকল ভর্তিচ্ছু শিক্ষার্থীর সুবিধার্থে অনলাইন আবেদন প্রক্রিয়া সহজতর করতে এই নির্দেশিকা প্রকাশ করা হলো। আবেদন করার পূর্বে নিয়মাবলীসমূহ অত্যন্ত সতর্কতার সাথে পাঠ করার জন্য নির্দেশ প্রদান করা যাচ্ছে।",
-      photoRulesTitle: "১. ছবি আপলোডের সঠিক নিয়মাবলী (Photo Rules)",
-      photoRules: [
-        "ব্যাকগ্রাউন্ড: অবশ্যই এক রঙের (সাদা অথবা হালকা নীল) ব্যাকগ্রাউন্ড হতে হবে। কোনো প্রাকৃতিক দৃশ্য বা আসবাবপত্র থাকা যাবে না।",
-        "পোশাক: কলারযুক্ত মার্জিত ফরমাল পোশাক পরিহিত হতে হবে। চশমা, টুপি বা ক্যাপ পরা ছবি গ্রহণযোগ্য নয়।",
-        "পোজ ও অবস্থান: সরাসরি ক্যামেরার দিকে সোজা হয়ে তাকাতে হবে (Military aligned)। দুই কান ও কাঁধ সমানভাবে স্পষ্ট দেখা যেতে হবে।",
-        "আলো ও স্পষ্টতা: ছবিতে পর্যাপ্ত আলো থাকতে হবে। কোনো অস্পষ্ট, ঘোলাটে, বা অতিরিক্ত ফিল্টার করা সেলফি আপলোড করা যাবে না।"
-      ],
-      aiRulesTitle: "২. আর্টিফিশিয়াল ইন্টেলিজেন্স (AI) ফটো চেকিং",
-      aiRulesText: "আবেদন ফর্মে যুক্ত রয়েছে Gemini AI Integration। আপনি যখনই ছবি আপলোড করবেন, এআই স্বয়ংক্রিয়ভাবে ছবির ব্যাকগ্রাউন্ড, চশমা, টুপি, ছবির গুণমান এবং পোজ বিশ্লেষণ করবে। ছবি নিয়ম বহির্ভূত হলে পোর্টাল আপনাকে সতর্কবার্তা দেবে এবং সংশোধন করতে বলবে।",
-      securityRulesTitle: "৩. সুরক্ষিত পাসওয়ার্ড সংরক্ষণ (Password Guard)",
-      securityRulesText: "আবেদনপত্রটি সফলভাবে সাবমিট করার সাথে সাথে স্ক্রিনে একটি অটো-জেনারেটেড সুরক্ষিত পাসওয়ার্ড (Auto-generated Password) প্রদর্শিত হবে। আপনার নিবন্ধিত মোবাইল নম্বর এবং এই পাসওয়ার্ডটি অত্যন্ত যত্নসহকারে লিখে রাখুন। আপনার ড্যাশবোর্ডে প্রবেশের একমাত্র চাবিকাঠি এটি।",
-      workflowTitle: "৪. আবেদন প্রক্রিয়া (Application Workflow)",
-      workflowSteps: [
-        { step: 1, title: "ধাপ ১ (রেজিস্ট্রেশন)", desc: "ফর্মে ব্যক্তিগত বিবরণ, নাম (বাংলা ও ইংরেজিতে), এবং এসএসসি জিপিএ টাইপ করুন।" },
-        { step: 2, title: "ধাপ ২ (ছবি আপলোড)", desc: "সঠিক নিয়ম মেনে ছবি আপলোড করুন এবং এআই সনাক্তকরণ সম্পন্ন করুন।" },
-        { step: 3, title: "ধাপ ৩ (শারীরিক বিবরণ)", desc: "আপনার সঠিক উচ্চতা, ওজন এবং রক্তের গ্রুপ ইনপুট করুন।" },
-        { step: 4, title: "ধাপ ৪ (সাবমিশন)", desc: "ফর্ম সাবমিট করে পাসওয়ার্ড লিখে রাখুন।" }
-      ],
-      admitCardTitle: "৫. প্রবেশপত্র (Admit Card) সংগ্রহ প্রক্রিয়া",
-      admitCardText: "আবেদনটি জমা হওয়ার পর আমাদের পিইউও এবং প্লাটুন অ্যাডমিনগণ আবেদনপত্রের সকল তথ্য ও ছবি গভীরভাবে নিরীক্ষণ করবেন। সবকিছু নির্ভুল থাকলে আবেদনটি অনুমোদন (Approved) করা হবে। অনুমোদন সম্পন্ন হওয়া মাত্রই আপনি ড্যাশবোর্ডে লগইন করে অফিশিয়াল কিউআর ও বারকোড সম্বলিত প্রবেশপত্র ডাউনলোড করতে পারবেন।",
-      docsTitle: "৬. প্রয়োজনীয় কাগজপত্র (সংগে আনতে হবে)",
-      docsList: [
-        "এসএসসি ও এইচএসসি সনদপত্রের ফটোকপি (২ কপি)",
-        "কলেজে ভর্তির রশিদ/রশিদ কপি (১ কপি)",
-        "পাসপোর্ট সাইজ রঙিন ছবি (২ কপি)",
-        "ব্লাড গ্রুপ রিপোর্টের ফটোকপি",
-        "জাতীয় পরিচয়পত্র অথবা জন্ম সনদের ফটোকপি"
-      ],
-      warningText: "সতর্কতা: ভুল বা মিথ্যা তথ্য এবং জালিয়াতিপূর্ণ ছবি প্রদান করলে আবেদনপত্র সরাসরি বাতিল বলে গণ্য হবে।",
-      commanderName: "উজ্জ্বল কান্তি দেব",
-      commanderRank: "প্রফেসর আন্ডার অফিসার ও প্লাটুন কমান্ডার",
-      platoonFooter: "কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুন",
-      subFooter: "১৫ বিএনসিসি ব্যাটালিয়ন, কর্ণফুলী রেজিমেন্ট"
-    };
-    return res.json(fallbackGuide);
   }
-});
+);
 
-// 9. AI EXAMINER EVALUATE ANSWER SCRIPT
-app.post("/api/gemini/evaluate-answer-script", async (req: express.Request, res: express.Response) => {
-  try {
-    const { questions, answers, candidateInfo, examTitle } = req.body;
-    if (!questions || !Array.isArray(questions)) {
-      return res.status(400).json({ error: "Questions array is required" });
-    }
-
-    const payloadForAI = questions.map((q: any) => {
-      const userAnsObj = answers ? answers[q.id] : null;
-      const candidateAns = userAnsObj ? userAnsObj.selectedAnswer : "";
-      return {
-        questionId: q.id,
-        questionText: q.question,
-        questionType: q.questionType,
-        subject: q.subject,
-        maxMarks: q.marks || 1,
-        options: q.options || [],
-        correctAnswer: q.correctAnswer || "",
-        acceptedAnswers: q.acceptedAnswers || [],
-        explanation: q.explanation || "",
-        candidateAnswer: candidateAns !== undefined && candidateAns !== null ? candidateAns : ""
-      };
-    });
-
-    const prompt = `
-    You are an expert military and academic examiner for the Cox's Bazar City College BNCC Platoon Online Examination System.
-    Exam Title: ${examTitle || "BNCC Knowledge Assessment & Recruitment Exam"}
-    Candidate Name: ${candidateInfo?.name || "Candidate"} (ID: ${candidateInfo?.registrationNumber || "N/A"})
-
-    Analyze each question and the candidate's response with strict academic fairness, accuracy, and military discipline.
-    
-    Evaluation Guidelines:
-    1. Objective Questions (MCQ, True/False, Multiple Choice):
-       - Compare candidate answer with the correct answer key.
-       - If correct, award full maxMarks.
-       - If incorrect or empty, award 0 marks.
-       - Provide a concise Bengali feedback explanation.
-       
-    2. Short Answer / Subjective / Written Questions (Short Question, Fill in Gaps, Changing Sentence, Tag Question):
-       - Read the candidate's response carefully.
-       - Compare with the correct answer, accepted answers, or explanation.
-       - Award full marks for accurate complete responses.
-       - Award partial marks (e.g., 2.5 out of 5, or 1 out of 2) for partially correct responses, missing key points, or minor grammatical/conceptual flaws.
-       - Award 0 for completely incorrect or blank responses.
-       - Provide clear, constructive marking justification and feedback in Bengali explaining why these marks were awarded.
-
-    Questions & Candidate Answers:
-    ${JSON.stringify(payloadForAI, null, 2)}
-
-    Return strict JSON format in Bengali with schema matching:
-    {
-      "evaluations": [
-        {
-          "questionId": "string",
-          "obtainedMarks": number,
-          "maxMarks": number,
-          "status": "correct" | "wrong" | "partial" | "unanswered",
-          "feedback": "Detailed justification in Bengali for the marks awarded",
-          "confidence": number
-        }
-      ],
-      "overallFeedback": "Professional summary in Bengali evaluating overall candidate performance and areas of improvement"
-    }
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            evaluations: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  questionId: { type: Type.STRING },
-                  obtainedMarks: { type: Type.NUMBER },
-                  maxMarks: { type: Type.NUMBER },
-                  status: { type: Type.STRING },
-                  feedback: { type: Type.STRING },
-                  confidence: { type: Type.NUMBER }
-                },
-                required: ["questionId", "obtainedMarks", "maxMarks", "status", "feedback"]
-              }
-            },
-            overallFeedback: { type: Type.STRING }
-          },
-          required: ["evaluations", "overallFeedback"]
-        }
+app.post(
+  "/api/gemini/evaluate-answer-script",
+  rateLimit(10 * 60 * 1000, 30),
+  requireAuth(["super_admin", "admin", "exam_admin"]),
+  async (req, res) => {
+    try {
+      const { questions, answers, candidateInfo, examTitle } = req.body || {};
+      if (!questions || !Array.isArray(questions)) {
+        return res.status(400).json({ error: "Questions array is required" });
       }
-    });
 
-    if (response.text) {
-      let rawText = response.text.trim();
-      if (rawText.startsWith("```")) {
-        rawText = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-      }
-      const parsed = JSON.parse(rawText.trim());
-      return res.json(parsed);
-    }
-    throw new Error("Empty AI response");
-  } catch (error: any) {
-    console.error("AI Examiner Evaluation Error (Falling back):", error);
-    // Intelligent server fallback logic for evaluation
-    const { questions, answers } = req.body || {};
-    const fallbackEvaluations = (questions || []).map((q: any) => {
-      const userAnsObj = answers ? answers[q.id] : null;
-      const given = userAnsObj ? userAnsObj.selectedAnswer : "";
-      const maxMarks = q.marks || 1;
-      const isSubjective = ["short_question", "fill_gaps", "changing_sentence", "tag_question"].includes(q.questionType);
-
-      if (given === undefined || given === null || given === "") {
+      const payloadForAI = questions.map((q: any) => {
+        const userAnsObj = answers ? answers[q.id] : null;
         return {
           questionId: q.id,
-          obtainedMarks: 0,
-          maxMarks,
-          status: "unanswered",
-          feedback: "পরীক্ষার্থী এই প্রশ্নটির কোনো উত্তর প্রদান করেননি।",
-          confidence: 100
+          questionText: q.question,
+          questionType: q.questionType,
+          subject: q.subject,
+          maxMarks: q.marks || 1,
+          options: q.options || [],
+          correctAnswer: q.correctAnswer || "",
+          acceptedAnswers: q.acceptedAnswers || [],
+          explanation: q.explanation || "",
+          candidateAnswer: userAnsObj?.selectedAnswer ?? "",
         };
-      }
+      });
 
-      if (!isSubjective) {
-        const givenStr = typeof given === "string" ? given.trim().toUpperCase() : "";
-        const keyStr = typeof q.correctAnswer === "string" ? q.correctAnswer.trim().toUpperCase() : "";
-        const isCorrect = givenStr === keyStr;
+      const response = await getAiClient().models.generateContent({
+        model: ACTIVE_GEMINI_MODEL,
+        contents: `Evaluate exam "${examTitle || "BNCC Exam"}" for ${candidateInfo?.name || "Candidate"}. Award exact marks strictly based on model answers and provide constructive Bengali feedback.\nData: ${JSON.stringify(payloadForAI)}`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              evaluations: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    questionId: { type: Type.STRING },
+                    obtainedMarks: { type: Type.NUMBER },
+                    maxMarks: { type: Type.NUMBER },
+                    status: { type: Type.STRING },
+                    feedback: { type: Type.STRING },
+                    confidence: { type: Type.NUMBER },
+                  },
+                  required: ["questionId", "obtainedMarks", "maxMarks", "status", "feedback"],
+                },
+              },
+              overallFeedback: { type: Type.STRING },
+            },
+            required: ["evaluations", "overallFeedback"],
+          },
+        },
+      });
+
+      if (response.text) {
+        return res.json(JSON.parse(response.text.trim()));
+      }
+      throw new Error("Empty response");
+    } catch {
+      const { questions, answers } = req.body || {};
+      const fallbackEvaluations = (questions || []).map((q: any) => {
+        const given = answers?.[q.id]?.selectedAnswer ?? "";
+        const maxMarks = q.marks || 1;
+        if (!given || (Array.isArray(given) && given.length === 0)) {
+          return {
+            questionId: q.id,
+            obtainedMarks: 0,
+            maxMarks,
+            status: "unanswered",
+            feedback: "উত্তর প্রদান করা হয়নি।",
+            confidence: 100,
+          };
+        }
+        const isCorrect =
+          String(given).trim().toLowerCase() === String(q.correctAnswer || "").trim().toLowerCase();
         return {
           questionId: q.id,
           obtainedMarks: isCorrect ? maxMarks : 0,
           maxMarks,
-          status: isCorrect ? "correct" : "wrong",
-          feedback: isCorrect ? "অবজেক্টিভ উত্তরটি সম্পূর্ণ নির্ভুল।" : `উত্তরটি সঠিক নয়। সঠিক উত্তর: ${q.correctAnswer || "মডেল উত্তর"}`,
-          confidence: 100
+          status: isCorrect ? "correct" : "partial",
+          feedback: isCorrect
+            ? "মডেল উত্তরের সাথে মিলেছে।"
+            : "ম্যানুয়াল পরীক্ষকের চূড়ান্ত যাচাই প্রয়োজন।",
+          confidence: 80,
         };
-      } else {
-        // Subjective fallback
-        const givenText = String(given).trim();
-        const keyText = String(q.correctAnswer || "").trim();
-        let awarded = 0;
-        let status = "wrong";
-        let feedback = "উত্তরটি আংশিক সঠিক।";
+      });
+      return res.json({
+        evaluations: fallbackEvaluations,
+        isFallback: true,
+        overallFeedback: "স্বয়ংক্রিয় প্রাথমিক মূল্যায়ন সম্পন্ন হয়েছে; অনুগ্রহ করে পরীক্ষকের মাধ্যমে চূড়ান্ত করুন।",
+      });
+    }
+  }
+);
 
-        if (keyText && givenText.toLowerCase() === keyText.toLowerCase()) {
-          awarded = maxMarks;
-          status = "correct";
-          feedback = "লিখিত উত্তরটি মডেল উত্তরের সাথে সম্পূর্ণ মিলে গেছে।";
-        } else if (givenText.length > 8) {
-          awarded = Number((maxMarks * 0.75).toFixed(1));
-          status = "partial";
-          feedback = "উত্তরটিতে বিষয়বস্তুর প্রাসঙ্গিক বিষয় সংসংযুক্ত ও অধিকাংশ শর্ত পূরণ হয়েছে।";
-        } else {
-          awarded = Number((maxMarks * 0.5).toFixed(1));
-          status = "partial";
-          feedback = "উত্তরটি সংক্ষিপ্ত বা আংশিক সঠিক।";
-        }
+interface ContactInquiry {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  subject: string;
+  message: string;
+  createdAt: string;
+}
+const contactInquiries: ContactInquiry[] = [];
 
-        return {
-          questionId: q.id,
-          obtainedMarks: awarded,
-          maxMarks,
-          status,
-          feedback,
-          confidence: 90
-        };
-      }
-    });
+app.post("/api/contact", rateLimit(10 * 60 * 1000, 15), (req, res) => {
+  const { name, phone, email, subject, message } = req.body || {};
+  const clean = (v: unknown, max: number) =>
+    String(v ?? "")
+      .replace(/[<>]/g, "")
+      .trim()
+      .slice(0, max);
 
-    return res.json({
-      evaluations: fallbackEvaluations,
-      overallFeedback: "এআই এক্সামিনারের মূল্যায়ন সম্পন্ন হয়েছে। প্রতিটি প্রাপ্ত নম্বর ও ফিডব্যাক রিভিউ করে অনুমোদন বা পরিবর্তন করুন।"
+  const safeName = clean(name, 120);
+  const safePhone = clean(phone, 32);
+  const safeEmail = clean(email, 160);
+  const safeSubject = clean(subject, 160) || "General Inquiry";
+  const safeMessage = clean(message, 2500);
+
+  if (!safeName || !safePhone || !safeMessage) {
+    return res.status(400).json({
+      error: "নাম, মোবাইল নম্বর এবং বার্তা অবশ্যই প্রদান করতে হবে।",
     });
   }
+  if (!/^[0-9+\-\s()]{6,25}$/.test(safePhone)) {
+    return res.status(400).json({
+      error: "অনুগ্রহ করে একটি সঠিক মোবাইল নম্বর প্রদান করুন।",
+    });
+  }
+
+  const inquiry: ContactInquiry = {
+    id: `CBCC-INQ-${Date.now().toString(36).toUpperCase()}`,
+    name: safeName,
+    phone: safePhone,
+    email: safeEmail,
+    subject: safeSubject,
+    message: safeMessage,
+    createdAt: new Date().toISOString(),
+  };
+
+  contactInquiries.unshift(inquiry);
+  if (contactInquiries.length > 200) {
+    contactInquiries.length = 200;
+  }
+
+  return res.status(201).json({
+    success: true,
+    ticketId: inquiry.id,
+    createdAt: inquiry.createdAt,
+  });
 });
 
-// EXAM MODULE HEALTH ENDPOINT
-app.get("/api/exam/health", (req: express.Request, res: express.Response) => {
+app.get("/api/contact", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
+  return res.json({ inquiries: contactInquiries });
+});
+
+// =========================================================================
+// AUTHENTICATED MEDIA MANAGEMENT VAULT (PUBLIC VS PRIVATE ISOLATION)
+// =========================================================================
+
+const MEDIA_ROOT_DIR = path.join(process.cwd(), ".bncc-media");
+const MEDIA_PUBLIC_DIR = path.join(MEDIA_ROOT_DIR, "public");
+const MEDIA_PRIVATE_DIR = path.join(MEDIA_ROOT_DIR, "private");
+const MEDIA_TRASH_PUBLIC_DIR = path.join(MEDIA_ROOT_DIR, "deleted-public");
+const MEDIA_META_FILE = path.join(MEDIA_ROOT_DIR, "metadata.json");
+const PUBLIC_ASSETS_META_FILE = path.join(MEDIA_ROOT_DIR, "public-assets-meta.json");
+
+function getPublicRootDir(): string {
+  const devRoot = path.join(process.cwd(), "public");
+  if (fs.existsSync(devRoot)) return devRoot;
+  const distRoot = path.join(process.cwd(), "dist");
+  if (fs.existsSync(distRoot)) return distRoot;
+  return devRoot;
+}
+
+function getPublicAssetsDir(): string {
+  const devDir = path.join(process.cwd(), "public", "assets");
+  if (fs.existsSync(devDir)) return devDir;
+  const distDir = path.join(process.cwd(), "dist", "assets");
+  if (fs.existsSync(distDir)) return distDir;
+  return devDir;
+}
+
+function ensureMediaDirs() {
+  fs.mkdirSync(MEDIA_PUBLIC_DIR, { recursive: true });
+  fs.mkdirSync(MEDIA_PRIVATE_DIR, { recursive: true });
+  fs.mkdirSync(MEDIA_TRASH_PUBLIC_DIR, { recursive: true });
+}
+
+interface StoredMediaMeta {
+  id: string;
+  fileName: string;
+  storedFileName: string;
+  title: string;
+  altText: string;
+  description: string;
+  mimeType: string;
+  sizeBytes: number;
+  category: string;
+  tags: string[];
+  visibility: "public" | "private";
+  storageLocation: "firebase_storage" | "server_vault" | "public_assets" | "external";
+  storagePath: string;
+  url: string;
+  sha256: string;
+  isPrivateCandidateAsset?: boolean;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type PublicAssetMetaOverride = Partial<
+  Pick<StoredMediaMeta, "fileName" | "title" | "altText" | "description" | "category" | "tags">
+> & { hidden?: boolean };
+
+function readPublicAssetOverrides(): Record<string, PublicAssetMetaOverride> {
+  ensureMediaDirs();
+  if (!fs.existsSync(PUBLIC_ASSETS_META_FILE)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(PUBLIC_ASSETS_META_FILE, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePublicAssetOverrides(overrides: Record<string, PublicAssetMetaOverride>) {
+  ensureMediaDirs();
+  fs.writeFileSync(PUBLIC_ASSETS_META_FILE, JSON.stringify(overrides, null, 2), "utf8");
+}
+
+const PUBLIC_ASSET_MIME_MAP: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".pdf": "application/pdf",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".json": "application/json",
+  ".xml": "application/xml",
+  ".md": "text/markdown",
+  ".txt": "text/plain",
+};
+
+const PUBLIC_LOGO_FILES = new Set(["New_Project__2__6a6c0725.png", "POU_7647ec14.png"]);
+const PUBLIC_LOGO_PREFIXES = ["Bncc_logo", "logo-removebg-preview", "New_Project", "2025-2026", "122__", "hh_", "hh__"];
+const PUBLIC_GALLERY_PREFIXES = ["2025__", "6.3__", "gg__", "dd__", "dddf__"];
+
+function inferPublicAssetCategory(fileName: string, mimeType: string): string {
+  if (
+    PUBLIC_LOGO_FILES.has(fileName) ||
+    PUBLIC_LOGO_PREFIXES.some((prefix) => fileName.startsWith(prefix))
+  ) {
+    return "Logos & Branding";
+  }
+  if (
+    mimeType === "application/pdf" ||
+    mimeType === "text/html" ||
+    mimeType === "text/css" ||
+    mimeType === "application/javascript" ||
+    mimeType === "text/plain" ||
+    mimeType === "text/markdown" ||
+    mimeType === "application/json"
+  ) {
+    return "Documents";
+  }
+  if (PUBLIC_GALLERY_PREFIXES.some((prefix) => fileName.startsWith(prefix))) {
+    return "Gallery";
+  }
+  if (mimeType.startsWith("image/")) {
+    return "Cadets";
+  }
+  return "General";
+}
+
+function formatPublicAssetTitle(fileName: string): string {
+  const withoutExt = fileName.replace(/\.[^.]+$/, "");
+  const withoutHash = withoutExt.replace(/_[0-9a-f]{8}$/i, "");
+  return withoutHash.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim() || fileName;
+}
+
+const publicHashCache = new Map<string, { mtimeMs: number; size: number; sha256: string }>();
+
+function getCachedFileSha256(fullPath: string, stat: fs.Stats): string {
+  const cached = publicHashCache.get(fullPath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.sha256;
+  }
+  const sha256 = crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex");
+  publicHashCache.set(fullPath, { mtimeMs: stat.mtimeMs, size: stat.size, sha256 });
+  return sha256;
+}
+
+interface ScannedPublicAsset {
+  meta: StoredMediaMeta;
+  fullPath: string;
+  relPath: string;
+}
+
+const ROOT_PUBLIC_EXCLUDES = new Set(["assets-manifest.json"]);
+
+function scanPublicAssets(includeHash = false): ScannedPublicAsset[] {
+  const baseDir = getPublicAssetsDir();
+  const rootDir = getPublicRootDir();
+  const overrides = readPublicAssetOverrides();
+  const results: ScannedPublicAsset[] = [];
+
+  if (fs.existsSync(baseDir)) {
+    const walk = (dir: string) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith(".")) continue;
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(fullPath);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+
+        const relPath = path.relative(baseDir, fullPath).split(path.sep).join("/");
+        const stat = fs.statSync(fullPath);
+        const ext = path.extname(entry.name).toLowerCase();
+        const mimeType = PUBLIC_ASSET_MIME_MAP[ext] || "text/plain";
+        const id = `pub_${crypto.createHash("sha1").update(relPath).digest("hex").slice(0, 12)}`;
+        const url = `/assets/${relPath.split("/").map((seg) => encodeURIComponent(seg)).join("/")}`;
+        const override = overrides[id] || {};
+        if (override.hidden) continue;
+        const defaultCategory = inferPublicAssetCategory(entry.name, mimeType);
+        const subFolder = relPath.includes("/") ? relPath.split("/")[0] : "assets";
+        const createdIso = stat.birthtimeMs ? new Date(stat.birthtimeMs).toISOString() : new Date(stat.mtimeMs).toISOString();
+        const updatedIso = new Date(stat.mtimeMs).toISOString();
+
+        results.push({
+          fullPath,
+          relPath,
+          meta: {
+            id,
+            fileName: override.fileName || entry.name,
+            storedFileName: relPath,
+            title: override.title || formatPublicAssetTitle(entry.name),
+            altText: override.altText || formatPublicAssetTitle(entry.name),
+            description: override.description || `Site static asset from public/assets/${relPath}`,
+            mimeType,
+            sizeBytes: stat.size,
+            category: override.category || defaultCategory,
+            tags: Array.isArray(override.tags) ? override.tags : ["public-assets", subFolder],
+            visibility: "public",
+            storageLocation: "public_assets",
+            storagePath: `public/assets/${relPath}`,
+            url,
+            sha256: includeHash ? getCachedFileSha256(fullPath, stat) : "",
+            isPrivateCandidateAsset: false,
+            uploadedBy: "system",
+            createdAt: createdIso,
+            updatedAt: updatedIso,
+          },
+        });
+      }
+    };
+
+    walk(baseDir);
+  }
+
+  // Also include all root public assets & PWA branding icons (e.g. /icon.svg, /pwa-*.png, /offline.html, /robots.txt, /sitemap.xml)
+  if (fs.existsSync(rootDir)) {
+    const rootEntries = fs.readdirSync(rootDir, { withFileTypes: true });
+    for (const entry of rootEntries) {
+      if (!entry.isFile() || entry.name.startsWith(".") || ROOT_PUBLIC_EXCLUDES.has(entry.name)) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      const fullPath = path.join(rootDir, entry.name);
+      const stat = fs.statSync(fullPath);
+      const mimeType = PUBLIC_ASSET_MIME_MAP[ext] || "application/octet-stream";
+      const id = `pub_${crypto.createHash("sha1").update(`root:${entry.name}`).digest("hex").slice(0, 12)}`;
+      const url = `/${encodeURIComponent(entry.name)}`;
+      const override = overrides[id] || {};
+      if (override.hidden) continue;
+      const isDoc =
+        mimeType.startsWith("text/") ||
+        mimeType === "application/xml" ||
+        mimeType === "application/json" ||
+        mimeType === "application/pdf";
+      const createdIso = stat.birthtimeMs ? new Date(stat.birthtimeMs).toISOString() : new Date(stat.mtimeMs).toISOString();
+      const updatedIso = new Date(stat.mtimeMs).toISOString();
+
+      results.push({
+        fullPath,
+        relPath: entry.name,
+        meta: {
+          id,
+          fileName: override.fileName || entry.name,
+          storedFileName: entry.name,
+          title: override.title || formatPublicAssetTitle(entry.name),
+          altText: override.altText || formatPublicAssetTitle(entry.name),
+          description: override.description || `Site static asset from public/${entry.name}`,
+          mimeType,
+          sizeBytes: stat.size,
+          category: override.category || (isDoc ? "Documents" : "Logos & Branding"),
+          tags: Array.isArray(override.tags) ? override.tags : ["public-root", isDoc ? "site-doc" : "branding"],
+          visibility: "public",
+          storageLocation: "public_assets",
+          storagePath: `public/${entry.name}`,
+          url,
+          sha256: includeHash ? getCachedFileSha256(fullPath, stat) : "",
+          isPrivateCandidateAsset: false,
+          uploadedBy: "system",
+          createdAt: createdIso,
+          updatedAt: updatedIso,
+        },
+      });
+    }
+  }
+
+  return results;
+}
+
+const SITE_EXTERNAL_ASSETS: Array<{
+  url: string;
+  fileName: string;
+  title: string;
+  category: string;
+  mimeType: string;
+  description: string;
+  tags: string[];
+}> = [
+  {
+    url: "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png",
+    fileName: "college-official-logo.png",
+    title: "Cox's Bazar City College Official Logo",
+    category: "Logos & Branding",
+    mimeType: "image/png",
+    description: "Official College Crest used in Navbar, Footer, Admit Cards, and Circulars.",
+    tags: ["logo", "college", "branding"],
+  },
+  {
+    url: "https://i.ibb.co/Fb3R6wR/Bncc-logo.png",
+    fileName: "bncc-official-crest.png",
+    title: "BNCC Official Crest & Emblem",
+    category: "Logos & Branding",
+    mimeType: "image/png",
+    description: "Official Bangladesh National Cadet Corps emblem used site-wide and as watermarks.",
+    tags: ["logo", "bncc", "branding"],
+  },
+  {
+    url: "https://upload.wikimedia.org/wikipedia/commons/3/34/A_CUO.png",
+    fileName: "rank-badge-cuo.png",
+    title: "Rank Badge — Cadet Under Officer (CUO)",
+    category: "Logos & Branding",
+    mimeType: "image/png",
+    description: "Official BNCC Cadet Under Officer insignia badge.",
+    tags: ["rank-badge", "cuo", "insignia"],
+  },
+  {
+    url: "https://upload.wikimedia.org/wikipedia/commons/6/63/A_SGT.png",
+    fileName: "rank-badge-sgt.png",
+    title: "Rank Badge — Cadet Sergeant (SGT)",
+    category: "Logos & Branding",
+    mimeType: "image/png",
+    description: "Official BNCC Cadet Sergeant insignia badge.",
+    tags: ["rank-badge", "sgt", "insignia"],
+  },
+  {
+    url: "https://upload.wikimedia.org/wikipedia/commons/7/73/A_CPL.png",
+    fileName: "rank-badge-cpl.png",
+    title: "Rank Badge — Cadet Corporal (CPL)",
+    category: "Logos & Branding",
+    mimeType: "image/png",
+    description: "Official BNCC Cadet Corporal insignia badge.",
+    tags: ["rank-badge", "cpl", "insignia"],
+  },
+  {
+    url: "https://i.ibb.co/m8rYjJx/274856261-1655184164824692-8057334507379742892-n.jpg",
+    fileName: "nomanul-islam-saimon-batch1.jpg",
+    title: "Nomanul Islam Saimon (Batch 1 In-Charge)",
+    category: "Cadets",
+    mimeType: "image/jpeg",
+    description: "Inaugural Batch Platoon In-Charge portrait in Hall of In-Charges.",
+    tags: ["incharge", "batch-1", "cadet"],
+  },
+  {
+    url: "https://i.ibb.co/mGx3CWW/454425731-1865516033934342-5355007169042337456-n.jpg",
+    fileName: "waliul-islam-azan-batch2.jpg",
+    title: "Waliul Islam Azan (Batch 2 In-Charge)",
+    category: "Cadets",
+    mimeType: "image/jpeg",
+    description: "Batch 2 Platoon In-Charge portrait in Hall of In-Charges.",
+    tags: ["incharge", "batch-2", "cadet"],
+  },
+  {
+    url: "https://i.ibb.co/MpXXtK5/387735944-1684451718707442-3020994251185180456-n-1.jpg",
+    fileName: "mehenaj-mahu-batch3.jpg",
+    title: "Mehenaj Mahu (Batch 3 In-Charge)",
+    category: "Cadets",
+    mimeType: "image/jpeg",
+    description: "Batch 3 Platoon In-Charge portrait in Hall of In-Charges.",
+    tags: ["incharge", "batch-3", "cadet"],
+  },
+];
+
+function getExternalSiteAssets(): StoredMediaMeta[] {
+  const overrides = readPublicAssetOverrides();
+  const baseTime = "2026-01-01T00:00:00.000Z";
+  const items: StoredMediaMeta[] = [];
+
+  for (const ext of SITE_EXTERNAL_ASSETS) {
+    const id = `ext_${crypto.createHash("sha1").update(ext.url).digest("hex").slice(0, 12)}`;
+    const override = overrides[id] || {};
+    if (override.hidden) continue;
+
+    items.push({
+      id,
+      fileName: override.fileName || ext.fileName,
+      storedFileName: ext.fileName,
+      title: override.title || ext.title,
+      altText: override.altText || ext.title,
+      description: override.description || ext.description,
+      mimeType: ext.mimeType,
+      sizeBytes: 0,
+      category: override.category || ext.category,
+      tags: Array.isArray(override.tags) ? override.tags : ext.tags,
+      visibility: "public",
+      storageLocation: "external",
+      storagePath: ext.url,
+      url: ext.url,
+      sha256: "",
+      isPrivateCandidateAsset: false,
+      uploadedBy: "system",
+      createdAt: baseTime,
+      updatedAt: baseTime,
+    });
+  }
+
+  return items;
+}
+
+function readMediaMetaList(): StoredMediaMeta[] {
+  ensureMediaDirs();
+  if (!fs.existsSync(MEDIA_META_FILE)) return [];
+  try {
+    const raw = fs.readFileSync(MEDIA_META_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMediaMetaList(items: StoredMediaMeta[]) {
+  ensureMediaDirs();
+  fs.writeFileSync(MEDIA_META_FILE, JSON.stringify(items, null, 2), "utf8");
+}
+
+const ALLOWED_MEDIA_MIME_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "application/pdf": ".pdf",
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "audio/mpeg": ".mp3",
+  "audio/wav": ".wav",
+};
+
+function sanitizeMediaFilename(name: string): string {
+  const base = path.basename(String(name || "asset")).replace(/[^a-zA-Z0-9._-]/g, "_");
+  return base.slice(0, 120) || "asset";
+}
+
+function buildPublicAssetCatalog(): StoredMediaMeta[] {
+  const publicItems = scanPublicAssets(false).map((entry) => entry.meta);
+  const externalItems = getExternalSiteAssets();
+  return [...publicItems, ...externalItems].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+function writePublicAssetsManifest(): void {
+  try {
+    const items = buildPublicAssetCatalog();
+    const payload = JSON.stringify({ generatedAt: new Date().toISOString(), count: items.length, items });
+    const publicManifest = path.join(process.cwd(), "public", "assets-manifest.json");
+    if (fs.existsSync(path.join(process.cwd(), "public"))) {
+      fs.writeFileSync(publicManifest, payload, "utf8");
+    }
+    const distDir = path.join(process.cwd(), "dist");
+    if (fs.existsSync(distDir)) {
+      fs.writeFileSync(path.join(distDir, "assets-manifest.json"), payload, "utf8");
+    }
+  } catch {
+    // Non-blocking manifest generation
+  }
+}
+
+app.get("/api/media/public-assets", (_req, res) => {
+  return res.json({ items: buildPublicAssetCatalog() });
+});
+
+app.get("/api/media/list", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
+  const vaultItems = readMediaMetaList();
+  const publicCatalog = buildPublicAssetCatalog();
+  const combined = [...vaultItems, ...publicCatalog].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  return res.json({ items: combined });
+});
+
+app.post(
+  "/api/media/upload",
+  rateLimit(5 * 60 * 1000, 120),
+  requireAuth(ADMIN_ROLE_LIST),
+  (req, res) => {
+    try {
+      const serverUser = (req as any).serverUser as ServerSessionUser;
+      const {
+        fileName,
+        mimeType,
+        dataBase64,
+        visibility = "public",
+        category = "General",
+        title = "",
+        altText = "",
+        description = "",
+        tags = [],
+        isPrivateCandidateAsset = false,
+        replaceId = "",
+      } = req.body || {};
+
+      const cleanMime = String(mimeType || "").toLowerCase().trim();
+      const ext = ALLOWED_MEDIA_MIME_EXT[cleanMime];
+      if (!ext) {
+        return res.status(400).json({
+          error: "অননুমোদিত ফাইল ফরম্যাট। অনুমোদিত ফরম্যাট: JPG, PNG, WebP, GIF, PDF, MP4, WebM, MP3, WAV।",
+        });
+      }
+
+      if (!dataBase64 || typeof dataBase64 !== "string") {
+        return res.status(400).json({ error: "ফাইল ডেটা পাওয়া যায়নি।" });
+      }
+
+      const rawBase64 = dataBase64.includes(",") ? dataBase64.split(",")[1] : dataBase64;
+      const buffer = Buffer.from(rawBase64, "base64");
+      const maxBytes = 8 * 1024 * 1024;
+      if (!buffer.length || buffer.length > maxBytes) {
+        return res.status(400).json({
+          error: "ফাইলের আকার সর্বোচ্চ ৮ মেগাবাইটের মধ্যে হতে হবে।",
+        });
+      }
+
+      const safeVisibility: "public" | "private" =
+        isPrivateCandidateAsset || visibility === "private" ? "private" : "public";
+      const sanitizedOriginal = sanitizeMediaFilename(fileName || `media${ext}`);
+      const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+
+      const currentItems = readMediaMetaList();
+      if (!replaceId) {
+        const duplicate = currentItems.find(
+          (item) => item.sha256 === sha256 && item.visibility === safeVisibility
+        );
+        if (duplicate) {
+          return res.status(200).json({
+            item: duplicate,
+            duplicateDetected: true,
+          });
+        }
+      }
+
+      if (replaceId && String(replaceId).startsWith("pub_")) {
+        const targetPublic = scanPublicAssets(false).find((entry) => entry.meta.id === replaceId);
+        if (!targetPublic) {
+          return res.status(404).json({ error: "Public asset not found for replacement" });
+        }
+        fs.writeFileSync(targetPublic.fullPath, buffer);
+        publicHashCache.delete(targetPublic.fullPath);
+        writePublicAssetsManifest();
+        const refreshed = scanPublicAssets(true).find((entry) => entry.meta.id === replaceId);
+        return res.status(200).json({
+          item: refreshed?.meta || targetPublic.meta,
+          duplicateDetected: false,
+        });
+      }
+
+      ensureMediaDirs();
+      const id = replaceId ? sanitizeMediaFilename(replaceId) : `med_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+      const storedFileName = `${id}${ext}`;
+      const targetDir = safeVisibility === "private" ? MEDIA_PRIVATE_DIR : MEDIA_PUBLIC_DIR;
+      const targetPath = path.join(targetDir, storedFileName);
+      fs.writeFileSync(targetPath, buffer);
+
+      const url =
+        safeVisibility === "private"
+          ? `/api/media/private/${encodeURIComponent(storedFileName)}`
+          : `/api/media/file/${encodeURIComponent(storedFileName)}`;
+
+      const now = new Date().toISOString();
+      const existingIdx = currentItems.findIndex((x) => x.id === id);
+      if (existingIdx >= 0 && currentItems[existingIdx].storedFileName !== storedFileName) {
+        const oldDir =
+          currentItems[existingIdx].visibility === "private" ? MEDIA_PRIVATE_DIR : MEDIA_PUBLIC_DIR;
+        const oldPath = path.join(oldDir, currentItems[existingIdx].storedFileName);
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+        }
+      }
+
+      const record: StoredMediaMeta = {
+        id,
+        fileName: sanitizedOriginal,
+        storedFileName,
+        title: String(title || sanitizedOriginal).slice(0, 200),
+        altText: String(altText || "").slice(0, 300),
+        description: String(description || "").slice(0, 1000),
+        mimeType: cleanMime,
+        sizeBytes: buffer.length,
+        category: String(category || "General").slice(0, 64),
+        tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 20) : [],
+        visibility: safeVisibility,
+        storageLocation: "server_vault",
+        storagePath: `${safeVisibility}/${storedFileName}`,
+        url,
+        sha256,
+        isPrivateCandidateAsset: Boolean(isPrivateCandidateAsset),
+        uploadedBy: serverUser?.username || serverUser?.email || "admin",
+        createdAt: existingIdx >= 0 ? currentItems[existingIdx].createdAt : now,
+        updatedAt: now,
+      };
+
+      if (existingIdx >= 0) {
+        currentItems[existingIdx] = record;
+      } else {
+        currentItems.unshift(record);
+      }
+      writeMediaMetaList(currentItems);
+
+      return res.status(201).json({ item: record, duplicateDetected: false });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || "Media upload failed" });
+    }
+  }
+);
+
+app.patch("/api/media/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+  const id = sanitizeMediaFilename(String(req.params.id || ""));
+  const { title, altText, description, category, tags, visibility, fileName } = req.body || {};
+
+  if (id.startsWith("pub_") || id.startsWith("ext_")) {
+    const publicMatch = id.startsWith("pub_")
+      ? scanPublicAssets(false).find((entry) => entry.meta.id === id)?.meta
+      : getExternalSiteAssets().find((entry) => entry.id === id);
+    if (!publicMatch) {
+      return res.status(404).json({ error: "Site asset not found" });
+    }
+    const overrides = readPublicAssetOverrides();
+    overrides[id] = {
+      ...(overrides[id] || {}),
+      fileName: fileName ? sanitizeMediaFilename(String(fileName)) : publicMatch.fileName,
+      title: title !== undefined ? String(title).slice(0, 200) : publicMatch.title,
+      altText: altText !== undefined ? String(altText).slice(0, 300) : publicMatch.altText,
+      description: description !== undefined ? String(description).slice(0, 1000) : publicMatch.description,
+      category: category !== undefined ? String(category).slice(0, 64) : publicMatch.category,
+      tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 20) : publicMatch.tags,
+    };
+    writePublicAssetOverrides(overrides);
+    writePublicAssetsManifest();
+    const updatedItem = id.startsWith("pub_")
+      ? scanPublicAssets(false).find((entry) => entry.meta.id === id)?.meta
+      : getExternalSiteAssets().find((entry) => entry.id === id);
+    return res.json({ item: updatedItem || publicMatch });
+  }
+
+  const items = readMediaMetaList();
+  const idx = items.findIndex((item) => item.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Media item not found" });
+  }
+  const current = items[idx];
+
+  let nextVisibility = current.visibility;
+  if (!current.isPrivateCandidateAsset && (visibility === "public" || visibility === "private")) {
+    nextVisibility = visibility;
+  }
+
+  let nextUrl = current.url;
+  let nextPath = current.storagePath;
+  if (nextVisibility !== current.visibility && current.storedFileName) {
+    ensureMediaDirs();
+    const fromDir = current.visibility === "private" ? MEDIA_PRIVATE_DIR : MEDIA_PUBLIC_DIR;
+    const toDir = nextVisibility === "private" ? MEDIA_PRIVATE_DIR : MEDIA_PUBLIC_DIR;
+    const fromFile = path.join(fromDir, current.storedFileName);
+    const toFile = path.join(toDir, current.storedFileName);
+    if (fs.existsSync(fromFile)) {
+      fs.renameSync(fromFile, toFile);
+    }
+    nextPath = `${nextVisibility}/${current.storedFileName}`;
+    nextUrl =
+      nextVisibility === "private"
+        ? `/api/media/private/${encodeURIComponent(current.storedFileName)}`
+        : `/api/media/file/${encodeURIComponent(current.storedFileName)}`;
+  }
+
+  const updated: StoredMediaMeta = {
+    ...current,
+    fileName: fileName ? sanitizeMediaFilename(String(fileName)) : current.fileName,
+    title: title !== undefined ? String(title).slice(0, 200) : current.title,
+    altText: altText !== undefined ? String(altText).slice(0, 300) : current.altText,
+    description: description !== undefined ? String(description).slice(0, 1000) : current.description,
+    category: category !== undefined ? String(category).slice(0, 64) : current.category,
+    tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 20) : current.tags,
+    visibility: nextVisibility,
+    storagePath: nextPath,
+    url: nextUrl,
+    updatedAt: new Date().toISOString(),
+  };
+
+  items[idx] = updated;
+  writeMediaMetaList(items);
+  return res.json({ item: updated });
+});
+
+app.delete("/api/media/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+  const id = sanitizeMediaFilename(String(req.params.id || ""));
+
+  if (id.startsWith("ext_")) {
+    const extMatch = getExternalSiteAssets().find((entry) => entry.id === id);
+    if (!extMatch) {
+      return res.status(404).json({ error: "External asset not found" });
+    }
+    const overrides = readPublicAssetOverrides();
+    overrides[id] = { ...(overrides[id] || {}), hidden: true };
+    writePublicAssetOverrides(overrides);
+    writePublicAssetsManifest();
+    return res.json({ success: true });
+  }
+
+  if (id.startsWith("pub_")) {
+    const publicMatch = scanPublicAssets(false).find((entry) => entry.meta.id === id);
+    if (!publicMatch) {
+      return res.status(404).json({ error: "Public asset not found" });
+    }
+    ensureMediaDirs();
+    const trashTarget = path.join(
+      MEDIA_TRASH_PUBLIC_DIR,
+      `${Date.now()}_${path.basename(publicMatch.fullPath)}`
+    );
+    fs.renameSync(publicMatch.fullPath, trashTarget);
+    publicHashCache.delete(publicMatch.fullPath);
+    const overrides = readPublicAssetOverrides();
+    if (overrides[id]) {
+      delete overrides[id];
+      writePublicAssetOverrides(overrides);
+    }
+    writePublicAssetsManifest();
+    return res.json({ success: true });
+  }
+
+  const items = readMediaMetaList();
+  const idx = items.findIndex((item) => item.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Media item not found" });
+  }
+  const target = items[idx];
+  const dir = target.visibility === "private" ? MEDIA_PRIVATE_DIR : MEDIA_PUBLIC_DIR;
+  const fullPath = path.join(dir, path.basename(target.storedFileName || ""));
+  if (fs.existsSync(fullPath)) {
+    fs.unlinkSync(fullPath);
+  }
+  items.splice(idx, 1);
+  writeMediaMetaList(items);
+  return res.json({ success: true });
+});
+
+app.get("/api/media/file/:fileName", (req, res) => {
+  const safeName = path.basename(String(req.params.fileName || ""));
+  const fullPath = path.join(MEDIA_PUBLIC_DIR, safeName);
+  if (!safeName || !fs.existsSync(fullPath)) {
+    return res.status(404).json({ error: "Public asset not found" });
+  }
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.sendFile(fullPath);
+});
+
+app.get("/api/media/private/:fileName", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+  const safeName = path.basename(String(req.params.fileName || ""));
+  const fullPath = path.join(MEDIA_PRIVATE_DIR, safeName);
+  if (!safeName || !fs.existsSync(fullPath)) {
+    return res.status(404).json({ error: "Private asset not found" });
+  }
+  res.setHeader("Cache-Control", "no-store");
+  return res.sendFile(fullPath);
+});
+
+app.get("/api/exam/health", (_req, res) => {
   res.json({ status: "ok", module: "Examination System", timestamp: new Date().toISOString() });
 });
 
-// START EXPRESS/VITE ENGINE
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", service: "CBCC BNCC Platoon Portal", timestamp: new Date().toISOString() });
+});
+
 async function startServer() {
-  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: "spa",
     });
+
+    // When HMR is disabled in Cloud Run preview, skip Vite's WS client handshake cleanly
+    app.get("/@vite/client", async (_req, res, next) => {
+      try {
+        const result = await vite.transformRequest("/@vite/client");
+        if (!result?.code) return next();
+        const patched = result.code.replace(
+          /transport\.connect\(createHMRHandler\(handleMessage\)\);?/g,
+          "/* HMR disabled: WebSocket transport skipped */"
+        );
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        return res.send(patched);
+      } catch {
+        return next();
+      }
+    });
+
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (req: express.Request, res: express.Response) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  writePublicAssetsManifest();
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);

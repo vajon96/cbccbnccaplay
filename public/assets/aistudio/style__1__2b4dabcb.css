@@ -1,0 +1,27 @@
+body {
+    font-family: 'Hind Siliguri', sans-serif;
+    background-color: #f8f9fa;
+}
+
+.card {
+    max-width: 600px;
+    margin: 20px auto;
+    border-radius: 12px;
+}
+
+.btn-primary, .btn-next, .btn-success {
+    padding: 10px 25px;
+    font-weight: 600;
+}
+
+.step h5 {
+    color: #0d6efd;
+    margin-bottom: 20px;
+    border-left: 4px solid #0d6efd;
+    padding-left: 10px;
+}
+
+.form-control {
+    margin-bottom: 15px;
+    border-radius: 8px;
+}

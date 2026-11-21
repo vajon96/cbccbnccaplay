@@ -149,6 +149,7 @@ export interface PdfExportOptions {
   pixelRatio?: number;
   orientation?: "p" | "portrait" | "l" | "landscape";
   backgroundColor?: string;
+  format?: string | [number, number];
 }
 
 /**
@@ -213,7 +214,8 @@ export async function downloadElementAsPdf(
   }
 
   const orientation = options?.orientation || "p";
-  const pdf = new jsPDF(orientation, "mm", "a4");
+  const format = options?.format || "a4";
+  const pdf = new jsPDF(orientation, "mm", format as any);
   const pdfWidth = pdf.internal.pageSize.getWidth();
   const pdfHeight = pdf.internal.pageSize.getHeight();
 

@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="কক্সবাজার সিটি কলেজ বিএনসিসি প্লাটুনের বর্তমান এবং প্রাক্তন ক্যাডেটদের তালিকা।">
+    <title>ক্যাডেটবৃন্দ - Cox's Bazar City College BNCC Platoon</title>
+    
+    <!-- বাংলা ফন্ট অপ্টিমাইজেশন -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* প্রফেশনাল কালার স্কিম (নেভি ও গোল্ড) */
+        :root {
+            --navy: #002366;
+            --dark-blue: #00356b;
+            --gold: #d4af37;
+            --light-gray: #f8f9fa;
+            --dark-gray: #343a40;
+            --white: #ffffff;
+            --error-red: #d9534f;
+        }
+
+        /* বেস স্টাইলস */
+        body {
+            font-family: 'Hind Siliguri', 'Shonar Bangla', 'Arial Unicode MS', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: var(--light-gray);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* ইন্সটিটিউশনাল হেডার */
+        .institutional-header {
+            background-color: var(--white);
+            padding: 1rem 0;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .logo-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .institution-logo {
+            height: 70px;
+            width: auto;
+        }
+
+        .institution-name {
+            flex-grow: 1;
+            text-align: center;
+            font-size: 1.4rem;
+            color: var(--navy);
+            font-weight: 600;
+            padding: 0 2rem;
+        }
+
+        /* হিরো/ব্যানার এরিয়া */
+        .hero-banner {
+            background: linear-gradient(135deg, var(--navy), var(--dark-blue));
+            color: var(--white);
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-size: 2.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .hero-subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        /* নেভিগেশন (রেস্পন্সিভ স্টাইল) */
+        .main-navigation {
+            background-color: var(--navy);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: center; 
+            align-items: center;
+            flex-wrap: wrap; 
+        }
+        
+        .menu-toggle {
+            display: none; 
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 1rem 0;
+            margin-left: auto; 
+        }
+
+        .nav-menu {
+            display: flex;
+            justify-content: center;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-item {
+            margin: 0 0.5rem;
+        }
+
+        .nav-link {
+            color: var(--white);
+            text-decoration: none;
+            padding: 1rem 1.5rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            display: block;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background-color: rgba(255,255,255,0.1);
+            border-bottom-color: var(--gold);
+        }
+
+        .nav-link i {
+            margin-right: 8px;
+        }
+        
+        /* সার্চ এবং ফিল্টার সেকশন */
+        .search-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            margin-bottom: 30px;
+        }
+        
+        .search-container {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .search-input {
+            flex: 1;
+            min-width: 250px;
+        }
+        
+        .filter-select {
+            min-width: 200px;
+        }
+        
+        /* মেইন কন্টেন্ট স্টাইলিং */
+        main {
+            flex: 1;
+            padding: 3rem 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .batch-section {
+            margin-bottom: 40px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .batch-section:hover {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .batch-section h1 {
+            color: var(--navy);
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid var(--gold);
+            display: inline-block;
+            font-weight: 600;
+        }
+        
+        .batch-section h1 i {
+            color: var(--gold);
+            margin-right: 10px;
+        }
+
+        .batch-img-link {
+            display: block;
+            border: 3px solid transparent;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: border-color 0.3s ease;
+        }
+        
+        .batch-img-link:hover {
+            border-color: var(--navy);
+        }
+
+        .batch-img {
+            width: 100%;
+            height: auto;
+            border-radius: 5px;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .batch-img-link:hover .batch-img {
+            transform: scale(1.03);
+        }
+
+        /* ক্যাডেট গ্রিড স্টাইলস */
+        .cadet-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .cadet-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .cadet-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        
+        .cadet-photo {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        
+        .cadet-info {
+            padding: 15px;
+        }
+        
+        .cadet-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--navy);
+        }
+        
+        .cadet-rank {
+            color: var(--gold);
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+        
+        .cadet-bio {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        /* ক্যাডেট প্রোফাইল মোডাল */
+        .cadet-modal .modal-header {
+            background-color: var(--navy);
+            color: var(--white);
+        }
+        
+        .cadet-modal .modal-title {
+            font-weight: 600;
+        }
+        
+        .cadet-modal .modal-body {
+            padding: 2rem;
+        }
+        
+        .cadet-profile {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .cadet-profile-img {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 5px solid var(--gold);
+            margin-bottom: 20px;
+        }
+        
+        .profile-details {
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: var(--navy);
+        }
+        
+        .detail-value {
+            color: #555;
+        }
+        
+        /* ফুটার */
+        .institutional-footer {
+            background-color: var(--dark-gray);
+            color: var(--white);
+            padding: 3rem 0 1.5rem;
+            margin-top: auto;
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .footer-column {
+            margin-bottom: 1.5rem;
+        }
+
+        .footer-title {
+            color: var(--gold);
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .commander-profile {
+            text-align: center;
+        }
+
+        .commander-photo {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--gold);
+            margin: 0 auto 1rem;
+        }
+
+        .commander-name {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .footer-links li {
+            margin-bottom: 0.8rem;
+        }
+
+        .footer-links a {
+            color: #ddd;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            display: block;
+        }
+
+        .footer-links a:hover {
+            color: var(--gold);
+        }
+
+        .footer-links i {
+            width: 20px;
+            text-align: center;
+            margin-right: 8px;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1.5rem;
+        }
+
+        .social-link {
+            color: var(--white);
+            background-color: rgba(255,255,255,0.1);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .social-link:hover {
+            background-color: var(--gold);
+            color: var(--navy);
+        }
+
+        .copyright {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        /* রেস্পন্সিভ নেভিগেশন ওভাররাইড */
+        @media (max-width: 768px) {
+            .logo-container {
+                flex-direction: column;
+                padding: 1rem;
+            }
+            
+            .institution-name {
+                margin: 1rem 0;
+                padding: 0;
+                font-size: 1.2rem;
+            }
+
+            .nav-container {
+                justify-content: flex-end;
+                padding-top: 5px;
+            }
+
+            .menu-toggle {
+                display: block; 
+                order: 1; 
+            }
+            
+            .nav-menu {
+                flex-direction: column;
+                align-items: center;
+                width: 100%;
+                max-height: 0; 
+                overflow: hidden;
+                transition: max-height 0.4s ease-in-out;
+                order: 2; 
+            }
+            
+            .nav-menu.is-open {
+                max-height: 500px; 
+            }
+            
+            .nav-item {
+                width: 100%;
+                text-align: center;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                margin: 0;
+            }
+
+            .nav-item:first-child {
+                border-top: none;
+            }
+            
+            .nav-link {
+                padding: 0.8rem;
+                border-bottom: none; 
+            }
+            
+            .search-container {
+                flex-direction: column;
+            }
+            
+            .search-input, .filter-select {
+                min-width: 100%;
+            }
+            
+            .footer-container {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+            
+            .cadet-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .cadet-modal .modal-body {
+                padding: 1rem;
+            }
+            
+            .cadet-profile-img {
+                width: 150px;
+                height: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="institutional-header">
+        <div class="logo-container">
+            <a href="https://cbcc.edu.bd/" aria-label="Cox's Bazar City College">
+                <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo" class="institution-logo">
+            </a>
+            <div class="institution-name">
+                Cox's Bazar City College BNCC Platoon
+            </div>
+            <a href="https://bncc.info/" aria-label="Bangladesh National Cadet Corps">
+                <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" class="institution-logo">
+            </a>
+        </div>
+    </header>
+
+    <div class="hero-banner">
+        <h1 class="hero-title">ক্যাডেটবৃন্দ: জাতির ভবিষ্যৎ নেতৃত্ব</h1>
+        <p class="hero-subtitle">আমাদের ক্যাডেটরা শৃঙ্খলা, জ্ঞান ও সেবার আদর্শে নিজেদের গড়ে তুলছে।</p>
+    </div>
+
+    <nav class="main-navigation">
+        <div class="nav-container">
+            <button class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+            
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="index.html" class="nav-link"><i class="fas fa-home"></i> Home</a></li>
+                <li class="nav-item"><a href="about.html" class="nav-link"><i class="fas fa-info-circle"></i> About</a></li>
+                <li class="nav-item"><a href="activities.html" class="nav-link"><i class="fas fa-tasks"></i> Activities</a></li>
+                <li class="nav-item"><a href="cadets.html" class="nav-link active" aria-current="page"><i class="fas fa-users"></i> Cadets</a></li>
+                <li class="nav-item"><a href="gallery.html" class="nav-link"><i class="fas fa-images"></i> Gallery</a></li>
+                <li class="nav-item"><a href="contact.html" class="nav-link"><i class="fas fa-envelope"></i> Contact</a></li>
+                <li class="nav-item"><a href="hall-of-incharges.html" class="nav-link"><i class="fas fa-medal"></i> In-Charges</a></li>
+                <li class="nav-item"><a href="how-to-become-cadet.html" class="nav-link"><i class="fas fa-question-circle"></i> Cadet Guide</a></li>
+                <li class="nav-item"><a href="become-cadet.html" class="nav-link"><i class="fas fa-user-plus"></i> Join Now</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main>
+        <section id="cadets-batches">
+            <!-- সার্চ এবং ফিল্টার সেকশন -->
+       
+            <!-- ২০২৫-২০২৬ ব্যাচ -->
+            <div class="batch-section">
+                <h1><i class="fas fa-users"></i> ২০২৫-২০২৬ ব্যাচ ক্যাডেট</h1>
+                <a href="#" class="batch-img-link" data-bs-toggle="modal" data-bs-target="#batch2526Modal">
+                    <img class="batch-img" src="2025-2026.png" alt="2025-2026 Batch Cadets" loading="lazy">
+                </a>
+                
+                <!-- ক্যাডেট গ্রিড -->
+                <div class="cadet-grid" id="cadetGrid2526">
+                    <!-- ক্যাডেট কার্ডগুলি জাভাস্ক্রিপ্ট দ্বারা যোগ করা হবে -->
+                </div>
+            </div>
+
+            <!-- ২০২৪-২০২৫ ব্যাচ -->
+            <div class="batch-section">
+                <h1><i class="fas fa-users"></i> ২০২৪-২০২৫ ব্যাচ ক্যাডেট</h1>
+                <a href="#" class="batch-img-link" data-bs-toggle="modal" data-bs-target="#batch2425Modal">
+                    <img class="batch-img" src="122.png" alt="2024-2025 Batch Cadets" loading="lazy">
+                </a>
+                <p class="mt-3 text-muted">আমাদের বিএনসিসি পরিবারের নতুন সদস্যরা, ২০২৪-২০২৫ ব্যাচের ক্যাডেটবৃন্দ।</p>
+                
+                <!-- ক্যাডেট গ্রিড -->
+                <div class="cadet-grid" id="cadetGrid2425">
+                    <!-- ক্যাডেট কার্ডগুলি জাভাস্ক্রিপ্ট দ্বারা যোগ করা হবে -->
+                </div>
+            </div>
+
+            <!-- ২০২৩-২০২৪ ব্যাচ -->
+            <div class="batch-section">
+                <h1><i class="fas fa-users"></i> ২০২৩-২০২৪ ব্যাচ ক্যাডেট</h1>
+                <a href="#" class="batch-img-link" data-bs-toggle="modal" data-bs-target="#batch2324Modal">
+                    <img class="batch-img" src="New Project.png" alt="2023-2024 Batch Cadets" loading="lazy">
+                </a>
+                <p class="mt-3 text-muted">শৃঙ্খলা ও প্রতিশ্রুতির প্রতীক আমাদের ২০২৩-২০২৪ ব্যাচের গর্বিত ক্যাডেটবৃন্দ।</p>
+                
+                <!-- ক্যাডেট গ্রিড -->
+                <div class="cadet-grid" id="cadetGrid2324">
+                    <!-- ক্যাডেট কার্ডগুলি জাভাস্ক্রিপ্ট দ্বারা যোগ করা হবে -->
+                </div>
+            </div>
+            
+            <!-- প্রাক্তন ক্যাডেট সেকশন -->
+            <div class="batch-section text-center">
+                <h2><i class="fas fa-history"></i> প্রাক্তন ক্যাডেটদের সম্মাননা</h2>
+                <p class="text-muted">আমাদের প্রাক্তন ক্যাডেটরা দেশ ও জাতির বিভিন্ন ক্ষেত্রে সফলতার সাথে কাজ করে চলেছেন। তাদের অবদান আমাদের জন্য প্রেরণার উৎস।</p>
+                <a href="hall-of-incharges.html" class="btn btn-primary" style="background-color: var(--navy); border-color: var(--navy);">অফিসার এবং প্রাক্তন ক্যাডেটদের তালিকা দেখুন <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </section>
+        
+        <!-- ব্যাচ ইমেজ মোডাল -->
+        <div class="modal fade" id="batch2526Modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header" style="background-color: var(--navy); color: var(--white);">
+                        <h5 class="modal-title">২০২৫-২০২৬ ব্যাচ ক্যাডেট</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <img src="2025-2026.png" class="img-fluid" alt="2025-2026 Batch Cadets">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal fade" id="batch2425Modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header" style="background-color: var(--navy); color: var(--white);">
+                        <h5 class="modal-title">২০২৪-২০২৫ ব্যাচ ক্যাডেট</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <img src="122.png" class="img-fluid" alt="2024-2025 Batch Cadets">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal fade" id="batch2324Modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header" style="background-color: var(--navy); color: var(--white);">
+                        <h5 class="modal-title">২০২৩-২০২৪ ব্যাচ ক্যাডেট</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <img src="New Project.png" class="img-fluid" alt="2023-2024 Batch Cadets">
+                    </div>
+                </div>
+            </div>
+        </div><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cadet Directory</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin-top: 100px;
+}
+
+#passwordBox {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+button {
+    padding: 10px 18px;
+    margin-left: 5px;
+    background: #002147;
+    color: #C5A059;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🔐 Cadet Directory</h2>
+
+<input type="password" id="passwordBox" placeholder="Enter password">
+<button onclick="checkPassword()">Access</button>
+
+<script>
+function checkPassword() {
+    const password = document.getElementById("passwordBox").value;
+
+    if (password === "BNCC2026") {
+        window.location.href =
+        "https://cbccbncc.netlify.app/2024/all%20%20cadet.html";
+    } else {
+        alert("Incorrect password!");
+    }
+}
+</script>
+
+</body>
+</html>
+             <div class="search-section">
+                <h2><i class="fas fa-search"></i> ক্যাডেট খুঁজুন</h2>
+                <div class="search-container">
+                    <input type="text" id="cadetSearch" class="form-control search-input" placeholder="ক্যাডেটের নাম লিখুন...">
+                    <select id="batchFilter" class="form-select filter-select">
+                        <option value="all">সকল ব্যাচ</option>
+                        <option value="2025-2026">২০২৫-২০২৬ ব্যাচ</option>
+                        <option value="2024-2025">২০২৪-২০২৫ ব্যাচ</option>
+                        <option value="2023-2024">২০২৩-২০২৪ ব্যাচ</option>
+                    </select>
+                    <select id="rankFilter" class="form-select filter-select">
+                        <option value="all">সকল পদমর্যাদা</option>
+                        <option value="cadet">ক্যাডেট</option>
+                        <option value="sergeant">সার্জেন্ট</option>
+                        <option value="corporal">কর্পোরাল</option>
+                        <option value="lance-corporal">ল্যান্স কর্পোরাল</option>
+                    </select>
+                </div>
+            </div>
+            
+        <!-- ক্যাডেট প্রোফাইল মোডাল -->
+        <div class="modal fade cadet-modal" id="cadetProfileModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cadetModalTitle">ক্যাডেট প্রোফাইল</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="cadet-profile">
+                            <img id="cadetModalImage" src="" alt="Cadet Photo" class="cadet-profile-img">
+                            <h3 id="cadetModalName" class="cadet-name"></h3>
+                            <p id="cadetModalRank" class="cadet-rank"></p>
+                            <div class="profile-details">
+                                <div class="detail-row">
+                                    <span class="detail-label">ব্যাচ:</span>
+                                    <span id="cadetModalBatch" class="detail-value"></span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">পদমর্যাদা:</span>
+                                    <span id="cadetModalRankFull" class="detail-value"></span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">বিভাগ:</span>
+                                    <span id="cadetModalDepartment" class="detail-value"></span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">যোগদানের তারিখ:</span>
+                                    <span id="cadetModalJoinDate" class="detail-value"></span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">জেলা:</span>
+                                    <span id="cadetModalDistrict" class="detail-value"></span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">যোগাযোগ:</span>
+                                    <span id="cadetModalContact" class="detail-value"></span>
+                                </div>
+                            </div>
+                            <p id="cadetModalBio" class="cadet-bio mt-3"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="institutional-footer">
+        <div class="footer-container">
+            <div class="footer-column">
+                <div class="commander-profile">
+                    <img src="https://i.ibb.co/dsqhP9LH/file-1-3.jpg" alt="Platoon Commander" class="commander-photo">
+                    <h4 class="commander-name">Professor Under Officer Ujjwal Kanti Deb</h4>
+                    <p>প্লাটুন কমান্ডার</p>
+                    <div class="social-links">
+                        <a href="#" class="social-link" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#" class="social-link" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="social-link" aria-label="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-column">
+                <h3 class="footer-title">জরুরী লিঙ্কসমূহ</h3>
+                <ul class="footer-links">
+                    <li><a href="index.html"><i class="fas fa-chevron-right"></i> হোম</a></li>
+                    <li><a href="about.html"><i class="fas fa-chevron-right"></i> আমাদের সম্পর্কে</a></li>
+                    <li><a href="activities.html"><i class="fas fa-chevron-right"></i> কার্যক্রম</a></li>
+                    <li><a href="hall-of-incharges.html"><i class="fas fa-chevron-right"></i> ইন-চার্জ হল</a></li>
+                    <li><a href="gallery.html"><i class="fas fa-chevron-right"></i> ফটো গ্যালারি</a></li>
+                    <li><a href="contact.html"><i class="fas fa-chevron-right"></i> যোগাযোগ</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h3 class="footer-title">যোগাযোগের তথ্য</h3>
+                <ul class="footer-links">
+                    <li><i class="fas fa-map-marker-alt"></i> কক্স'স বাজার সিটি কলেজ, কলেজ রোড, কক্স'স বাজার</li>
+                    <li><i class="fas fa-phone"></i> +৮৮০ ১৮১২-৪৩ ০৪ ৫৪</li>
+                    <li><i class="fas fa-envelope"></i> contact@cbccbncc.edu.bd</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="copyright">
+            &copy; ২০২৫ কক্স'স বাজার সিটি কলেজ বিএনসিসি প্লাটুন। সর্বস্বত্ব সংরক্ষিত।
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ক্যাডেট ডেটা (বাস্তব প্রয়োগে এটি সার্ভার থেকে আসবে)
+        const cadetsData = {
+            "2025-2026": [
+                {
+                    id: 1,
+                    name: "আব্দুল্লাহ আল মামুন",
+                    rank: "ক্যাডেট",
+                    rankFull: "ক্যাডেট",
+                    photo: "https://via.placeholder.com/300x300?text=Abdullah+Al+Mamun",
+                    department: "বিজ্ঞান",
+                    joinDate: "১৫ জানুয়ারি, ২০২৫",
+                    district: "কক্সবাজার",
+                    contact: "abdullah@example.com",
+                    bio: "আব্দুল্লাহ একজন মেধাবী এবং প্রতিশ্রুতিবদ্ধ ক্যাডেট। তিনি পদার্থবিজ্ঞানে বিশেষ আগ্রহী এবং ভবিষ্যতে প্রকৌশলী হতে চান।"
+                },
+                {
+                    id: 2,
+                    name: "ফাতেমা বেগম",
+                    rank: "ক্যাডেট",
+                    rankFull: "ক্যাডেট",
+                    photo: "https://via.placeholder.com/300x300?text=Fatema+Begum",
+                    department: "মানবিক",
+                    joinDate: "২০ জানুয়ারি, ২০২৫",
+                    district: "কক্সবাজার",
+                    contact: "fatema@example.com",
+                    bio: "ফাতেমা একজন সক্রিয় ক্যাডেট যিনি সাহিত্য ও সামাজিক কাজে আগ্রহী। তিনি ভবিষ্যতে শিক্ষিকা হতে চান।"
+                }
+            ],
+            "2024-2025": [
+                {
+                    id: 3,
+                    name: "রফিকুল ইসলাম",
+                    rank: "সার্জেন্ট",
+                    rankFull: "সার্জেন্ট",
+                    photo: "https://via.placeholder.com/300x300?text=Rafiqul+Islam",
+                    department: "বাণিজ্য",
+                    joinDate: "১০ মার্চ, ২০২৪",
+                    district: "কক্সবাজার",
+                    contact: "rafiq@example.com",
+                    bio: "রফিকুল একজন দায়িত্বশীল সার্জেন্ট যিনি দল পরিচালনায় দক্ষ। তিনি ভবিষ্যতে ব্যবসায়ী হতে চান।"
+                },
+                {
+                    id: 4,
+                    name: "সুমাইয়া আক্তার",
+                    rank: "কর্পোরাল",
+                    rankFull: "কর্পোরাল",
+                    photo: "https://via.placeholder.com/300x300?text=Sumaiya+Akter",
+                    department: "বিজ্ঞান",
+                    joinDate: "১৫ এপ্রিল, ২০২৪",
+                    district: "কক্সবাজার",
+                    contact: "sumaiya@example.com",
+                    bio: "সুমাইয়া একজন মেধাবী কর্পোরাল যিনি জীববিজ্ঞানে বিশেষ আগ্রহী। তিনি ভবিষ্যতে ডাক্তার হতে চান।"
+                },
+                {
+                    id: 5,
+                    name: "ইমরান হোসেন",
+                    rank: "ল্যান্স কর্পোরাল",
+                    rankFull: "ল্যান্স কর্পোরাল",
+                    photo: "https://via.placeholder.com/300x300?text=Imran+Hossain",
+                    department: "মানবিক",
+                    joinDate: "২০ মে, ২০২৪",
+                    district: "কক্সবাজার",
+                    contact: "imran@example.com",
+                    bio: "ইমরান একজন সক্রিয় ল্যান্স কর্পোরাল যিনি ইতিহাস ও রাজনীতিতে আগ্রহী। তিনি ভবিষ্যতে সরকারি চাকুরী করতে চান।"
+                }
+            ],
+            "2023-2024": [
+                {
+                    id: 6,
+                    name: "আনিকা তাবাসসুম",
+                    rank: "সার্জেন্ট",
+                    rankFull: "সার্জেন্ট",
+                    photo: "https://via.placeholder.com/300x300?text=Anika+Tabassum",
+                    department: "বিজ্ঞান",
+                    joinDate: "৫ ফেব্রুয়ারি, ২০২৩",
+                    district: "কক্সবাজার",
+                    contact: "anika@example.com",
+                    bio: "আনিকা একজন দক্ষ সার্জেন্ট যিনি রসায়নে বিশেষ আগ্রহী। তিনি ভবিষ্যতে ফার্মাসিস্ট হতে চান।"
+                },
+                {
+                    id: 7,
+                    name: "সজীব আহমেদ",
+                    rank: "কর্পোরাল",
+                    rankFull: "কর্পোরাল",
+                    photo: "https://via.placeholder.com/300x300?text=Sajib+Ahmed",
+                    department: "বাণিজ্য",
+                    joinDate: "১২ মার্চ, ২০২৩",
+                    district: "কক্সবাজার",
+                    contact: "sajib@example.com",
+                    bio: "সজীব একজন প্রতিশ্রুতিবদ্ধ কর্পোরাল যিনি হিসাববিজ্ঞানে দক্ষ। তিনি ভবিষ্যতে সিএ হতে চান।"
+                },
+                {
+                    id: 8,
+                    name: "নুসরাত জাহান",
+                    rank: "ল্যান্স কর্পোরাল",
+                    rankFull: "ল্যান্স কর্পোরাল",
+                    photo: "https://via.placeholder.com/300x300?text=Nusrat+Jahan",
+                    department: "মানবিক",
+                    joinDate: "২০ এপ্রিল, ২০২৩",
+                    district: "কক্সবাজার",
+                    contact: "nusrat@example.com",
+                    bio: "নুসরাত একজন সক্রিয় ল্যান্স কর্পোরাল যিনি সমাজসেবায় আগ্রহী। তিনি ভবিষ্যতে সমাজকর্মী হতে চান।"
+                },
+                {
+                    id: 9,
+                    name: "তানভীর হাসান",
+                    rank: "ক্যাডেট",
+                    rankFull: "ক্যাডেট",
+                    photo: "https://via.placeholder.com/300x300?text=Tanvir+Hasan",
+                    department: "বিজ্ঞান",
+                    joinDate: "১০ মে, ২০২৩",
+                    district: "কক্সবাজার",
+                    contact: "tanvir@example.com",
+                    bio: "তানভীর একজন মেধাবী ক্যাডেট যিনি গণিতে বিশেষ আগ্রহী। তিনি ভবিষ্যতে প্রোগ্রামার হতে চান।"
+                }
+            ]
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Highlight current page in navigation
+            const currentPage = location.pathname.split('/').pop() || 'index.html';
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === currentPage) {
+                    link.classList.add('active');
+                    link.setAttribute('aria-current', 'page');
+                }
+            });
+            
+            // --- Mobile Menu Toggle Logic ---
+            const menuToggle = document.querySelector('.menu-toggle');
+            const navMenu = document.querySelector('.nav-menu');
+
+            if (menuToggle && navMenu) {
+                menuToggle.addEventListener('click', () => {
+                    const isExpanded = navMenu.classList.toggle('is-open');
+                    menuToggle.setAttribute('aria-expanded', isExpanded);
+
+                    const icon = menuToggle.querySelector('i');
+                    if (isExpanded) {
+                        icon.classList.remove('fa-bars');
+                        icon.classList.add('fa-times');
+                    } else {
+                        icon.classList.remove('fa-times');
+                        icon.classList.add('fa-bars');
+                    }
+                });
+            }
+            
+            // ক্যাডেট গ্রিড তৈরি করুন
+            renderCadetGrids();
+            
+            // সার্চ এবং ফিল্টার ইভেন্ট লিসেনার যোগ করুন
+            document.getElementById('cadetSearch').addEventListener('input', filterCadets);
+            document.getElementById('batchFilter').addEventListener('change', filterCadets);
+            document.getElementById('rankFilter').addEventListener('change', filterCadets);
+            
+            // Lazy loading images with Intersection Observer (if supported)
+            if ('IntersectionObserver' in window) {
+                const imageObserver = new IntersectionObserver((entries, observer) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const img = entry.target;
+                            img.src = img.dataset.src;
+                            img.classList.remove('lazy');
+                            imageObserver.unobserve(img);
+                        }
+                    });
+                });
+
+                document.querySelectorAll('img[data-src]').forEach(img => {
+                    imageObserver.observe(img);
+                });
+            }
+        });
+        
+        // ক্যাডেট গ্রিড রেন্ডার ফাংশন
+        function renderCadetGrids() {
+            for (const batch in cadetsData) {
+                const gridContainer = document.getElementById(`cadetGrid${batch.replace('-', '')}`);
+                if (gridContainer) {
+                    gridContainer.innerHTML = '';
+                    
+                    cadetsData[batch].forEach(cadet => {
+                        const cadetCard = document.createElement('div');
+                        cadetCard.className = 'cadet-card';
+                        cadetCard.setAttribute('data-batch', batch);
+                        cadetCard.setAttribute('data-rank', cadet.rank);
+                        cadetCard.setAttribute('data-id', cadet.id);
+                        
+                        cadetCard.innerHTML = `
+                            <img src="${cadet.photo}" alt="${cadet.name}" class="cadet-photo">
+                            <div class="cadet-info">
+                                <h4 class="cadet-name">${cadet.name}</h4>
+                                <p class="cadet-rank">${cadet.rank}</p>
+                                <p class="cadet-bio">${cadet.bio.substring(0, 100)}...</p>
+                            </div>
+                        `;
+                        
+                        cadetCard.addEventListener('click', () => openCadetProfile(cadet, batch));
+                        gridContainer.appendChild(cadetCard);
+                    });
+                }
+            }
+        }
+        
+        // ক্যাডেট প্রোফাইল মোডাল খুলুন
+        function openCadetProfile(cadet, batch) {
+            document.getElementById('cadetModalTitle').textContent = `${cadet.name} - প্রোফাইল`;
+            document.getElementById('cadetModalImage').src = cadet.photo;
+            document.getElementById('cadetModalImage').alt = cadet.name;
+            document.getElementById('cadetModalName').textContent = cadet.name;
+            document.getElementById('cadetModalRank').textContent = cadet.rank;
+            document.getElementById('cadetModalBatch').textContent = batch;
+            document.getElementById('cadetModalRankFull').textContent = cadet.rankFull;
+            document.getElementById('cadetModalDepartment').textContent = cadet.department;
+            document.getElementById('cadetModalJoinDate').textContent = cadet.joinDate;
+            document.getElementById('cadetModalDistrict').textContent = cadet.district;
+            document.getElementById('cadetModalContact').textContent = cadet.contact;
+            document.getElementById('cadetModalBio').textContent = cadet.bio;
+            
+            const cadetModal = new bootstrap.Modal(document.getElementById('cadetProfileModal'));
+            cadetModal.show();
+        }
+        
+        // ক্যাডেট ফিল্টার ফাংশন
+        function filterCadets() {
+            const searchTerm = document.getElementById('cadetSearch').value.toLowerCase();
+            const batchFilter = document.getElementById('batchFilter').value;
+            const rankFilter = document.getElementById('rankFilter').value;
+            
+            const allCadetCards = document.querySelectorAll('.cadet-card');
+            
+            allCadetCards.forEach(card => {
+                const cadetName = card.querySelector('.cadet-name').textContent.toLowerCase();
+                const cadetBatch = card.getAttribute('data-batch');
+                const cadetRank = card.getAttribute('data-rank');
+                
+                const matchesSearch = cadetName.includes(searchTerm);
+                const matchesBatch = batchFilter === 'all' || cadetBatch === batchFilter;
+                const matchesRank = rankFilter === 'all' || cadetRank === rankFilter;
+                
+                if (matchesSearch && matchesBatch && matchesRank) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

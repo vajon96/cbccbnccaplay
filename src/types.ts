@@ -178,7 +178,8 @@ export interface ExamModel {
   createdBy: string;
   createdAt: any;
   updatedAt: any;
-  questionSnapshots?: QuestionBankItem[]; // Snapshot of questions bound to this exam
+  questionSnapshots?: QuestionBankItem[]; // Snapshot of questions bound to this exam (sanitized of answer keys)
+  sealedKeyEnvelope?: string; // AES-256-GCM server-sealed answer key envelope
 }
 
 export type AttemptStatus = "not_started" | "in_progress" | "submitted" | "auto_submitted" | "expired";
@@ -233,6 +234,7 @@ export interface ExamAttempt {
   examTitle?: string;
   candidateId: string; // User ID in applicants collection
   userId: string;
+  ownerUid?: string; // Verified Firebase Auth UID
   registrationNumber: string;
   candidateName?: string;
   candidatePhoto?: string;
@@ -241,6 +243,9 @@ export interface ExamAttempt {
   startedAt: any;
   submittedAt?: any;
   status: AttemptStatus;
+  isAutoSubmitted?: boolean;
+  gradingStatus?: string;
+  resultSignature?: string;
   score?: number;
   percentage?: number;
   correctCount?: number;
@@ -302,6 +307,7 @@ export interface ExamResult {
   attemptId: string;
   candidateId: string;
   userId: string;
+  ownerUid?: string;
   registrationNumber: string;
   candidateName: string;
   candidatePhoto?: string;
@@ -316,6 +322,8 @@ export interface ExamResult {
   timeTakenSeconds?: number;
   submittedAt: any;
   rank?: number;
+  gradingStatus?: string;
+  resultSignature?: string;
 }
 
 export interface ExamSetting {

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr Kader | Platoon In-Charge</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #0f172a;
+            --secondary: #1e293b;
+            --accent: #fbbf24;
+            --gold-gradient: linear-gradient(45deg, #b45309, #fbbf24, #b45309);
+            --glass: rgba(255, 255, 255, 0.95);
+            --text-main: #1e293b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: var(--text-main);
+        }
+
+        .container { 
+            width: 100%; 
+            max-width: 950px; 
+            perspective: 1000px;
+        }
+
+        /* Profile Card Styling */
+        .id-card {
+            background: var(--glass);
+            border-radius: 30px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255,255,255,0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Branding */
+        .top-bar {
+            background: var(--primary);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--accent);
+        }
+
+        .logos { display: flex; gap: 15px; }
+        .logos img { height: 50px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2)); }
+
+        .college-info { text-align: right; color: white; }
+        .college-info h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: 1px; }
+        .college-info p { font-size: 0.8rem; color: var(--accent); text-transform: uppercase; opacity: 0.9; }
+
+        /* Main Content Layout */
+        .card-body {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            padding: 40px;
+        }
+
+        /* Photo Section */
+        .photo-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .image-container {
+            position: relative;
+            width: 260px;
+            height: 320px;
+            padding: 8px;
+            background: var(--gold-gradient);
+            background-size: 200% 200%;
+            animation: gradientMove 3s ease infinite;
+            border-radius: 20px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        }
+
+        @keyframes gradientMove {
+            0% {background-position: 0% 50%}
+            50% {background-position: 100% 50%}
+            100% {background-position: 0% 50%}
+        }
+
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 15px;
+            background: white;
+        }
+
+        .rank-badge {
+            margin-top: -25px;
+            z-index: 10;
+            background: var(--primary);
+            color: var(--accent);
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Content Section */
+        .details-section {
+            padding-left: 20px;
+        }
+
+        .name-header { margin-bottom: 30px; }
+        .name-header h2 { 
+            font-family: 'Playfair Display', serif; 
+            font-size: 3.2rem; 
+            color: var(--primary);
+            line-height: 1;
+        }
+        .name-header .title-sub {
+            font-size: 1.2rem;
+            color: #b45309;
+            font-weight: 600;
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .grid-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .info-card {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 15px;
+            border: 1px solid #e2e8f0;
+            transition: 0.3s;
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: white;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            border-color: var(--accent);
+        }
+
+        .info-card label {
+            display: block;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .info-card p {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 0.95rem;
+        }
+
+        /* Contact Area */
+        .contact-strip {
+            background: #f1f5f9;
+            border-radius: 20px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-around;
+            border: 1px dashed #cbd5e0;
+        }
+
+        .contact-item { text-align: center; }
+        .contact-item i { color: var(--accent); margin-bottom: 5px; font-size: 1.1rem; }
+        .contact-item span { display: block; font-size: 0.7rem; color: #64748b; }
+        .contact-item strong { font-size: 0.85rem; color: var(--primary); }
+
+        /* Action Button */
+        .actions {
+            margin-top: 30px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .btn-main {
+            background: var(--primary);
+            color: white;
+            padding: 14px 35px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.4s;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.3);
+        }
+
+        .btn-main:hover {
+            background: var(--accent);
+            color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: rgba(255,255,255,0.6);
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        @media (max-width: 850px) {
+            .card-body { grid-template-columns: 1fr; padding: 30px; }
+            .details-section { padding-left: 0; text-align: center; }
+            .grid-info { grid-template-columns: 1fr; }
+            .name-header h2 { font-size: 2.5rem; }
+            .title-sub { justify-content: center; }
+            .contact-strip { flex-direction: column; gap: 15px; }
+            .actions { justify-content: center; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="id-card">
+            <div class="top-bar">
+                <div class="logos">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo">
+                    <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                </div>
+                <div class="college-info">
+                    <h1>COX'S BAZAR CITY COLLEGE</h1>
+                    <p>Bangladesh National Cadet Corps</p>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="photo-section">
+                    <div class="image-container">
+                        <img src="https://i.ibb.co.com/W73snyG/122-3-1.jpg" alt="Mr Kader">
+                    </div>
+                    <div class="rank-badge">
+                        <i class="fas fa-star"></i> PLATOON IN-CHARGE
+                    </div>
+                </div>
+
+                <div class="details-section">
+                    <div class="name-header">
+                        <h2>Mr Kader</h2>
+                        <div class="title-sub">
+                            <span>PLATOON IN-CHARGE</span>
+                            <div style="width: 40px; height: 2px; background: var(--accent);"></div>
+                            <span>CBCC</span>
+                        </div>
+                    </div>
+
+                    <div class="grid-info">
+                        <div class="info-card">
+                            <label><i class="fas fa-shield-halved"></i> Role</label>
+                            <p>PLATOON IN-CHARGE</p>
+                        </div>
+                        <div class="info-card">
+                            <label><i class="fas fa-droplet" style="color:#e53e3e"></i> Blood Group</label>
+                            <p>A+ (Positive)</p>
+                        </div>
+                        <div class="info-card">
+                            <label><i class="fas fa-cake-candles"></i> Birth Date</label>
+                            <p>05 January 2002</p>
+                        </div>
+                        <div class="info-card">
+                            <label><i class="fas fa-location-dot"></i> Station</label>
+                            <p>Cox's Bazar, BD</p>
+                        </div>
+                    </div>
+
+                    <div class="contact-strip">
+                        <div class="contact-item">
+                            <i class="fas fa-envelope"></i>
+                            <span>Email Address</span>
+                            <strong>itskader786@gmail.com</strong>
+                        </div>
+                        <div class="contact-item">
+                            <i class="fas fa-phone-volume"></i>
+                            <span>Emergency Contact</span>
+                            <strong>+880 1311106204</strong>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <a href="cadets.html" class="btn-main">
+                            Explore Platoon <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2025 BNCC UNIT | COX'S BAZAR CITY COLLEGE PLATOON</p>
+        </footer>
+    </div>
+</body>
+</html>

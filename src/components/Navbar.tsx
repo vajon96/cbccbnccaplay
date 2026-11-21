@@ -1,169 +1,287 @@
 import { Link, useLocation } from "react-router-dom";
-import { 
-  Menu, X, Home, Users, 
-  Image as ImageIcon, Medal, 
-  UserPlus, MessageCircle, LogIn, FileText, Scan, BookOpen
+import {
+  Menu, X, Home, Users, Image as ImageIcon, Medal, UserPlus,
+  MessageCircle, LogIn, FileText, BookOpen, Info, Activity,
+  Phone, Bell, Globe, LayoutDashboard, ChevronDown, QrCode
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CircularViewerModal } from "./modular/CircularViewerModal";
+import { PWAInstallButton } from "./PWAInstallButton";
+import { useCMS } from "../context/CMSContext";
+import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getDefaultLandingRoute, hasPermission } from "../lib/rbac";
 
 export function Navbar() {
+  const cms = useCMS();
+  const { user, isAuthenticated } = useAuth();
+  const { lang, toggleLang, t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isCircularModalOpen, setIsCircularModalOpen] = useState(false);
   const location = useLocation();
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
-  const navLinks = [
-    { name: "Main Website", path: "https://cbccbncc.netlify.app/", icon: Home },
-    { name: "Verify QR", path: "/qr-scan", icon: Scan },
-    { name: "Exam Portal", path: "/exam", icon: BookOpen },
-    { name: "Cadets", path: "https://cbccbncc.netlify.app/cadets", icon: Users },
-    { name: "Gallery", path: "https://cbccbncc.netlify.app/gallery", icon: ImageIcon },
-    { name: "Hall of In-Charges", path: "https://cbccbncc.netlify.app/hall-of-incharges", icon: Medal },
+  useEffect(() => {
+    setIsOpen(false);
+    setIsMoreOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setIsMoreOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsMoreOpen(false);
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, []);
+
+  const isExamPortalOpen = cms.settings.examPortalOpen !== false;
+
+  const primaryLinks = [
+    { name: t("navHome"), path: "/", icon: Home },
+    { name: t("navActivities"), path: "/activities", icon: Activity },
+    { name: t("navCadets"), path: "/cadets", icon: Users },
+    { name: t("navNotices"), path: "/notices", icon: Bell },
+    ...(isExamPortalOpen
+      ? [{ name: t("navExamPortal"), path: "/exam", icon: BookOpen, highlight: true }]
+      : []),
   ];
+
+  const secondaryLinks = [
+    { name: t("navAbout"), path: "/about", icon: Info },
+    { name: t("navIncharges"), path: "/hall-of-incharges", icon: Medal },
+    { name: t("navGallery"), path: "/gallery", icon: ImageIcon },
+    { name: t("navGuide"), path: "/how-to-become-cadet", icon: BookOpen },
+    { name: t("navOfflineForm"), path: "/offline-application", icon: FileText },
+    { name: t("navQrScan"), path: "/qr-scan", icon: QrCode },
+    { name: t("navContact"), path: "/contact", icon: Phone },
+  ];
+
+  const allDrawerLinks = [...primaryLinks, ...secondaryLinks];
+
+  const canManageCms = hasPermission(user?.role, "manage_cms");
 
   const authLinks = [
-    { name: "Messenger", path: "/messenger", icon: MessageCircle },
-    { name: "Login", path: "/login", icon: LogIn },
+    ...(canManageCms ? [{ name: "CMS", path: "/admin/cms", icon: Globe }] : []),
+    ...(isAuthenticated ? [{ name: "Messenger", path: "/messenger", icon: MessageCircle }] : []),
+    isAuthenticated && user
+      ? { name: t("navDashboard"), path: getDefaultLandingRoute(user.role), icon: LayoutDashboard }
+      : { name: t("navLogin"), path: "/login", icon: LogIn },
   ];
 
+  const isSecondaryActive = secondaryLinks.some((item) => location.pathname === item.path);
+
   return (
-    <nav className="sticky top-0 z-50 bg-primary border-b border-primary/20 shadow-lg">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
-          <div className="flex items-center space-x-3 shrink-0">
-            {/* ... logos remain same ... */}
-            <a href="https://cbcc.edu.bd/" target="_blank" rel="noopener noreferrer" className="shrink-0">
-              <img 
-                src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" 
-                alt="Cox's Bazar City College Logo" 
-                className="h-10 w-auto"
+    <header className="sticky top-0 z-50 bg-[#002147] border-b border-white/10 shadow-lg">
+      <nav aria-label="Main navigation" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-[70px] gap-4">
+          {/* Zone 1: Institutional Crest & Brand */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <a
+              href={cms.settings.collegeWebsite || "https://cbcc.edu.bd/"}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Cox's Bazar City College Website"
+              className="shrink-0"
+            >
+              <img
+                src={cms.settings.collegeLogoUrl || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png"}
+                alt="Cox's Bazar City College Logo"
+                className="h-9 w-auto"
                 referrerPolicy="no-referrer"
               />
             </a>
-            <Link to="/" className="flex flex-col hidden sm:flex">
-              <span className="text-sand font-bold text-sm tracking-tight leading-none font-display">Cox's Bazar City College</span>
-              <span className="text-[9px] text-sand/80 uppercase tracking-widest font-semibold mt-1">BNCC Platoon</span>
+            <Link to="/" className="hidden sm:flex flex-col whitespace-nowrap">
+              <span className="text-white font-bold text-xs tracking-tight leading-none font-display">
+                {cms.settings.siteTitleEn || "Cox's Bazar City College"}
+              </span>
+              <span className="text-[10px] text-[#C5A059] uppercase tracking-[0.18em] font-bold mt-1">
+                BNCC Platoon
+              </span>
             </Link>
-            <a href="https://bncc.info/" target="_blank" rel="noopener noreferrer" className="shrink-0 border-l border-white/20 pl-3 ml-1">
-              <img 
-                src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" 
-                alt="BNCC Logo" 
-                className="h-10 w-auto"
+            <a
+              href={cms.settings.bnccCentralWebsite || "https://bncc.info/"}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="BNCC Headquarters Website"
+              className="shrink-0 border-l border-white/15 pl-2.5 ml-0.5"
+            >
+              <img
+                src={cms.settings.bnccLogoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
+                alt="BNCC Logo"
+                className="h-9 w-auto"
                 referrerPolicy="no-referrer"
               />
             </a>
           </div>
 
-          {/* Desktop Nav */}
-          <div className="hidden xl:flex items-center space-x-1">
-            <div className="flex items-center border-r border-white/10 pr-4 mr-4 space-x-1">
-              {navLinks.map((link) => {
-                const isExternal = link.path.startsWith("http");
-                const isExam = link.path === "/exam";
-                const className = `flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-all rounded-lg relative ${
-                  isExam 
-                    ? "bg-amber-400/20 text-amber-300 hover:bg-amber-400/30 border border-amber-400/30"
-                    : location.pathname === link.path 
-                    ? "text-white bg-white/20" 
-                    : "text-sand/70 hover:text-white hover:bg-white/10"
-                }`;
-                const content = (
-                  <>
-                    <link.icon size={14} className={isExam ? "text-amber-300" : location.pathname === link.path ? "text-white" : "text-sand/40"} />
-                    {link.name}
-                    {isExam && (
-                      <span className="ml-1 px-1.5 py-0.2 bg-amber-400 text-slate-950 text-[9px] font-black rounded-full leading-tight uppercase animate-pulse">
-                        LIVE
-                      </span>
-                    )}
-                  </>
-                );
-
-                return isExternal ? (
-                  <a key={link.path} href={link.path} target="_blank" rel="noopener noreferrer" className={className}>
-                    {content}
-                  </a>
-                ) : (
-                  <Link key={link.path} to={link.path} className={className}>
-                    {content}
-                  </Link>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {authLinks.map((link) => (
+          {/* Zone 2: Single-Line Core Links + More Dropdown (Desktop) */}
+          <div className="hidden xl:flex items-center gap-1 whitespace-nowrap">
+            {primaryLinks.map((link) => {
+              const isActive = location.pathname === link.path;
+              return (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className="flex items-center gap-2 text-sand/70 hover:text-white text-[11px] font-black uppercase tracking-[0.15em] transition-all"
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold tracking-wide transition-colors rounded-lg whitespace-nowrap ${
+                    link.highlight
+                      ? "bg-[#C5A059]/15 text-[#f3d492] hover:bg-[#C5A059]/25 border border-[#C5A059]/40"
+                      : isActive
+                      ? "text-white bg-white/15"
+                      : "text-slate-200 hover:text-white hover:bg-white/10"
+                  }`}
                 >
-                  <link.icon size={16} className="text-white" />
-                  {link.name}
+                  <link.icon
+                    size={14}
+                    className={link.highlight ? "text-[#C5A059]" : isActive ? "text-white" : "text-slate-300"}
+                  />
+                  <span>{link.name}</span>
                 </Link>
-              ))}
+              );
+            })}
+
+            {/* More Dropdown */}
+            <div className="relative" ref={moreMenuRef}>
               <button
-                id="navbar-circular-btn"
-                onClick={() => setIsCircularModalOpen(true)}
-                className="px-4 py-2 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 text-[11px] font-black uppercase tracking-widest rounded-full transition-all flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-amber-400/10"
-                title="ভর্তি সার্কুলার দেখুন (View Admission Circular)"
+                type="button"
+                onClick={() => setIsMoreOpen((prev) => !prev)}
+                aria-expanded={isMoreOpen}
+                aria-haspopup="menu"
+                className={`flex items-center gap-1 px-3 py-2 text-xs font-semibold tracking-wide rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                  isMoreOpen || isSecondaryActive
+                    ? "text-white bg-white/15"
+                    : "text-slate-200 hover:text-white hover:bg-white/10"
+                }`}
               >
-                <FileText size={13} className="text-amber-300" />
-                <span>Circular</span>
-                <span className="px-1.5 py-0.5 bg-amber-400 text-slate-950 text-[8px] font-black rounded-full uppercase leading-none animate-pulse">
-                  NEW
-                </span>
+                <span>{t("navMore")}</span>
+                <ChevronDown size={14} className={`transition-transform duration-150 ${isMoreOpen ? "rotate-180" : ""}`} />
               </button>
-              <Link
-                to="/enroll"
-                className="ml-4 px-6 py-2 bg-white text-primary font-black uppercase tracking-widest text-[11px] rounded-full hover:bg-sand transition-all shadow-xl shadow-black/20 flex items-center gap-2 group"
-              >
-                <UserPlus size={14} className="group-hover:scale-110 transition-transform" />
-                Join Us
-              </Link>
+
+              {isMoreOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-60 bg-[#061830] border border-[#C5A059]/30 rounded-xl shadow-2xl py-2 z-50"
+                >
+                  {secondaryLinks.map((item) => {
+                    const active = location.pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        role="menuitem"
+                        to={item.path}
+                        onClick={() => setIsMoreOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors ${
+                          active
+                            ? "bg-white/15 text-[#C5A059]"
+                            : "text-slate-200 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <item.icon size={15} className="text-[#C5A059] shrink-0" />
+                        <span>{item.name}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Mobile/Tablet Menu Button */}
-          <div className="xl:hidden flex items-center gap-3">
-            <div className="flex items-center gap-2 mr-1">
-              {authLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white"
-                  title={link.name}
-                >
-                  <link.icon size={16} />
-                </Link>
-              ))}
-              <button
-                id="mobile-navbar-circular-btn"
-                onClick={() => setIsCircularModalOpen(true)}
-                className="w-9 h-9 rounded-full bg-amber-400/20 hover:bg-amber-400/30 flex items-center justify-center text-amber-300 border border-amber-400/40 relative shadow-sm"
-                title="ভর্তি সার্কুলার (Circular)"
+          {/* Zone 3: Language Switcher, Portal Auth & Action CTAs */}
+          <div className="hidden xl:flex items-center gap-2.5 shrink-0 whitespace-nowrap">
+            <button
+              type="button"
+              onClick={toggleLang}
+              aria-label={lang === "bn" ? "Switch language to English" : "বাংলা ভাষায় পরিবর্তন করুন"}
+              className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-100 border border-white/15 text-xs font-bold cursor-pointer transition-colors"
+            >
+              {lang === "bn" ? "EN" : "বাং"}
+            </button>
+
+            <PWAInstallButton compact />
+
+            {authLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-slate-100 hover:text-[#C5A059] hover:bg-white/5 text-xs font-semibold transition-colors"
               >
-                <FileText size={16} />
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping" />
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full" />
-              </button>
-            </div>
+                <link.icon size={14} className="text-[#C5A059]" />
+                <span>{link.name}</span>
+              </Link>
+            ))}
+
+            <button
+              id="navbar-circular-btn"
+              type="button"
+              onClick={() => setIsCircularModalOpen(true)}
+              className="px-3 py-2 bg-[#C5A059]/15 hover:bg-[#C5A059]/25 text-[#f3d492] border border-[#C5A059]/40 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="ভর্তি সার্কুলার দেখুন (View Admission Circular)"
+            >
+              <FileText size={13} className="text-[#C5A059]" />
+              <span>{t("navCircular")}</span>
+            </button>
+
             <Link
               to="/enroll"
-              className="px-4 py-2 bg-white text-primary font-black uppercase tracking-widest text-[10px] rounded-full shadow-lg shrink-0"
+              className="px-4 py-2 bg-[#C5A059] hover:bg-[#b59048] text-[#00152e] font-extrabold text-xs rounded-lg transition-colors shadow-md flex items-center gap-1.5"
             >
-              Join
+              <UserPlus size={14} />
+              <span>{t("navJoinUs")}</span>
+            </Link>
+          </div>
+
+          {/* Mobile / Tablet Controls */}
+          <div className="xl:hidden flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleLang}
+              aria-label={lang === "bn" ? "Switch language to English" : "বাংলা ভাষায় পরিবর্তন করুন"}
+              className="px-2.5 py-2 rounded-lg bg-white/10 text-slate-100 border border-white/15 text-xs font-bold cursor-pointer"
+            >
+              {lang === "bn" ? "EN" : "বাং"}
+            </button>
+            <PWAInstallButton compact />
+            <button
+              id="mobile-navbar-circular-btn"
+              type="button"
+              onClick={() => setIsCircularModalOpen(true)}
+              className="w-9 h-9 rounded-lg bg-[#C5A059]/20 hover:bg-[#C5A059]/30 flex items-center justify-center text-[#f3d492] border border-[#C5A059]/40 cursor-pointer"
+              aria-label={t("navCircular")}
+              title={t("navCircular")}
+            >
+              <FileText size={16} />
+            </button>
+            <Link
+              to="/enroll"
+              className="px-3 py-2 bg-[#C5A059] text-[#00152e] font-extrabold text-xs rounded-lg shadow-md shrink-0"
+            >
+              {t("navJoinUs")}
             </Link>
             <button
+              type="button"
               onClick={() => setIsOpen(!isOpen)}
-              className="p-2 text-sand hover:text-white ring-1 ring-white/10 rounded-lg shrink-0"
+              className="p-2 text-slate-100 hover:text-white ring-1 ring-white/20 rounded-lg shrink-0 cursor-pointer"
+              aria-label="Toggle Menu"
+              aria-expanded={isOpen}
             >
-              {isOpen ? <X /> : <Menu />}
+              {isOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </div>
-      </div>
+      </nav>
 
       {/* Mobile Nav Drawer */}
       <AnimatePresence>
@@ -172,114 +290,109 @@ export function Navbar() {
             initial={{ opacity: 0, x: "100%" }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-y-0 right-0 w-full sm:w-80 bg-primary z-[60] shadow-2xl flex flex-col xl:hidden"
+            transition={{ type: "spring", damping: 28, stiffness: 260 }}
+            className="fixed inset-y-0 right-0 w-full sm:w-80 bg-[#002147] z-[60] shadow-2xl flex flex-col xl:hidden border-l border-white/10"
           >
-            <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <span className="text-sand font-black uppercase tracking-[0.2em] text-xs">Command Center</span>
-              <button onClick={() => setIsOpen(false)} className="p-2 text-sand hover:text-white ring-1 ring-white/10 rounded-lg">
-                <X />
+            <div className="flex items-center justify-between p-5 border-b border-white/10">
+              <span className="text-[#C5A059] font-extrabold uppercase tracking-[0.18em] text-xs">
+                Platoon Navigation
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-2 text-slate-200 hover:text-white ring-1 ring-white/15 rounded-lg cursor-pointer"
+                aria-label="Close Menu"
+              >
+                <X size={18} />
               </button>
             </div>
-            
+
             <div className="flex-grow overflow-y-auto pt-4 pb-12 px-4 space-y-2 no-scrollbar">
-              <div className="grid grid-cols-2 gap-2 mb-8">
+              <div className="grid grid-cols-2 gap-2 mb-5">
                 {authLinks.map((link) => (
                   <Link
                     key={link.path}
                     to={link.path}
                     onClick={() => setIsOpen(false)}
-                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-white/5 border border-white/10 text-sand hover:bg-white/10 hover:text-white transition-all"
+                    className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-white/5 border border-white/10 text-slate-100 hover:bg-white/10 transition-colors"
                   >
-                    <link.icon size={20} className="text-white" />
-                    <span className="font-extrabold text-[10px] uppercase tracking-widest">{link.name}</span>
+                    <link.icon size={18} className="text-[#C5A059]" />
+                    <span className="font-bold text-xs">{link.name}</span>
                   </Link>
                 ))}
               </div>
 
               <div className="space-y-1">
-                <span className="block px-4 py-2 text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Quick Navigation</span>
-                {navLinks.map((link) => {
-                  const isExternal = link.path.startsWith("http");
+                <span className="block px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                  All Pages
+                </span>
+                {allDrawerLinks.map((link) => {
                   const isExam = link.path === "/exam";
-                  const className = `flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all ${
-                    isExam
-                      ? "bg-amber-400/20 text-amber-300 border border-amber-400/30"
-                      : location.pathname === link.path 
-                      ? "bg-white/20 text-white shadow-inner" 
-                      : "text-sand/70 hover:bg-white/5 hover:text-white"
-                  }`;
-                  const content = (
-                    <>
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                        isExam
-                          ? "bg-amber-400 text-slate-950 shadow-lg"
-                          : location.pathname === link.path ? "bg-white text-primary shadow-lg" : "bg-white/5"
-                      }`}>
-                        <link.icon size={18} />
-                      </div>
-                      <div className="flex items-center justify-between flex-1">
-                        <span className="font-bold text-xs uppercase tracking-wide">{link.name}</span>
-                        {isExam && (
-                          <span className="px-2 py-0.5 bg-amber-400 text-slate-950 text-[9px] font-black rounded-full uppercase">
-                            LIVE
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  );
-
-                  return isExternal ? (
-                    <a key={link.path} href={link.path} target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)} className={className}>
-                      {content}
-                    </a>
-                  ) : (
+                  const isActive = location.pathname === link.path;
+                  return (
                     <Link
                       key={link.path}
                       to={link.path}
                       onClick={() => setIsOpen(false)}
-                      className={className}
+                      className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl transition-colors ${
+                        isExam
+                          ? "bg-[#C5A059]/20 text-[#f3d492] border border-[#C5A059]/30"
+                          : isActive
+                          ? "bg-white/15 text-white"
+                          : "text-slate-200 hover:bg-white/5 hover:text-white"
+                      }`}
                     >
-                      {content}
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          isExam
+                            ? "bg-[#C5A059] text-[#00152e]"
+                            : isActive
+                            ? "bg-white text-[#002147]"
+                            : "bg-white/5 text-slate-300"
+                        }`}
+                      >
+                        <link.icon size={16} />
+                      </div>
+                      <span className="font-semibold text-xs">{link.name}</span>
                     </Link>
                   );
                 })}
               </div>
-              
-              <div className="pt-8 px-2 space-y-3">
+
+              <div className="pt-5 px-1 space-y-2.5">
+                <PWAInstallButton />
+
                 <button
                   id="drawer-circular-btn"
+                  type="button"
                   onClick={() => {
                     setIsOpen(false);
                     setIsCircularModalOpen(true);
                   }}
-                  className="flex items-center justify-center gap-3 w-full py-4 bg-amber-400/20 text-amber-300 border border-amber-400/40 font-black uppercase tracking-[0.15em] text-xs rounded-2xl hover:bg-amber-400/30 transition-all cursor-pointer shadow-lg"
+                  className="flex items-center justify-center gap-2.5 w-full py-3 bg-[#C5A059]/20 text-[#f3d492] border border-[#C5A059]/40 font-bold text-xs rounded-xl hover:bg-[#C5A059]/30 transition-colors cursor-pointer"
                 >
-                  <FileText size={18} />
-                  <span>Admission Circular (PDF)</span>
-                  <span className="px-1.5 py-0.5 bg-amber-400 text-slate-950 text-[9px] font-black rounded-full uppercase">
-                    NEW
-                  </span>
+                  <FileText size={16} />
+                  <span>{t("navCircular")}</span>
                 </button>
 
                 <Link
                   to="/enroll"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center justify-center gap-3 w-full py-5 bg-white text-primary font-black uppercase tracking-[0.2em] text-xs rounded-2xl shadow-2xl shadow-black/30 hover:scale-[1.02] active:scale-95 transition-all"
+                  className="flex items-center justify-center gap-2.5 w-full py-3.5 bg-[#C5A059] text-[#00152e] font-extrabold text-xs rounded-xl shadow-lg hover:bg-[#b59048] transition-colors"
                 >
-                  <UserPlus size={18} />
-                  Join the Platoon
+                  <UserPlus size={16} />
+                  <span>{t("ctaEnroll")}</span>
                 </Link>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-      
-      {/* Backdrop for Mobile Nav */}
+
+      {/* Backdrop */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -289,10 +402,7 @@ export function Navbar() {
         )}
       </AnimatePresence>
 
-      <CircularViewerModal 
-        isOpen={isCircularModalOpen} 
-        onClose={() => setIsCircularModalOpen(false)} 
-      />
-    </nav>
+      <CircularViewerModal isOpen={isCircularModalOpen} onClose={() => setIsCircularModalOpen(false)} />
+    </header>
   );
 }

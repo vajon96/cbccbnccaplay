@@ -66,9 +66,10 @@ export function AnswerScriptViewer({
   const [aiOverallSummary, setAiOverallSummary] = useState<string>("");
   const [aiDraftActive, setAiDraftActive] = useState(false);
 
-  // Script Deletion State
+  // Script Deletion & Finalize Confirmation State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeletingScript, setIsDeletingScript] = useState(false);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -242,13 +243,11 @@ export function AnswerScriptViewer({
   };
 
   const handleFinalize = async () => {
-    if (!window.confirm("Are you sure you want to FINALIZE this evaluation? Normal editing will be locked.")) {
-      return;
-    }
     setSaving(true);
     try {
       const updated = await finalizeAttemptEvaluation(attemptId, actorId, actorName);
       setAttempt(updated);
+      setConfirmFinalize(false);
       setMessage({ type: "success", text: "Evaluation FINALIZED and locked! ✓" });
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Error finalizing evaluation." });
@@ -259,7 +258,7 @@ export function AnswerScriptViewer({
 
   const handleReopenSubmit = async () => {
     if (!reopenReason.trim()) {
-      alert("Please provide a mandatory reason for reopening this finalized evaluation.");
+      setMessage({ type: "error", text: "Please provide a mandatory reason for reopening this finalized evaluation." });
       return;
     }
     setSaving(true);
@@ -605,8 +604,8 @@ export function AnswerScriptViewer({
         {/* Candidate Info Card */}
         <div className="lg:col-span-2 bg-slate-900 border border-white/10 p-6 rounded-3xl shadow-xl flex flex-col sm:flex-row items-start sm:items-center gap-5">
           <div className="w-20 h-20 rounded-2xl bg-slate-800 border-2 border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow-lg">
-            {attempt.candidatePhoto ? (
-              <img src={attempt.candidatePhoto} alt={attempt.candidateName} className="w-full h-full object-cover" />
+            {attempt.candidatePhoto && attempt.candidatePhoto.trim() !== "" ? (
+              <img src={attempt.candidatePhoto} alt={attempt.candidateName || "Candidate"} className="w-full h-full object-cover" />
             ) : (
               <span className="text-2xl font-black text-amber-400">
                 {attempt.candidateName ? attempt.candidateName.substring(0, 2).toUpperCase() : "C"}
@@ -854,9 +853,27 @@ export function AnswerScriptViewer({
                 </button>
               )}
             </div>
+          ) : confirmFinalize ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-amber-300">Lock &amp; Finalize?</span>
+              <button
+                onClick={handleFinalize}
+                disabled={saving}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer disabled:opacity-50"
+              >
+                Confirm Finalize
+              </button>
+              <button
+                onClick={() => setConfirmFinalize(false)}
+                disabled={saving}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
           ) : (
             <button
-              onClick={handleFinalize}
+              onClick={() => setConfirmFinalize(true)}
               disabled={saving}
               className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >

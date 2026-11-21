@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, doc, getDoc, setDoc, collection, Timestamp } from "../firebase";
 import { getSession } from "../lib/auth";
+import { isAdminRole } from "../lib/rbac";
 
 export function PublicQrScan() {
   const [loading, setLoading] = useState(false);
@@ -214,12 +215,19 @@ export function PublicQrScan() {
               return;
             }
 
-            const docRef = doc(db, "applicants", cadetId);
-            const docSnap = await getDoc(docRef);
+            let docSnap = await getDoc(doc(db, "public_qr_cards", cadetId));
+            if (!docSnap.exists() && getSession()) {
+              try {
+                docSnap = await getDoc(doc(db, "applicants", cadetId));
+              } catch {
+                // Non-owner public visitor cannot read PII applicants directly
+              }
+            }
 
             if (docSnap.exists()) {
               const rawData = docSnap.data();
-              const approvedStatus = rawData.status === "Approved" || rawData.status === "Joined";
+              const isRevoked = rawData.qrStatus === "revoked" || Boolean(rawData.qrRevoked);
+              const approvedStatus = !isRevoked && (rawData.status === "Approved" || rawData.status === "Joined" || Boolean(rawData.isValidCadet));
               
               const publicProfile = {
                 id: cadetId,
@@ -228,10 +236,12 @@ export function PublicQrScan() {
                 academicYear: rawData.academicYear,
                 studyStatus: rawData.studyStatus,
                 photo: rawData.photo,
-                status: rawData.status,
+                status: isRevoked ? "Revoked" : rawData.status,
                 collegeName: rawData.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)",
                 platoonName: "কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন (Cox's Bazar City College BNCC Platoon)",
-                isValidCadet: approvedStatus
+                isValidCadet: approvedStatus,
+                isRevoked,
+                qrRevokedReason: rawData.qrRevokedReason || "",
               };
 
               setCadetData(publicProfile);
@@ -616,9 +626,9 @@ export function PublicQrScan() {
                       setLoading(true);
                       setError(null);
 
-                      // 1. Check if authorized role: only Super Admin and QR Admin can manually search. Public/user rolls are blocked.
+                      // 1. Check if authorized admin role for manual ID fallback lookup
                       const session = getSession();
-                      const isAuthorized = session?.role === "super_admin" || session?.role === "qr_admin";
+                      const isAuthorized = Boolean(session && isAdminRole(session.role));
                       if (!isAuthorized) {
                         setError("QR Verification Required. Please scan QR Code to view details. সাধারণ ব্যবহারকারীদের জন্য ম্যানুয়াল ক্যাডেট সার্চ করার সুবিধা বন্ধ রয়েছে।");
                         setTimeout(() => setError(null), 5000);
@@ -662,8 +672,10 @@ export function PublicQrScan() {
                           return;
                         }
 
-                        const docRef = doc(db, "applicants", cleanInputId);
-                        const docSnap = await getDoc(docRef);
+                        let docSnap = await getDoc(doc(db, "public_qr_cards", cleanInputId));
+                        if (!docSnap.exists()) {
+                          docSnap = await getDoc(doc(db, "applicants", cleanInputId));
+                        }
                         if (docSnap.exists()) {
                           const rawData = docSnap.data();
 
@@ -688,18 +700,21 @@ export function PublicQrScan() {
                             return;
                           }
 
-                          const approvedStatus = rawData.status === "Approved" || rawData.status === "Joined";
+                          const isRevoked = rawData.qrStatus === "revoked" || Boolean(rawData.qrRevoked);
+                          const approvedStatus = !isRevoked && (rawData.status === "Approved" || rawData.status === "Joined");
                           const publicProfile = {
-                            id: inputId,
+                            id: cleanInputId,
                             fullNameEnglish: rawData.fullNameEnglish,
                             fullNameBangla: rawData.fullNameBangla,
                             academicYear: rawData.academicYear,
                             studyStatus: rawData.studyStatus,
                             photo: rawData.photo,
-                            status: rawData.status,
+                            status: isRevoked ? "Revoked" : rawData.status,
                             collegeName: rawData.collegeName || "কক্সবাজার সিটি কলেজ (Cox's Bazar City College)",
                             platoonName: "কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন (Cox's Bazar City College BNCC Platoon)",
-                            isValidCadet: approvedStatus
+                            isValidCadet: approvedStatus,
+                            isRevoked,
+                            qrRevokedReason: rawData.qrRevokedReason || "",
                           };
                           setCadetData(publicProfile);
                           targetField.value = "";
@@ -744,10 +759,20 @@ export function PublicQrScan() {
               className="p-6 rounded-3xl bg-slate-900 border border-white/5 shadow-2xl space-y-6 text-center"
             >
               {/* Cadet validation alert */}
-              {cadetData.isValidCadet ? (
+              {cadetData.isRevoked ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center border border-rose-500/40">
+                    <ShieldAlert className="w-6 h-6 text-rose-400" />
+                  </div>
+                  <h3 className="text-rose-400 font-black text-sm uppercase tracking-wider">REVOKED / বাতিলকৃত কিউআর কোড</h3>
+                  <p className="text-rose-300/90 text-xs font-medium">
+                    {cadetData.qrRevokedReason || "এই QR কোডটি প্রশাসনিকভাবে বাতিল বা পুনঃইস্যু করা হয়েছে।"}
+                  </p>
+                </div>
+              ) : cadetData.isValidCadet ? (
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/30">
-                    <ShieldCheck className="w-6 h-6 text-emerald-400 animate-bounce" />
+                    <ShieldCheck className="w-6 h-6 text-emerald-400" />
                   </div>
                   <h3 className="text-emerald-400 font-black text-sm uppercase tracking-wider">VERIFIED CADET</h3>
                   <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Cox's Bazar City College</p>
@@ -755,7 +780,7 @@ export function PublicQrScan() {
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center border border-amber-500/30">
-                    <ShieldAlert className="w-6 h-6 text-amber-400 animate-bounce" />
+                    <ShieldAlert className="w-6 h-6 text-amber-400" />
                   </div>
                   <h3 className="text-amber-400 font-black text-sm uppercase tracking-wider">PENDING VERIFICATION</h3>
                   <p className="text-slate-500 text-[10px] uppercase tracking-widest font-black">Cox's Bazar City College</p>
@@ -765,7 +790,7 @@ export function PublicQrScan() {
               {/* Limited Profile Data Only */}
               <div className="space-y-4 p-5 bg-slate-950 rounded-2xl border border-white/5">
                 <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-emerald-500 mx-auto shadow-xl bg-slate-900">
-                  {cadetData.photo ? (
+                  {cadetData.photo && cadetData.photo.trim() !== "" ? (
                     <img src={cadetData.photo} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
@@ -799,9 +824,10 @@ export function PublicQrScan() {
                     <p className="text-xs font-bold text-slate-300 uppercase">{cadetData.platoonName || "কক্সবাজার সিটি কলেজ বিএনসিসি মিশ্র প্লাটুন (Cox's Bazar City College BNCC Platoon)"}</p>
                   </div>
                   <div className="col-span-2 text-center pt-2">
-                    <span className="text-[9.5px] uppercase tracking-wider text-slate-500 font-black block mb-1">VERIFICATION STATUS</span>
-                    <span className={`inline-block px-3 py-1 text-[9.5px] font-black tracking-widest text-white uppercase rounded-full ${
-                      cadetData.status === "Approved" || cadetData.status === "Joined" ? "bg-emerald-500 animate-pulse" : "bg-amber-600"
+                    <span className="text-[9.5px] uppercase tracking-wider text-slate-400 font-black block mb-1">VERIFICATION STATUS</span>
+                    <span className={`inline-block px-3 py-1 text-[10px] font-black tracking-widest text-white uppercase rounded-lg ${
+                      cadetData.isRevoked ? "bg-rose-600" :
+                      cadetData.status === "Approved" || cadetData.status === "Joined" ? "bg-emerald-600" : "bg-amber-600"
                     }`}>
                       {cadetData.status || "Pending"}
                     </span>

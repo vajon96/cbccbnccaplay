@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BNCC Admit Card Generator - Cox's Bazar City College</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        /* Base & Utility */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { display: flex; flex-direction: column; min-height: 100vh; background-color: #f4f6f9; color: #2c3e50; line-height: 1.6; }
+        header { background: linear-gradient(135deg, #004d40, #00796b); padding: 20px 0; color: white; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); }
+        .logo-container { display: flex; justify-content: center; align-items: center; gap: 30px; margin-bottom: 15px; }
+        .logo-container img { height: 80px; width: auto; border-radius: 50%; border: 2px solid white; }
+        marquee { padding: 8px 0; background-color: rgba(0, 0, 0, 0.1); font-size: 1.4rem; font-weight: 700; color: #ffeb3b; }
+        main { flex: 1; padding: 20px; max-width: 1300px; margin: 0 auto; width: 100%; }
+        .content-section { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1); margin-bottom: 30px; }
+        .btn-generate { background-color: #00796b; color: white; font-weight: 700; border: none; padding: 12px 30px; border-radius: 6px; font-size: 1.1rem; display: block; margin: 25px auto 0; }
+        .btn-download { background-color: #d35400; color: white; border: none; padding: 10px 25px; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 20px; }
+        
+        /* --- ADMIT CARD STYLES --- */
+        .admit-card {
+            width: 100%;
+            max-width: 750px; 
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 5px solid #004d40;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            display: none;
+            overflow: hidden; 
+        }
+        
+        .admit-card-header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #e67e22;
+            padding-bottom: 10px;
+        }
+
+        /* Container for the three logos */
+        .admit-card-logo-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        /* Specific logo size for the card */
+        .admit-card-logo-row img {
+            height: 60px; /* Adjusted size for three logos */
+            width: auto;
+        }
+        
+        .admit-card-header h2 {
+            color: #004d40;
+            font-weight: 900;
+            font-size: 1.8rem;
+            margin: 5px 0 3px 0;
+        }
+        .admit-card-header p {
+            color: #e67e22;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        /* Two Column Data Layout */
+        .admit-card-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr; /* Data on left, Photo/IDs on right */
+            gap: 20px;
+        }
+        
+        /* Candidate Details */
+        .detail-row {
+            display: flex;
+            margin-bottom: 6px;
+            border-bottom: 1px dotted #ccc;
+            padding-bottom: 3px;
+        }
+        .detail-label {
+            flex: 0 0 140px;
+            font-weight: 600;
+            color: #34495e;
+            font-size: 0.9rem;
+        }
+        .detail-value {
+            flex: 1;
+            font-size: 0.9rem;
+            word-break: break-word;
+            color: #000;
+        }
+
+        /* Photo & ID Column */
+        .photo-id-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .admit-card-photo-container {
+            width: 140px;
+            height: 180px;
+            background-color: #f7f9fb;
+            border: 2px solid #34495e;
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .admit-card-photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .photo-error-message {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 235, 235, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #c0392b;
+            font-weight: 700;
+            font-size: 0.8rem;
+            padding: 5px;
+            border: 2px dashed #e74c3c;
+            display: none;
+        }
+
+        /* Custom ID Box Styling (User-Entered) */
+        .primary-id-box {
+            background-color: #f1c40f; 
+            border: 2px solid #e67e22;
+            padding: 8px 10px;
+            text-align: center;
+            border-radius: 4px;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .primary-id-box strong {
+            font-size: 0.8rem;
+            color: #d35400;
+            display: block;
+        }
+        .primary-id-box .unique-value {
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: #c0392b;
+        }
+
+        /* Auto-Generated Serial Number (Internet/Machine ID) */
+        .print-serial-box {
+            background-color: #ecf0f1;
+            border: 1px solid #bdc3c7;
+            padding: 5px;
+            text-align: center;
+            border-radius: 4px;
+            width: 100%;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        /* --- Print-Specific CSS (For PDF/Printout) --- */
+        @media print {
+            header, .banner, .content-section, footer, .btn-download {
+                display: none !important;
+            }
+            main {
+                max-width: none;
+                padding: 0;
+            }
+            .admit-card {
+                width: 100%; 
+                margin: 0;
+                box-shadow: none;
+                border: 1px solid #000; 
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <a href="https://cbcc.edu.bd/">
+                <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo">
+            </a>
+            <a href="https://bncc.info/">
+                <img class="logo" src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+            </a>
+           
+           
+        </div>
+        <marquee behavior="scroll" scrollamount="4" direction="left">
+            Cox's Bazar City College BNCC Platoon - Recruitment Admit Card Generator
+        </marquee>
+    </header>
+
+    <main>
+        <section class="content-section">
+            <h3 class="text-center mb-4 text-primary"><i class="fas fa-edit"></i> Admit Card Data Entry</h3>
+            <p class="text-center text-danger">⚠️ **Photo Link is Crucial: Use the Direct URL from Google Drive** ⚠️</p>
+            
+            <form id="admitCardForm">
+                <div class="row">
+                    <div class="col-md-6"><div class="form-group"><label for="fullName">Full Name</label><input type="text" class="form-control" id="fullName" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="formUnitRoll">Form/Unique Roll No. (Primary ID)</label><input type="text" class="form-control" id="formUnitRoll" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="fatherName">Father's Name</label><input type="text" class="form-control" id="fatherName" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="motherName">Mother's Name</label><input type="text" class="form-control" id="motherName" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="studentId">Student ID</label><input type="text" class="form-control" id="studentId" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="department">Department</label><input type="text" class="form-control" id="department" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="program">Academic Program</label><input type="text" class="form-control" id="program" placeholder="e.g., B.Sc(Honours) 1st Year" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="phone">Phone Number</label><input type="tel" class="form-control" id="phone" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="email">Email Address</label><input type="email" class="form-control" id="email" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="height">Height (e.g., 5' 6&quot;)</label><input type="text" class="form-control" id="height" required></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="gender">Gender</label><select class="form-control" id="gender" required><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option></select></div></div>
+                    <div class="col-md-6"><div class="form-group"><label for="address">Permanent Address</label><textarea class="form-control" id="address" rows="1" required></textarea></div></div>
+                </div>
+
+                <div class="form-group mt-3">
+                    <label for="photoUrl" class="text-danger"><i class="fas fa-camera"></i> Passport Size Photo URL</label>
+                    <input type="url" class="form-control" id="photoUrl" placeholder="https://drive.google.com/uc?export=view&id=FILE_ID" required>
+                </div>
+                
+                <button type="button" class="btn-generate" onclick="generateAdmitCard()">
+                    <i class="fas fa-eye"></i> Generate & Preview Admit Card
+                </button>
+            </form>
+        </section>
+        
+        <div id="admitCard" class="admit-card">
+            <div class="admit-card-header">
+                <div class="admit-card-logo-row">
+                    <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="College Logo">
+                    <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo">
+                    
+                    
+                </div>
+                
+                <h2>BANGLADESH NATIONAL CADET CORPS (BNCC)</h2>
+                <p>RECRUITMENT ADMIT CARD - COX'S BAZAR CITY COLLEGE PLATOON</p>
+            </div>
+            
+            <div class="admit-card-content">
+                <div class="candidate-details">
+                    <div class="detail-row"><div class="detail-label">Full Name:</div><div class="detail-value" id="cardName"></div></div>
+                    <div class="detail-row"><div class="detail-label">Father's Name:</div><div class="detail-value" id="cardFather"></div></div>
+                    <div class="detail-row"><div class="detail-label">Mother's Name:</div><div class="detail-value" id="cardMother"></div></div>
+                    <div class="detail-row"><div class="detail-label">Gender:</div><div class="detail-value" id="cardGender"></div></div>
+                    <div class="detail-row"><div class="detail-label">Student ID:</div><div class="detail-value" id="cardStudentId"></div></div>
+                    <div class="detail-row"><div class="detail-label">Department:</div><div class="detail-value" id="cardDepartment"></div></div>
+                    <div class="detail-row"><div class="detail-label">Program:</div><div class="detail-value" id="cardProgram"></div></div>
+                    <div class="detail-row"><div class="detail-label">Phone:</div><div class="detail-value" id="cardPhone"></div></div>
+                    <div class="detail-row"><div class="detail-label">Email:</div><div class="detail-value" id="cardEmail"></div></div>
+                    <div class="detail-row"><div class="detail-label">Height:</div><div class="detail-value" id="cardHeight"></div></div>
+                    <div class="detail-row"><div class="detail-label">Address:</div><div class="detail-value" id="cardAddress"></div></div>
+                </div>
+
+                <div class="photo-id-column">
+                    <div class="admit-card-photo-container">
+                        <img id="cardPhoto" src="" alt="Candidate Photo">
+                        <div class="photo-error-message">PHOTO NOT VALID<br>CHECK DIRECT LINK</div>
+                    </div>
+                    
+                    <div class="primary-id-box">
+                        <strong>PRIMARY/FORM NO.</strong>
+                        <div class="unique-value" id="cardFormUnitRoll"></div>
+                    </div>
+
+                    <div class="print-serial-box">
+                        <strong class="text-secondary">PRINT SERIAL NO. (Auto-Generated)</strong>
+                        <div id="printSerialNo">---</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="admit-card-footer mt-4">
+                <div class="row align-items-end">
+                    <div class="col-6 text-start">
+                        <br><br><br>
+                        <p style="border-top: 1px solid #000; width: 150px; font-size: 0.85rem; padding-top: 3px;">Candidate Signature</p>
+                    </div>
+                    
+                
+                <button class="btn-download" onclick="downloadAdmitCard()">
+                    <i class="fas fa-print"></i> Print / Save as PDF (Real-Time)
+                </button>
+            </div>
+        </div>
+        </main>
+
+    <footer>
+        <p>&copy; 2025 Cox's Bazar City College BNCC Platoon. Developed for internal use.</p>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function generateUniquePrintId() {
+            // Generates a unique ID based on date and time for machine tracking
+            const date = new Date();
+            const year = date.getFullYear().toString().slice(2);
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const seconds = date.getSeconds().toString().padStart(2, '0');
+            // Format: BNCC-YYMMDD-HHMMSS
+            return `BNCC-${year}${month}${day}-${hours}${minutes}${seconds}`;
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Pre-fill form with sample data for demonstration
+            document.getElementById('fullName').value = 'A M Yasin Mobarak';
+            document.getElementById('fatherName').value = 'Mr. Md Moinur Rahman';
+            document.getElementById('motherName').value = 'Mrs. Zannatul Ferdous';
+            document.getElementById('department').value = 'Biochemistry & Molecular Biology';
+            document.getElementById('studentId').value = '24061230660018';
+            document.getElementById('gender').value = 'Male';
+            document.getElementById('email').value = 'amyasinmobarak@gmail.com';
+            document.getElementById('program').value = 'B.Sc(Honours) 1st Year';
+            document.getElementById('address').value = 'Pomra, Rosaipara, Shantirhat, Rangunia, Chittagong';
+            document.getElementById('phone').value = '01946440974';
+            document.getElementById('height').value = "5' 6\"";
+            document.getElementById('formUnitRoll').value = 'BNCC/CBCC/25-001'; 
+            document.getElementById('photoUrl').value = 'https://drive.google.com/uc?export=view&id=1cIW0BkmT9iNQuVFy7AjLAcExzvJ-sSob';
+        });
+
+        function generateAdmitCard() {
+            const form = document.getElementById('admitCardForm');
+            if (!form.checkValidity()) {
+                alert("Please fill in all required fields correctly before generating the admit card.");
+                form.reportValidity();
+                return;
+            }
+            
+            // Set all candidate data to the card
+            document.getElementById('cardName').textContent = document.getElementById('fullName').value;
+            document.getElementById('cardFather').textContent = document.getElementById('fatherName').value;
+            document.getElementById('cardMother').textContent = document.getElementById('motherName').value;
+            document.getElementById('cardGender').textContent = document.getElementById('gender').value;
+            document.getElementById('cardStudentId').textContent = document.getElementById('studentId').value;
+            document.getElementById('cardDepartment').textContent = document.getElementById('department').value;
+            document.getElementById('cardProgram').textContent = document.getElementById('program').value;
+            document.getElementById('cardAddress').textContent = document.getElementById('address').value;
+            document.getElementById('cardPhone').textContent = document.getElementById('phone').value;
+            document.getElementById('cardEmail').textContent = document.getElementById('email').value;
+            document.getElementById('cardHeight').textContent = document.getElementById('height').value;
+            document.getElementById('cardFormUnitRoll').textContent = document.getElementById('formUnitRoll').value;
+
+            // Reset print serial number in preview
+            document.getElementById('printSerialNo').textContent = '---';
+
+            // Photo handling with error logic
+            const cardPhoto = document.getElementById('cardPhoto');
+            const errorText = document.querySelector('.photo-error-message');
+            const photoUrl = document.getElementById('photoUrl').value;
+
+            cardPhoto.style.display = 'none';
+            errorText.style.display = 'none';
+
+            if (photoUrl) {
+                cardPhoto.src = photoUrl;
+            }
+
+            cardPhoto.onload = function() {
+                cardPhoto.style.display = 'block';
+                errorText.style.display = 'none';
+            };
+
+            cardPhoto.onerror = function() {
+                cardPhoto.style.display = 'none';
+                errorText.style.display = 'flex';
+                cardPhoto.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; 
+            };
+            
+            // Show the admit card preview
+            document.getElementById('admitCard').style.display = 'block';
+            document.getElementById('admitCard').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function downloadAdmitCard() {
+            // 1. GENERATE the unique machine ID in real-time
+            const uniqueId = generateUniquePrintId();
+            document.getElementById('printSerialNo').textContent = uniqueId;
+            
+            // 2. TRIGGER the native browser Print dialog (Real-time PDF/Print)
+            window.print();
+
+            // Reset serial number after printing is initiated
+            setTimeout(() => {
+                document.getElementById('printSerialNo').textContent = '---';
+            }, 100); 
+        }
+    </script>
+</body>
+</html>

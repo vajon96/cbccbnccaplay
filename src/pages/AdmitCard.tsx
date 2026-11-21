@@ -1,65 +1,44 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useLocation, Link } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
-import { Download, CheckCircle, Shield, Loader2, ExternalLink, ArrowLeft, FileCheck, Info, Key, User as UserIcon } from "lucide-react";
+import { Download, CheckCircle, Shield, Loader2, FileCheck, Info, Printer } from "lucide-react";
 import { jsPDF } from "jspdf";
-import * as htmlToImage from 'html-to-image';
-import { db, doc, getDoc, handleFirestoreError, OperationType } from "../firebase";
+import * as htmlToImage from "html-to-image";
+import { db, doc, getDoc } from "../firebase";
 import { motion } from "framer-motion";
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 
 export function AdmitCard() {
+  useDocumentMeta({
+    title: "Admit Card | Cox's Bazar City College BNCC Platoon",
+    description: "Download or print your verified Cox's Bazar City College BNCC admission admit card.",
+  });
+
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const rawPassword = searchParams.get("pw");
+  const location = useLocation();
+  const rawPassword = (location.state as { generatedPassword?: string } | null)?.generatedPassword;
   const [applicant, setApplicant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Block browser print shortcut (Ctrl+P / Cmd+P)
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-        e.preventDefault();
-        alert("Printing is disabled. Please use the 'Download Admit Card' button.");
-      }
-    };
-
-    // Override window.print
-    const originalPrint = window.print;
-    window.print = () => {
-      alert("Printing is disabled. Please use the 'Download Admit Card' button.");
-    };
-
-    // Prevent context menu (optional, but requested 'Prevent right-click print options if possible')
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('contextmenu', handleContextMenu);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('contextmenu', handleContextMenu);
-      window.print = originalPrint;
-    };
-  }, []);
-
-  useEffect(() => {
     const fetchApplicant = async () => {
-      if (!id) return;
-      const path = `applicants/${id}`;
+      if (!id) {
+        setLoading(false);
+        return;
+      }
       try {
         const docRef = doc(db, "applicants", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setApplicant(docSnap.data());
-        } else {
-          console.error("No such document!");
         }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, path);
+      } catch (error: any) {
+        if (error?.code !== "permission-denied") {
+          console.error("Failed to fetch admit card:", error);
+        }
       } finally {
         setLoading(false);
       }
@@ -78,15 +57,12 @@ export function AdmitCard() {
   }, [applicant, searchParams]);
 
   const handleDownloadPDF = async () => {
-    if (!cardRef.current || downloading) return;
-    
+    if (!cardRef.current || downloading || !applicant) return;
+
     try {
       setDownloading(true);
-      
-      // Ensure all fonts are loaded
       await document.fonts.ready;
-      
-      // Ensure all images are fully loaded
+
       const images = Array.from(cardRef.current.querySelectorAll('img'));
       await Promise.all(images.map(img => {
         if (img.complete) return Promise.resolve();
@@ -97,14 +73,13 @@ export function AdmitCard() {
         });
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 800));
-
+      await new Promise(resolve => setTimeout(resolve, 600));
       const element = cardRef.current;
-      
+
       const imgData = await htmlToImage.toJpeg(element, {
         quality: 0.95,
         backgroundColor: "#ffffff",
-        pixelRatio: 2.5, // Balanced for quality and stability
+        pixelRatio: 2.5,
         cacheBust: true,
         style: {
           transform: 'none',
@@ -121,20 +96,15 @@ export function AdmitCard() {
         format: "a4",
         compress: true
       });
-      
+
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      
+
       pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
       pdf.save(`BNCC_Admit_Card_${applicant.id}.pdf`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("PDF Generation error:", error);
-      
-      if (error.message === "SECURITY_RESTRICTION") {
-        alert("Security Restriction: Your browser blocked the PDF generation because of external images (CORS). \n\nSolution: Please click the 'Print' button and choose 'Save as PDF' in the destination dropdown.");
-      } else {
-        alert("Error generating PDF. This usually happens in the preview window. \n\nSolution: Click 'Open in New Tab' at the top right of the screen, then try downloading again. Or use the 'Print' button.");
-      }
+      window.print();
     } finally {
       setDownloading(false);
     }
@@ -142,159 +112,138 @@ export function AdmitCard() {
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-screen space-y-4">
-      <Loader2 className="w-12 h-12 text-primary animate-spin" />
-      <p className="micro-label">Retrieving Credentials...</p>
+      <Loader2 className="w-12 h-12 text-[#002147] animate-spin" />
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Retrieving Credentials...</p>
     </div>
   );
 
   if (!applicant) return (
-    <div className="flex flex-col items-center justify-center h-screen space-y-6">
-      <Shield className="w-16 h-16 text-accent" />
-      <h2 className="text-2xl font-black uppercase">Applicant Not Found</h2>
-      <button onClick={() => window.history.back()} className="btn-hover px-6 py-3 bg-ink text-white font-bold uppercase tracking-widest text-xs rounded-sm">Return to Base</button>
+    <div className="flex flex-col items-center justify-center h-screen space-y-6 px-4 text-center">
+      <Shield className="w-16 h-16 text-[#C5A059]" />
+      <h2 className="text-2xl font-black text-[#002147]">Admit Card Access Requires Owner or Admin Sign-In</h2>
+      <p className="text-sm text-slate-600 max-w-md">
+        নিরাপত্তার স্বার্থে আপনার নিবন্ধিত ইমেইল/ক্যাডেট অ্যাকাউন্ট অথবা অ্যাডমিন সেশন দিয়ে লগইন অবস্থায় প্রবেশপত্র দেখতে পারবেন।
+      </p>
+      <div className="flex items-center gap-3">
+        <button onClick={() => window.history.back()} className="px-6 py-3 bg-slate-200 text-slate-800 font-bold text-xs rounded-xl cursor-pointer">
+          ফিরে যান
+        </button>
+        <Link to="/login" className="px-6 py-3 bg-[#002147] text-white font-bold text-xs rounded-xl">
+          পোর্টালে লগইন করুন
+        </Link>
+      </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-bg-light pb-24 selection:bg-primary selection:text-white">
+    <div className="min-h-screen bg-slate-100 pb-24">
       {/* Header Banner */}
-      <div className="bg-surface/50 backdrop-blur-xl py-12 mb-12 border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8">
+      <div className="bg-[#002147] py-10 mb-10 border-b border-[#C5A059]/30 print:hidden">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-3">
-              <FileCheck className="text-primary" size={24} />
-              <span className="micro-label !text-white/60">Official Document Retrieval</span>
+            <div className="flex items-center justify-center md:justify-start gap-2.5">
+              <FileCheck className="text-[#C5A059]" size={22} />
+              <span className="text-xs font-bold uppercase tracking-widest text-[#dfc07c]">Official Document Retrieval</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter">Enrollment Successful</h1>
-            <p className="text-white/40 font-light">Your application has been processed. Please download your admit card below.</p>
+            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">Admit Card &amp; Enrollment Slip</h1>
+            <p className="text-slate-300 text-sm">Download PDF or print your verified BNCC Admit Card below.</p>
           </div>
-          
-          <div className="flex flex-col items-end gap-3">
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => window.print()}
+              className="px-6 py-3.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center gap-2 cursor-pointer"
+            >
+              <Printer size={16} />
+              Print Card
+            </button>
             <button
               onClick={handleDownloadPDF}
               disabled={downloading}
-              className="px-10 py-5 bg-primary text-white font-black uppercase tracking-widest text-sm rounded-sm btn-hover flex items-center gap-3 disabled:opacity-50 shadow-2xl shadow-primary/20"
+              className="px-7 py-3.5 bg-[#C5A059] hover:bg-[#d6b36c] text-slate-950 font-black uppercase tracking-wider text-xs rounded-xl flex items-center gap-2 disabled:opacity-50 shadow-lg cursor-pointer"
             >
-              {downloading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-              Download Admit Card
+              {downloading ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+              Download PDF
             </button>
-            <div className="flex items-center gap-2 text-[10px] text-white/30 font-bold uppercase tracking-widest">
-              <Shield size={12} />
-              Secure Digital Retrieval
-            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 mb-10">
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-amber-50 border-2 border-amber-200 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-center gap-5 text-center shadow-lg shadow-amber-900/5"
-        >
-          <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0 ring-4 ring-amber-50">
-            <Info size={28} />
-          </div>
-          <div>
-            <h3 className="text-amber-900 font-black uppercase tracking-tight text-lg leading-none mb-1">Printing Restricted</h3>
-            <p className="text-amber-800 font-bold text-sm">
-              ⚠️ Printing is disabled. Please download your admit card.
-            </p>
-          </div>
-        </motion.div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-12">
+      <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-10">
         {/* Sidebar Info */}
-          <div className="lg:col-span-4 space-y-8">
-            {rawPassword && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-primary/10 border border-primary/20 p-8 rounded-sm space-y-6 relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl -mr-16 -mt-16" />
-                <div className="flex items-center gap-3 text-primary">
-                  <Shield size={20} />
-                  <h3 className="font-extrabold uppercase text-xs tracking-widest text-slate-900">Security Access</h3>
+        <div className="lg:col-span-4 space-y-6 print:hidden">
+          {rawPassword && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white border-2 border-[#C5A059] p-6 rounded-2xl space-y-4 shadow-sm"
+            >
+              <div className="flex items-center gap-2.5 text-[#002147]">
+                <Shield size={20} className="text-[#C5A059]" />
+                <h3 className="font-black uppercase text-xs tracking-wider">One-Time Credentials (Save Now)</h3>
+              </div>
+              <div className="space-y-3">
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-0.5">
+                  <span className="text-[10px] font-bold uppercase text-slate-500">Applicant ID</span>
+                  <span className="font-mono font-black text-lg text-[#002147]">{applicant.id}</span>
                 </div>
-                <div className="space-y-4">
-                  <div className="p-4 bg-bg-light/50 backdrop-blur border border-white/5 rounded flex flex-col gap-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-600">Applicant ID</span>
-                    <span className="font-mono font-black text-lg text-slate-900">{applicant.id}</span>
-                  </div>
-                  <div className="p-4 bg-bg-light/50 backdrop-blur border border-white/5 rounded flex flex-col gap-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-500">Password</span>
-                    <span className="font-mono font-black text-lg text-primary">{rawPassword}</span>
-                  </div>
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-0.5">
+                  <span className="text-[10px] font-bold uppercase text-slate-500">Password</span>
+                  <span className="font-mono font-black text-lg text-[#002147]">{rawPassword}</span>
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium italic">Save these credentials securely for future access.</p>
-              </motion.div>
-            )}
+              </div>
+              <p className="text-xs text-slate-600">নিরাপত্তার জন্য এই পাসওয়ার্ড URL-এ রাখা হয়নি। অনুগ্রহ করে সংরক্ষণ করুন।</p>
+            </motion.div>
+          )}
 
-            <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="glass-card p-8 rounded-sm space-y-8 border-l-4 border-primary"
-          >
-            <h3 className="text-xl font-black uppercase tracking-tighter text-white">Verification Status</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center py-3 border-b border-white/5">
-                <span className="text-[10px] font-bold uppercase text-slate-500">Document Status</span>
-                <span className="px-4 py-1 bg-green-500/10 text-green-400 text-[10px] font-black uppercase rounded-full border border-green-500/20">Verified</span>
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl space-y-5 shadow-sm">
+            <h3 className="text-lg font-black text-[#002147]">Verification Status</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2.5 border-b border-slate-100">
+                <span className="text-xs font-bold uppercase text-slate-500">Document Status</span>
+                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200">
+                  {applicant.status || "Pending"}
+                </span>
               </div>
-              <div className="flex justify-between items-center py-3 border-b border-white/5">
-                <span className="text-[10px] font-bold uppercase text-slate-500">Applicant ID</span>
-                <span className="font-mono text-sm font-bold text-white">{applicant.id}</span>
+              <div className="flex justify-between items-center py-2.5 border-b border-slate-100">
+                <span className="text-xs font-bold uppercase text-slate-500">Applicant ID</span>
+                <span className="font-mono text-sm font-bold text-[#002147]">{applicant.id}</span>
               </div>
-              <div className="flex justify-between items-center py-3 border-b border-white/5">
-                <span className="text-[10px] font-bold uppercase text-slate-500">Cohort Session</span>
-                <span className="font-mono text-sm font-bold text-white">2026-27</span>
+              <div className="flex justify-between items-center py-2.5">
+                <span className="text-xs font-bold uppercase text-slate-500">Cohort Session</span>
+                <span className="font-mono text-sm font-bold text-[#002147]">{applicant.session || "2026-27"}</span>
               </div>
             </div>
-          </motion.div>
+          </div>
 
-          <div className="p-8 bg-surface border border-white/5 space-y-6">
-            <div className="flex items-center gap-3 text-primary">
-              <Info size={18} />
-              <span className="font-black uppercase text-xs tracking-widest">Candidate Conduct</span>
+          <div className="p-6 bg-white border border-slate-200 rounded-2xl space-y-4 shadow-sm">
+            <div className="flex items-center gap-2.5 text-[#002147]">
+              <Info size={18} className="text-[#C5A059]" />
+              <span className="font-black uppercase text-xs tracking-wider">Candidate Conduct</span>
             </div>
-            <ul className="space-y-4">
+            <ul className="space-y-3">
               {[
-                "Bring this card to the examination hall.",
-                "Original NID/Birth Certificate required.",
+                "Bring this printed admit card to the examination hall.",
+                "Original NID / Birth Registration Certificate required.",
                 "Report 30 minutes before schedule.",
                 "Electronic devices are strictly prohibited."
               ].map((text, i) => (
-                <li key={i} className="flex gap-3 text-[11px] text-slate-400 font-medium leading-relaxed">
-                  <span className="text-primary font-bold">0{i+1}</span>
-                  {text}
+                <li key={i} className="flex gap-3 text-xs text-slate-700 font-medium leading-relaxed">
+                  <span className="text-[#002147] font-black font-mono">0{i + 1}</span>
+                  <span>{text}</span>
                 </li>
               ))}
             </ul>
           </div>
-
-          <button
-            onClick={() => window.open(window.location.href, '_blank')}
-            className="w-full py-4 border border-ink/10 text-ink/60 font-black uppercase tracking-widest text-[10px] rounded-sm hover:bg-ink hover:text-white transition-all flex items-center justify-center gap-3"
-          >
-            <ExternalLink size={14} />
-            Open in New Tab
-          </button>
         </div>
 
         {/* Admit Card Preview */}
         <div className="lg:col-span-8">
-          <div className="flex items-center justify-between mb-6">
-            <span className="micro-label">Document Preview</span>
-            <div className="flex gap-1">
-              <div className="w-2 h-2 rounded-full bg-red-400" />
-              <div className="w-2 h-2 rounded-full bg-yellow-400" />
-              <div className="w-2 h-2 rounded-full bg-green-400" />
-            </div>
+          <div className="flex items-center justify-between mb-4 print:hidden">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-600">Official A4 Document Preview</span>
           </div>
 
-          <div className="flex justify-center overflow-x-auto pb-12 no-scrollbar bg-slate-950 p-12 rounded-sm border border-white/5 relative group">
+          <div className="flex justify-center overflow-x-auto pb-8 no-scrollbar bg-slate-900 p-6 md:p-10 rounded-2xl border border-slate-800 relative print:bg-white print:p-0 print:border-0">
             <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity" />
             <div 
               ref={cardRef}
@@ -359,7 +308,7 @@ export function AdmitCard() {
                 <div className="flex justify-between items-start mb-4 relative z-10">
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-[1.2in] h-[1.5in] border border-black overflow-hidden bg-gray-50 flex items-center justify-center">
-                      {applicant.photo ? (
+                      {applicant.photo && applicant.photo.trim() !== "" ? (
                         <img 
                           src={applicant.photo} 
                           className="w-full h-full object-cover" 

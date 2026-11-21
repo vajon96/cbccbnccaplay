@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hall of Platoon In-Charges - Honoring the leadership of Cox's Bazar City College BNCC Platoon (Army Wing).">
+    <title>Hall of In-Charges | Cox's Bazar City College BNCC</title>
+    <link rel="icon" type="image/png" href="https://i.ibb.co/Fb3R6wR/Bncc-logo.png">
+    
+    <!-- External Frameworks and Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Oswald:wght@400;500;700&display=swap">
+    
+    <style>
+        /* Modernized Color Palette & Fonts */
+        :root {
+            --primary-color: #D32F2F; /* Deep Red */
+            --secondary-color: #1A252C; /* Deeper Slate Grey for high contrast */
+            --highlight-color: #FFC107; /* Amber/Gold */
+            --light-bg: #f8f9fa; /* Crisp light grey */
+            --dark-bg: #263238; /* Dark background for footer/nav */
+            --font-main: 'Roboto', sans-serif;
+            --font-heading: 'Oswald', sans-serif;
+            --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--light-bg);
+            color: var(--secondary-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        main {
+            flex: 1;
+        }
+
+        /* Header & Sticky Navigation */
+        header {
+            background: var(--secondary-color);
+            padding: 1.5rem 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            position: sticky;
+            top: 0;
+            z-index: 1020;
+        }
+
+        .logo {
+            height: 75px;
+            margin: 0 18px;
+            transition: var(--transition-smooth);
+            filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.1));
+        }
+        
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        header h1 {
+            font-family: var(--font-heading);
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 2.5px;
+            font-weight: 700;
+            font-size: 2.2rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .banner {
+            background: linear-gradient(135deg, var(--primary-color), #B71C1C);
+            color: white;
+            padding: 2.5rem;
+            text-align: center;
+            margin-bottom: 3rem;
+            box-shadow: inset 0 -5px 15px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        
+        .banner::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background-color: var(--highlight-color);
+            border-radius: 2px;
+        }
+        
+        .banner h2 {
+            font-family: var(--font-heading);
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .banner p {
+            font-family: var(--font-heading);
+            font-weight: 400;
+            letter-spacing: 1.5px;
+            opacity: 0.9;
+        }
+
+        nav {
+            background-color: var(--dark-bg);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 0.2rem 0;
+        }
+
+        nav a {
+            color: rgba(255, 255, 255, 0.85);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            font-weight: 500;
+            letter-spacing: 0.8px;
+            padding: 0.9rem 1.4rem;
+            text-decoration: none;
+            transition: var(--transition-smooth);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        nav a:hover, nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: inset 0 -3px 0 var(--highlight-color);
+        }
+
+        /* Title Sections */
+        .page-title {
+            font-family: var(--font-heading);
+            color: var(--primary-color);
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 3rem;
+            position: relative;
+            display: inline-block;
+            padding-bottom: 12px;
+            font-size: 2rem;
+            letter-spacing: 1px;
+        }
+
+        .page-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 3.5px;
+            background-color: var(--highlight-color);
+            border-radius: 2px;
+        }
+
+        /* Table UI Premium Upgrades */
+        .table-responsive {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            background: white;
+            border: 1px solid rgba(0,0,0,0.03);
+            animation: fadeInUp 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        table {
+            margin-bottom: 0 !important;
+            border-collapse: separate;
+        }
+
+        th {
+            background: linear-gradient(180deg, var(--primary-color), #C62828) !important;
+            color: white !important;
+            text-transform: uppercase;
+            font-weight: 500;
+            font-family: var(--font-heading);
+            letter-spacing: 1.2px;
+            padding: 1.2rem 1rem !important;
+            border: none !important;
+        }
+
+        td {
+            padding: 1.1rem 1rem !important;
+            border-color: #f1f3f5 !important;
+            transition: var(--transition-smooth);
+        }
+
+        .table-hover tbody tr {
+            transition: var(--transition-smooth);
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: #FFF9C4 !important; /* Soft warm glow background */
+            transform: scale(1.005);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+        }
+
+        /* Cadet & Profile Photo Framework */
+        .cadet-photo {
+            width: 85px;
+            height: 85px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+            object-fit: cover;
+            transition: var(--transition-smooth);
+            opacity: 0;
+            animation: fadeInUp 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            outline: 2px solid var(--primary-color);
+        }
+
+        /* Visual Delays for Sequential Rendering */
+        .photo-1 { animation-delay: 0.1s; }
+        .photo-2 { animation-delay: 0.2s; }
+        .photo-3 { animation-delay: 0.3s; }
+        .photo-4 { animation-delay: 0.4s; }
+        .photo-5 { animation-delay: 0.5s; }
+        .photo-6 { animation-delay: 0.6s; }
+        .photo-7 { animation-delay: 0.7s; }
+        
+        .table-hover tbody tr:hover .cadet-photo {
+            transform: scale(1.1) rotate(3deg);
+            outline-color: var(--highlight-color);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .rank-badge {
+            width: 42px;
+            height: auto;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+            transition: var(--transition-smooth);
+        }
+        
+        .table-hover tbody tr:hover .rank-badge {
+            transform: translateY(-2px);
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+        }
+
+        /* Identity Badges */
+        .batch-highlight {
+            font-weight: 700;
+            color: var(--primary-color);
+            font-family: var(--font-heading);
+            font-size: 1.15rem;
+            letter-spacing: 0.5px;
+        }
+
+        .award-highlight {
+            font-weight: 700;
+            color: #E65100;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+            background-color: #FFE0B2;
+            padding: 6px 12px;
+            border-radius: 50px;
+            display: inline-block;
+            box-shadow: 0 2px 5px rgba(230, 81, 0, 0.1);
+        }
+        
+        /* Modern Glassmorphic Alert */
+        .alert-info {
+            background: rgba(225, 245, 254, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(3, 169, 244, 0.2);
+            color: #01579B;
+            border-radius: 10px;
+            font-weight: 500;
+            box-shadow: var(--card-shadow);
+        }
+        
+        /* Footer Framework */
+        .footer {
+            background-color: var(--secondary-color);
+            color: #ECEFF1;
+            padding: 4rem 0 2rem;
+            margin-top: 6rem;
+            border-top: 4px solid var(--primary-color);
+        }
+        
+        .platoon-commander h3 {
+            font-family: var(--font-heading);
+            color: var(--highlight-color);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-size: 1.6rem;
+        }
+
+        .platoon-commander h4 {
+            font-weight: 300;
+            color: #FFFFFF;
+            margin-top: 0.4rem;
+            font-size: 1.15rem;
+            letter-spacing: 0.5px;
+        }
+
+        .platoon-commander img {
+            width: 135px;
+            height: 135px;
+            border-radius: 50%;
+            border: 4px solid white;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+            object-fit: cover;
+            outline: 3px solid var(--primary-color);
+            transition: var(--transition-smooth);
+        }
+        
+        .platoon-commander img:hover {
+            transform: scale(1.05);
+            outline-color: var(--highlight-color);
+        }
+        
+        .social-links a {
+            font-size: 1.3rem;
+            margin: 0 10px;
+            transition: var(--transition-smooth);
+            color: #90A4AE !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            background-color: rgba(255,255,255,0.03);
+            border-radius: 50%;
+            text-decoration: none;
+        }
+        
+        .social-links a:hover {
+            color: #FFFFFF !important;
+            background-color: var(--primary-color);
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(211, 47, 47, 0.4);
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 992px) {
+            nav a {
+                padding: 0.8rem 1rem;
+                font-size: 0.8rem;
+            }
+            header h1 {
+                font-size: 1.8rem;
+            }
+        }
+        @media (max-width: 768px) {
+            header {
+                padding: 1rem 0;
+            }
+            .logo {
+                height: 60px;
+                margin: 0 10px;
+            }
+            header h1 {
+                font-size: 1.4rem;
+                letter-spacing: 1px;
+            }
+            .banner {
+                padding: 1.8rem 1rem;
+                margin-bottom: 2rem;
+            }
+            nav {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            nav a {
+                text-align: center;
+                justify-content: center;
+                padding: 0.8rem;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            .page-title {
+                font-size: 1.6rem;
+                margin-bottom: 2rem;
+                display: block;
+                text-align: center;
+            }
+            td, th {
+                padding: 0.8rem 0.6rem !important;
+                font-size: 0.9rem;
+            }
+            .cadet-photo {
+                width: 65px;
+                height: 65px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Block -->
+    <header class="text-center">
+        <div class="d-flex justify-content-center align-items-center flex-wrap">
+            <a href="https://cbcc.edu.bd/" aria-label="Visit Cox's Bazar City College website">
+                <img src="https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png" alt="Cox's Bazar City College Logo" class="logo">
+            </a>
+            <a href="https://bncc.info/" aria-label="Visit BNCC official website">
+                <img src="https://i.ibb.co/Fb3R6wR/Bncc-logo.png" alt="BNCC Logo" class="logo">
+            </a>
+        </div>
+        <div class="mt-3">
+            <h1>Cox's Bazar City College BNCC Platoon</h1>
+        </div>
+    </header>
+
+    <!-- Sub-Hero Element -->
+    <div class="banner">
+        <h2 class="h3 mb-1">Hall of Platoon In-Charges</h2>
+        <p class="mb-0 text-uppercase">Honoring the Vanguard of Leadership - Army Wing</p>
+    </div>
+
+    <!-- Navigation Framework -->
+    <nav class="d-flex justify-content-center flex-wrap">
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="about.html"><i class="fas fa-info-circle"></i> About Us</a>
+        <a href="activities.html"><i class="fas fa-running"></i> Activities</a>
+        <a href="cadets.html"><i class="fas fa-users"></i> Cadets</a>
+        <a href="gallery.html"><i class="fas fa-images"></i> Gallery</a>
+        <a href="contact.html"><i class="fas fa-envelope"></i> Contact</a>
+        <a href="hall-of-incharges.html" class="active"><i class="fas fa-trophy"></i> In-Charges</a>
+        <a href="how-to-become-cadet.html"><i class="fas fa-question-circle"></i> How to Join</a>
+        <a href="become-cadet.html"><i class="fas fa-user-plus"></i> Enroll</a>
+    </nav>
+
+    <!-- Main Content Data Engine -->
+    <main class="container">
+        <section class="mb-5 text-center text-md-start">
+            <div class="text-center">
+                <h2 class="page-title">Platoon In-Charges History</h2>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col" style="width: 12%;" class="text-center">Batch</th>
+                            <th scope="col" style="width: 28%;">In-Charge Name</th>
+                            <th scope="col" style="width: 15%;" class="text-center">Photo</th>
+                            <th scope="col" style="width: 15%;" class="text-center">Rank</th>
+                            <th scope="col" style="width: 30%;">Awards and Honours</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="batch-highlight text-center">Batch 1</td>
+                            <td><strong>Nomanul Islam Saimon</strong></td>
+                            <td class="text-center"><img src="https://i.ibb.co/m8rYjJx/274856261-1655184164824692-8057334507379742892-n.jpg" alt="Cadet Nomanul Islam Saimon" class="cadet-photo photo-1" loading="lazy"></td>
+                            <td class="text-center"><img src="https://upload.wikimedia.org/wikipedia/commons/3/34/A_CUO.png" alt="Cadet Under Officer Rank Badge" class="rank-badge mx-auto" loading="lazy"></td>
+                            <td><span class="text-muted">N/A</span></td>
+                        </tr>
+                        <tr>
+                            <td class="batch-highlight text-center">Batch 2</td>
+                            <td><strong>Waliul Islam Azan</strong></td>
+                            <td class="text-center"><img src="https://i.ibb.co/mGx3CWW/454425731-1865516033934342-5355007169042337456-n.jpg" alt="Cadet Waliul Islam Azan" class="cadet-photo photo-2" loading="lazy"></td>
+                            <td class="text-center"><img src="https://upload.wikimedia.org/wikipedia/commons/3/34/A_CUO.png" alt="Cadet Under Officer Rank Badge" class="rank-badge mx-auto" loading="lazy"></td>
+                            <td><span class="award-highlight"><i class="fas fa-star me-1 text-warning"></i> Best Cadet Award</span></td>
+                        </tr>
+                        <tr>
+                            <td class="batch-highlight text-center">Batch 3</td>
+                            <td><strong>Mehenaj Mahu</strong></td>
+                            <td class="text-center"><img src="https://i.ibb.co/MpXXtK5/387735944-1684451718707442-3020994251185180456-n-1.jpg" alt="Cadet Mehenaj Mahu" class="cadet-photo photo-3" loading="lazy"></td>
+                            <td class="text-center"><img src="https://upload.wikimedia.org/wikipedia/commons/6/63/A_SGT.png" alt="Cadet Sergeant Rank Badge" class="rank-badge mx-auto" loading="lazy"></td>
+                            <td><span class="text-muted">N/A</span></td>
+                        </tr>
+                       <tr>
+    <td class="batch-highlight text-center">Batch 4</td>
+    <td>
+        <div><strong>Sajon Dey & Rabi Ullah</strong></div>
+        <hr class="my-1 border-secondary">
+        <div><strong></strong></div>
+    </td>
+    <td class="text-center">
+        <div class="d-flex justify-content-center gap-2">
+            <img src="https://i.ibb.co/8nyt5ZQ0/480572321-1371950260501082-6797274422495624557-n.jpg" alt="Cadet Sajon Dey" class="cadet-photo photo-4" loading="lazy">
+            <img src="https://i.ibb.co/8nNQgmJZ/IMG-20241221-WA0022.jpg" alt="Cadet Rabi Ullah" class="cadet-photo photo-5" loading="lazy">
+        </div>
+    </td>
+    <td class="text-center">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/7/73/A_CPL.png" alt="Cadet Corporal Rank Badge" class="rank-badge mx-auto" loading="lazy">
+    </td>
+    <td><span class="text-muted">N/A</span></td>
+</tr>
+                      <tr>
+    <!-- Batch Column -->
+    <td class="batch-highlight text-center align-middle fw-bold">Batch 5</td>
+    
+    <!-- Cadet Names -->
+    <td class="align-middle">
+        <div class="py-1"><strong>Wazed Hoque Tasin</strong></div>
+        <hr class="my-2 border-secondary opacity-25">
+        <div class="py-1"><strong>M R Kader</strong></div>
+    </td>
+    
+    <!-- Cadet Photos -->
+    <td class="text-center align-middle">
+        <div class="d-flex flex-column gap-3 align-items-center py-1">
+            <img src="https://i.ibb.co/9HcXXSxn/122-3-7.jpg" alt="Cadet Wazed Hoque Tasin" class="cadet-photo photo-6 rounded-circle" loading="lazy">
+            <img src="https://i.ibb.co/DgGw5Mkr/122-3-1.jpg" alt="Cadet M R Kader" class="cadet-photo photo-7 rounded-circle" loading="lazy">
+        </div>
+    </td>
+    
+    <!-- Rank Badges -->
+    <td class="text-center align-middle">
+        <div class="d-flex flex-column gap-3 align-items-center py-1">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/1/17/A_LCPL.png" alt="Cadet Lance Corporal Rank Badge" class="rank-badge mx-auto" loading="lazy">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/63/A_SGT.png" alt="Cadet Sergeant Rank Badge" class="rank-badge mx-auto" loading="lazy">
+        </div>
+    </td>
+    
+    <!-- Service Terms -->
+    <td class="align-middle">
+        <div class="small text-muted py-1">
+            <i class="far fa-calendar-alt me-1 text-primary"></i>
+            <span><strong>Term:</strong> Mar &ndash; Oct 2025</span>
+        </div>
+        <hr class="my-2 border-secondary opacity-25">
+        <div class="small text-muted py-1">
+            <i class="far fa-calendar-check me-1 text-success"></i>
+            <span><strong>Term:</strong> Oct 2025 &ndash; Present</span>
+        </div>
+    </td>
+</tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="alert alert-info mt-4 text-center" role="alert">
+                <i class="fas fa-handshake me-2"></i> These cadets exemplify the discipline and leadership ethos of the BNCC Platoon.
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer Block -->
+    <footer class="footer text-center">
+        <div class="container">
+            <div class="platoon-commander mb-4">
+                <h3>Platoon Commander</h3>
+                <img src="https://i.ibb.co/dsqhP9LH/file-1-3.jpg" alt="Professor Under Officer Ujjwal Kanti Deb" loading="lazy" class="mb-2">
+                <h4>PUO: Ujjwal Kanti Deb</h4>
+            </div>
+            <div class="social-links mb-4">
+                <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                <a href="#" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+            </div>
+            <p class="text-muted small mb-2">Proudly serving under the Bangladesh National Cadet Corps (BNCC)</p>
+            <p class="mb-0 text-white-50">&copy; 2026 Cox's Bazar City College BNCC Platoon. All Rights Reserved.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

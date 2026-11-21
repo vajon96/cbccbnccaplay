@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Shield, BookOpen, LogOut, User, Lock, Home } from "lucide-react";
-import { getSession, clearSession } from "../../lib/auth";
+import { BookOpen, LogOut, User, Lock, Home, Shield } from "lucide-react";
+import { getSession, logoutEverywhere } from "../../lib/auth";
+import { hasPermission } from "../../lib/rbac";
 
 interface ExamNavbarProps {
   title?: string;
@@ -10,8 +11,8 @@ export function ExamNavbar({ title = "BNCC Examination Portal" }: ExamNavbarProp
   const session = getSession();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    clearSession();
+  const handleLogout = async () => {
+    await logoutEverywhere();
     navigate("/exam");
   };
 
@@ -23,7 +24,7 @@ export function ExamNavbar({ title = "BNCC Examination Portal" }: ExamNavbarProp
           {/* Brand */}
           <div className="flex items-center space-x-3">
             <Link to="/exam" className="flex items-center space-x-3 group">
-              <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-[#C5A059] group-hover:scale-105 transition-transform">
                 <BookOpen size={20} />
               </div>
               <div>
@@ -39,6 +40,15 @@ export function ExamNavbar({ title = "BNCC Examination Portal" }: ExamNavbarProp
 
           {/* Right Action / Profile */}
           <div className="flex items-center space-x-3">
+            {session && hasPermission(session.role, "view_admin_dashboard", session.permissions) && (
+              <Link
+                to="/admin/dashboard"
+                className="px-3 py-1.5 rounded-lg bg-[#C5A059]/15 hover:bg-[#C5A059]/25 text-[#C5A059] text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#C5A059]/30"
+              >
+                <Shield size={14} />
+                <span className="hidden sm:inline">Main Admin</span>
+              </Link>
+            )}
             <Link 
               to="/" 
               className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-white/10"
@@ -52,7 +62,7 @@ export function ExamNavbar({ title = "BNCC Examination Portal" }: ExamNavbarProp
                 <div className="text-right hidden sm:block">
                   <span className="block text-xs font-black text-white">{session.name || session.id}</span>
                   <span className="block text-[9px] font-bold text-amber-400 uppercase tracking-widest">
-                    {session.role === "super_admin" || session.role === "admin" ? "Exam Admin" : `ID: ${session.id}`}
+                    {hasPermission(session.role, "manage_exams") ? "Exam Admin" : `ID: ${session.id}`}
                   </span>
                 </div>
 

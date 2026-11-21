@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Download, Loader2, Sparkles, Camera, User, CheckCircle, Shield, Award, HelpCircle } from "lucide-react";
 import { downloadElementAsPdf } from "../lib/pdfUtils";
-import { db, doc, onSnapshot } from "../firebase";
+import { db, doc, onSnapshot, reportFirestoreListenerError, OperationType } from "../firebase";
 
 interface AdmissionGuideModalProps {
   isOpen: boolean;
@@ -56,20 +56,23 @@ export function AdmissionGuideModal({ isOpen, onClose }: AdmissionGuideModalProp
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Listen to active guide document in real-time
+    if (!isOpen) return;
     const unsub = onSnapshot(doc(db, "guides", "active_guide"), (snap) => {
       if (snap.exists()) {
         setGuide(snap.data());
       }
     }, (err) => {
-      console.error("Error listening to active_guide:", err);
+      reportFirestoreListenerError(err, OperationType.GET, "guides/active_guide");
     });
 
     return () => unsub();
-  }, []);
+  }, [isOpen]);
+
+  const [downloadError, setDownloadError] = useState("");
 
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
+    setDownloadError("");
     setIsDownloading(true);
     try {
       await new Promise(r => setTimeout(r, 400));
@@ -79,7 +82,7 @@ export function AdmissionGuideModal({ isOpen, onClose }: AdmissionGuideModalProp
       );
     } catch (e) {
       console.error(e);
-      alert("PDF ডাউনলোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+      setDownloadError("PDF ডাউনলোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
     } finally {
       setIsDownloading(false);
     }
@@ -97,7 +100,11 @@ export function AdmissionGuideModal({ isOpen, onClose }: AdmissionGuideModalProp
 
       {/* Modal Card */}
       <div className="relative w-full max-w-5xl bg-slate-950 text-white rounded-[2.5rem] p-6 md:p-8 shadow-2xl flex flex-col max-h-[92vh] border border-white/10 z-10 animate-in fade-in zoom-in-95 duration-200">
-        
+        {downloadError && (
+          <div role="alert" className="mb-3 px-4 py-2.5 rounded-xl bg-red-950/70 border border-red-400/40 text-red-200 text-xs font-semibold">
+            {downloadError}
+          </div>
+        )}
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
           <div className="flex items-center gap-2.5 text-primary">
