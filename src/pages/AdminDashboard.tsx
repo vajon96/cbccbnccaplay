@@ -61,7 +61,6 @@ import {
   setDoc,
   deleteDoc,
   Timestamp,
-  handleFirestoreError,
   reportFirestoreListenerError,
   OperationType,
   addDoc,
@@ -109,6 +108,88 @@ const VALID_MODULES = new Set<AdminModuleId>([
   "security",
 ]);
 
+function normalizeApplicantStatusValue(status: unknown): "Pending" | "Approved" | "Rejected" {
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "approved" || s === "joined") return "Approved";
+  if (s === "rejected") return "Rejected";
+  return "Pending";
+}
+
+function resolveApplicantCreatedMs(app: any): number {
+  if (!app) return 0;
+  if (typeof app._createdAtMs === "number" && Number.isFinite(app._createdAtMs)) {
+    return app._createdAtMs;
+  }
+  if (typeof app.createdAt?.toMillis === "function") {
+    return app.createdAt.toMillis();
+  }
+  if (typeof app.createdAt?.seconds === "number") {
+    return app.createdAt.seconds * 1000;
+  }
+  if (typeof app.createdAtIso === "string") {
+    const t = Date.parse(app.createdAtIso);
+    if (!Number.isNaN(t)) return t;
+  }
+  if (typeof app.createdAt === "string") {
+    const t = Date.parse(app.createdAt);
+    if (!Number.isNaN(t)) return t;
+  }
+  if (typeof app.submittedAt === "string") {
+    const t = Date.parse(app.submittedAt);
+    if (!Number.isNaN(t)) return t;
+  }
+  if (typeof app.updatedAtIso === "string") {
+    const t = Date.parse(app.updatedAtIso);
+    if (!Number.isNaN(t)) return t;
+  }
+  return 0;
+}
+
+function normalizeApplicantDoc(raw: any): any {
+  const id = String(raw?.id || raw?.registrationNumber || "").trim();
+  const createdMs = resolveApplicantCreatedMs(raw);
+  return {
+    ...raw,
+    id,
+    registrationNumber: String(raw?.registrationNumber || id),
+    status: normalizeApplicantStatusValue(raw?.status),
+    _createdAtMs: createdMs,
+    _createdAtIso: createdMs > 0 ? new Date(createdMs).toISOString() : raw?.createdAtIso || "",
+  };
+}
+
+function mergeApplicantLists(firestoreList: any[], serverList: any[]): any[] {
+  const byId = new Map<string, any>();
+  for (const s of serverList) {
+    const norm = normalizeApplicantDoc(s);
+    if (norm.id) byId.set(norm.id, norm);
+  }
+  for (const f of firestoreList) {
+    const norm = normalizeApplicantDoc(f);
+    if (!norm.id) continue;
+    const prev = byId.get(norm.id);
+    if (prev) {
+      byId.set(norm.id, {
+        ...prev,
+        ...norm,
+        uploadedDocuments:
+          Array.isArray(norm.uploadedDocuments) && norm.uploadedDocuments.length > 0
+            ? norm.uploadedDocuments
+            : prev.uploadedDocuments || [],
+        _createdAtMs: norm._createdAtMs || prev._createdAtMs || 0,
+        _createdAtIso: norm._createdAtIso || prev._createdAtIso || "",
+      });
+    } else {
+      byId.set(norm.id, norm);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const diff = (b._createdAtMs || 0) - (a._createdAtMs || 0);
+    if (diff !== 0) return diff;
+    return String(b.id).localeCompare(String(a.id), undefined, { numeric: true });
+  });
+}
+
 function resolveInitialModule(urlParam: string | null): AdminModuleId {
   if (urlParam && VALID_MODULES.has(urlParam as AdminModuleId)) {
     return urlParam as AdminModuleId;
@@ -132,7 +213,10 @@ export function AdminDashboard() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [applicants, setApplicants] = useState<any[]>([]);
+  const [firestoreApplicants, setFirestoreApplicants] = useState<any[]>([]);
+  const [serverApplicants, setServerApplicants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [applicantsError, setApplicantsError] = useState<string | null>(null);
 
   const [aiInsights, setAiInsights] = useState("");
   const [isAnalyzingInsights, setIsAnalyzingInsights] = useState(false);
@@ -249,6 +333,44 @@ export function AdminDashboard() {
     }
   };
 
+  const fetchServerApplicants = async (quiet = false) => {
+    try {
+      const headers: Record<string, string> = {};
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken().catch(() => null);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      }
+      const res = await fetch("/api/applications", {
+        credentials: "include",
+        headers,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data?.applications) ? data.applications : [];
+        setServerApplicants(list);
+        if (!quiet) {
+          setApplicantsError((prev) =>
+            prev?.includes("Server registry") ? null : prev
+          );
+        }
+      } else if (!quiet && !firebaseUser) {
+        setApplicantsError("অ্যাডমিন সেশন যাচাই বা সার্ভার থেকে আবেদন লোড করতে সমস্যা হয়েছে।");
+      }
+    } catch {
+      if (!quiet && !firebaseUser) {
+        setApplicantsError("সার্ভার সংযোগ বিচ্ছিন্ন। পুনরায় চেষ্টা করুন।");
+      }
+    } finally {
+      if (!firebaseUser) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    setApplicants(mergeApplicantLists(firestoreApplicants, serverApplicants));
+  }, [firestoreApplicants, serverApplicants]);
+
   useEffect(() => {
     if (authLoading) return;
 
@@ -259,17 +381,27 @@ export function AdminDashboard() {
     }
     setAdminSession(session);
     void loadContactInquiries();
+    void fetchServerApplicants(false);
+
+    // Poll server registry every 6 seconds so credential-only admins also get real-time updates
+    const pollInterval = window.setInterval(() => {
+      void fetchServerApplicants(true);
+    }, 6000);
 
     if (!firebaseUser) {
       setLoading(false);
-      return;
+      return () => {
+        window.clearInterval(pollInterval);
+      };
     }
 
     let cancelled = false;
     const unsubscribers: Array<() => void> = [];
+    let counterChecked = false;
 
     const startAdminListeners = async () => {
       setLoading(true);
+      setApplicantsError(null);
 
       const providerEmail = firebaseUser.providerData?.find((p) => p.email)?.email || "";
       const emailLower = (firebaseUser.email || providerEmail || "").toLowerCase();
@@ -303,13 +435,15 @@ export function AdminDashboard() {
           adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
           if (cancelled) return;
         }
-        if (!adminDoc.exists()) {
+        if (!adminDoc.exists() && emailLower !== SUPER_ADMIN_EMAIL) {
+          setApplicantsError("Firestore অ্যাডমিন প্রোফাইল অনুপস্থিত (সার্ভার রেকর্ড প্রদর্শিত হচ্ছে)।");
           setLoading(false);
           return;
         }
       } catch (err: any) {
         if (cancelled) return;
         reportFirestoreListenerError(err, OperationType.GET, `admins/${firebaseUser.uid}`);
+        setApplicantsError("Firestore অ্যাডমিন অনুমতি যাচাই করা যায়নি; অনুগ্রহ করে সুপার অ্যাডমিন দিয়ে লগইন করুন।");
         setLoading(false);
         return;
       }
@@ -318,15 +452,64 @@ export function AdminDashboard() {
 
       const handleListenerError = (path: string) => (err: any) => {
         reportFirestoreListenerError(err, OperationType.LIST, path);
+        setApplicantsError(`Firestore থেকে '${path}' লোড করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে: ${err?.message || ""}`);
         setLoading(false);
       };
 
+      // Subscribe WITHOUT orderBy("createdAt") so legacy/dateless docs are NEVER excluded by Firestore!
       unsubscribers.push(
         onSnapshot(
-          query(collection(db, "applicants"), orderBy("createdAt", "desc")),
+          collection(db, "applicants"),
           (snapshot) => {
-            setApplicants(snapshot.docs.map((d) => ({ ...d.data(), id: d.id })));
+            const rawDocs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+            setFirestoreApplicants(rawDocs);
+            setApplicantsError(null);
             setLoading(false);
+
+            // Non-blocking background counter repair if existing numeric ID >= counter
+            if (!counterChecked && rawDocs.length > 0) {
+              counterChecked = true;
+              const numericIds = rawDocs
+                .map((r) => (/^\d+$/.test(String(r.id)) ? Number(r.id) : 0))
+                .filter((n) => n >= 1111 && n < 1000000);
+              const maxNumeric = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+              if (maxNumeric >= 1111) {
+                getDoc(doc(db, "counters", "applicant_id"))
+                  .then((cSnap) => {
+                    const current = cSnap.exists() ? Number(cSnap.data()?.currentId || 1110) : 1110;
+                    if (current < maxNumeric) {
+                      return setDoc(doc(db, "counters", "applicant_id"), { currentId: maxNumeric }, { merge: true });
+                    }
+                  })
+                  .catch(() => {});
+              }
+            }
+
+            // Mirror live Firestore applicants into persistent server registry for credential-only admin parity
+            if (rawDocs.length > 0) {
+              const syncBatchPayload = rawDocs.map((d) => {
+                const norm = normalizeApplicantDoc(d);
+                const { createdAt: _ts, passwordHash: _ph, password: _pw, ...serializable } = norm;
+                return {
+                  ...serializable,
+                  createdAtIso: norm._createdAtIso || new Date().toISOString(),
+                };
+              });
+              firebaseUser
+                .getIdToken()
+                .then((token) =>
+                  fetch("/api/applications/sync-batch", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`,
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({ applications: syncBatchPayload }),
+                  })
+                )
+                .catch(() => {});
+            }
           },
           handleListenerError("applicants")
         )
@@ -359,7 +542,7 @@ export function AdminDashboard() {
       if (session.role === "super_admin") {
         unsubscribers.push(
           onSnapshot(
-            query(collection(db, "admins"), orderBy("createdAt", "desc")),
+            collection(db, "admins"),
             (snapshot) => setAdmins(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
             (err) => reportFirestoreListenerError(err, OperationType.LIST, "admins")
           )
@@ -371,6 +554,7 @@ export function AdminDashboard() {
 
     return () => {
       cancelled = true;
+      window.clearInterval(pollInterval);
       unsubscribers.forEach((u) => u());
     };
   }, [navigate, authLoading, firebaseUser?.uid]);
@@ -504,19 +688,39 @@ export function AdminDashboard() {
     setResetting(true);
     try {
       const hashedPassword = await hashPassword(newPassword);
-      await updateDoc(doc(db, "applicants", showPasswordReset), { password: hashedPassword });
-      await addDoc(collection(db, "activity_logs"), {
-        type: "PASSWORD_RESET_BY_ADMIN",
-        targetId: showPasswordReset,
-        actorId: adminSession?.id || "admin",
-        timestamp: Timestamp.now(),
-        details: `Admin reset password for user ${showPasswordReset}`,
-      });
+      let updated = false;
+      if (firebaseUser) {
+        await updateDoc(doc(db, "applicants", showPasswordReset), {
+          passwordHash: hashedPassword,
+          password: hashedPassword,
+        })
+          .then(() => {
+            updated = true;
+          })
+          .catch(() => {});
+        await addDoc(collection(db, "activity_logs"), {
+          type: "PASSWORD_RESET_BY_ADMIN",
+          targetId: showPasswordReset,
+          actorId: adminSession?.id || "admin",
+          timestamp: Timestamp.now(),
+          details: `Admin reset password for user ${showPasswordReset}`,
+        }).catch(() => {});
+      }
+      const res = await fetch(`/api/applications/${encodeURIComponent(showPasswordReset)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ passwordHash: hashedPassword }),
+      }).catch(() => null);
+      if (res?.ok) updated = true;
+
+      if (!updated) {
+        showToast("পাসওয়ার্ড আপডেট করা যায়নি।", "error");
+        return;
+      }
       setShowPasswordReset(null);
       setNewPassword("");
       showToast("Password reset successfully!");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `applicants/${showPasswordReset}`);
     } finally {
       setResetting(false);
     }
@@ -537,20 +741,41 @@ export function AdminDashboard() {
       showToast("আপনার আবেদন অনুমোদন করার অনুমতি নেই।", "error");
       return;
     }
+    let updated = false;
+    if (firebaseUser) {
+      try {
+        await updateDoc(doc(db, "applicants", id), { status });
+        updated = true;
+        await setDoc(
+          doc(db, "public_qr_cards", id),
+          {
+            status,
+            isValidCadet: status === "Approved" || status === "Joined",
+            updatedAt: Timestamp.now(),
+          },
+          { merge: true }
+        ).catch(() => {});
+      } catch (err) {
+        reportFirestoreListenerError(err, OperationType.UPDATE, `applicants/${id}`);
+      }
+    }
     try {
-      await updateDoc(doc(db, "applicants", id), { status });
-      await setDoc(
-        doc(db, "public_qr_cards", id),
-        {
-          status,
-          isValidCadet: status === "Approved" || status === "Joined",
-          updatedAt: Timestamp.now(),
-        },
-        { merge: true }
-      ).catch(() => {});
+      const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) updated = true;
+    } catch {
+      // ignore network error if Firestore succeeded
+    }
+    if (updated) {
+      setServerApplicants((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+      setFirestoreApplicants((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
       showToast(`আবেদন স্ট্যাটাস '${status}' করা হয়েছে।`);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `applicants/${id}`);
+    } else {
+      showToast("আবেদন স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে।", "error");
     }
   };
 
@@ -560,21 +785,47 @@ export function AdminDashboard() {
       return;
     }
     const nextActive = app.isActive === false;
+    const nextAccountStatus = nextActive ? "Active" : "Suspended";
+    let updated = false;
+    if (firebaseUser) {
+      try {
+        await updateDoc(doc(db, "applicants", app.id), {
+          isActive: nextActive,
+          accountStatus: nextAccountStatus,
+        });
+        updated = true;
+        await addDoc(collection(db, "activity_logs"), {
+          type: nextActive ? "ACCOUNT_ACTIVATED" : "ACCOUNT_SUSPENDED",
+          targetId: app.id,
+          actorId: adminSession?.id || "super_admin",
+          timestamp: Timestamp.now(),
+          details: `Admin set account ${app.id} to ${nextAccountStatus}`,
+        }).catch(() => {});
+      } catch (err) {
+        reportFirestoreListenerError(err, OperationType.UPDATE, `applicants/${app.id}`);
+      }
+    }
     try {
-      await updateDoc(doc(db, "applicants", app.id), {
-        isActive: nextActive,
-        accountStatus: nextActive ? "Active" : "Suspended",
+      const res = await fetch(`/api/applications/${encodeURIComponent(app.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ isActive: nextActive, accountStatus: nextAccountStatus }),
       });
-      await addDoc(collection(db, "activity_logs"), {
-        type: nextActive ? "ACCOUNT_ACTIVATED" : "ACCOUNT_SUSPENDED",
-        targetId: app.id,
-        actorId: adminSession?.id || "super_admin",
-        timestamp: Timestamp.now(),
-        details: `Admin set account ${app.id} to ${nextActive ? "Active" : "Suspended"}`,
-      }).catch(() => {});
+      if (res.ok) updated = true;
+    } catch {
+      // ignore
+    }
+    if (updated) {
+      setServerApplicants((prev) =>
+        prev.map((a) => (a.id === app.id ? { ...a, isActive: nextActive, accountStatus: nextAccountStatus } : a))
+      );
+      setFirestoreApplicants((prev) =>
+        prev.map((a) => (a.id === app.id ? { ...a, isActive: nextActive, accountStatus: nextAccountStatus } : a))
+      );
       showToast(`অ্যাকাউন্ট ${app.id} ${nextActive ? "সক্রিয় (Active)" : "স্থগিত (Suspended)"} করা হয়েছে।`);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `applicants/${app.id}`);
+    } else {
+      showToast("অ্যাকাউন্ট স্ট্যাটাস পরিবর্তন করা যায়নি।", "error");
     }
   };
 
@@ -583,48 +834,96 @@ export function AdminDashboard() {
       showToast("আপনার রেকর্ড মুছে ফেলার অনুমতি নেই।", "error");
       return;
     }
+    let deleted = false;
+    if (firebaseUser) {
+      try {
+        await deleteDoc(doc(db, "applicants", id));
+        await deleteDoc(doc(db, "public_qr_cards", id)).catch(() => {});
+        deleted = true;
+      } catch (err) {
+        reportFirestoreListenerError(err, OperationType.DELETE, `applicants/${id}`);
+      }
+    }
     try {
-      await deleteDoc(doc(db, "applicants", id));
+      const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) deleted = true;
+    } catch {
+      // ignore
+    }
+    if (deleted) {
+      setServerApplicants((prev) => prev.filter((a) => a.id !== id));
+      setFirestoreApplicants((prev) => prev.filter((a) => a.id !== id));
       showToast("রেকর্ড মুছে ফেলা হয়েছে।");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `applicants/${id}`);
+    } else {
+      showToast("রেকর্ড মুছে ফেলতে সমস্যা হয়েছে।", "error");
     }
   };
 
   const handleBulkAction = async (ids: string[], action: "Approve" | "Reject" | "Delete") => {
     if (ids.length === 0) return;
+    let ok = false;
+    if (firebaseUser) {
+      try {
+        const batch = writeBatch(db);
+        ids.forEach((id) => {
+          const ref = doc(db, "applicants", id);
+          const qrRef = doc(db, "public_qr_cards", id);
+          if (action === "Delete") {
+            batch.delete(ref);
+            batch.delete(qrRef);
+          } else {
+            const nextStatus = action === "Approve" ? "Approved" : "Rejected";
+            batch.update(ref, { status: nextStatus });
+            batch.set(
+              qrRef,
+              {
+                status: nextStatus,
+                isValidCadet: nextStatus === "Approved",
+                updatedAt: Timestamp.now(),
+              },
+              { merge: true }
+            );
+          }
+        });
+        await batch.commit();
+        ok = true;
+        await addDoc(collection(db, "activity_logs"), {
+          type: `BULK_${action.toUpperCase()}`,
+          targetId: "MULTIPLE",
+          actorId: adminSession?.id || "admin",
+          timestamp: Timestamp.now(),
+          details: `Admin performed bulk ${action} on ${ids.length} candidates.`,
+        }).catch(() => {});
+      } catch {
+        // try server fallback
+      }
+    }
     try {
-      const batch = writeBatch(db);
-      ids.forEach((id) => {
-        const ref = doc(db, "applicants", id);
-        const qrRef = doc(db, "public_qr_cards", id);
-        if (action === "Delete") {
-          batch.delete(ref);
-          batch.delete(qrRef);
-        } else {
-          const nextStatus = action === "Approve" ? "Approved" : "Rejected";
-          batch.update(ref, { status: nextStatus });
-          batch.set(
-            qrRef,
-            {
-              status: nextStatus,
-              isValidCadet: nextStatus === "Approved",
-              updatedAt: Timestamp.now(),
-            },
-            { merge: true }
-          );
-        }
+      const res = await fetch("/api/applications/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, action }),
       });
-      await batch.commit();
-      await addDoc(collection(db, "activity_logs"), {
-        type: `BULK_${action.toUpperCase()}`,
-        targetId: "MULTIPLE",
-        actorId: adminSession?.id || "admin",
-        timestamp: Timestamp.now(),
-        details: `Admin performed bulk ${action} on ${ids.length} candidates.`,
-      });
-      showToast(`Bulk ${action} completed successfully.`);
+      if (res.ok) ok = true;
     } catch {
+      // ignore
+    }
+    if (ok) {
+      const idSet = new Set(ids);
+      if (action === "Delete") {
+        setServerApplicants((prev) => prev.filter((a) => !idSet.has(a.id)));
+        setFirestoreApplicants((prev) => prev.filter((a) => !idSet.has(a.id)));
+      } else {
+        const nextStatus = action === "Approve" ? "Approved" : "Rejected";
+        setServerApplicants((prev) => prev.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus } : a)));
+        setFirestoreApplicants((prev) => prev.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus } : a)));
+      }
+      showToast(`Bulk ${action} completed successfully.`);
+    } else {
       showToast("Bulk action failed.", "error");
     }
   };
@@ -706,11 +1005,14 @@ export function AdminDashboard() {
   };
 
   const exportToExcel = () => {
-    const dataToExport = applicants.map(({ photo, password, passwordHash, ...rest }) => ({
-      ...rest,
-      height: `${rest.heightFeet || 0}'${rest.heightInches || 0}"`,
-      createdAt: rest.createdAt ? new Date(rest.createdAt).toLocaleString() : "",
-    }));
+    const dataToExport = applicants.map(({ photo, uploadedDocuments, password, passwordHash, _createdAtMs, _createdAtIso, ...rest }) => {
+      const ms = resolveApplicantCreatedMs({ ...rest, _createdAtMs, _createdAtIso });
+      return {
+        ...rest,
+        height: `${rest.heightFeet || 0}'${rest.heightInches || 0}"`,
+        createdAt: ms > 0 ? new Date(ms).toLocaleString() : "",
+      };
+    });
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Applicants");
@@ -788,8 +1090,10 @@ export function AdminDashboard() {
     }
   };
 
+  const newCutoffMs = Date.now() - 24 * 60 * 60 * 1000;
   const stats = {
     total: applicants.length,
+    newToday: applicants.filter((a) => (a._createdAtMs || 0) >= newCutoffMs).length,
     pending: applicants.filter((a) => a.status === "Pending").length,
     approved: applicants.filter((a) => a.status === "Approved" || a.status === "Joined").length,
     rejected: applicants.filter((a) => a.status === "Rejected").length,
@@ -896,31 +1200,47 @@ export function AdminDashboard() {
           {activeModule === "overview" && (
             <div className="space-y-6">
               {/* Top KPI Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 {[
                   {
-                    label: "Total Applicants",
+                    label: "মোট আবেদন",
+                    sublabel: "Total Applications",
                     value: stats.total,
-                    hint: "Online enrollment ledger",
+                    hint: "সকল অনলাইন নিবন্ধন",
+                    tone: "text-white",
                     action: () => handleSelectModule("suite-admission"),
                   },
                   {
-                    label: "Pending Review",
+                    label: "নতুন আবেদন",
+                    sublabel: "Last 24 Hours",
+                    value: stats.newToday,
+                    hint: "সাম্প্রতিক জমা",
+                    tone: "text-cyan-300",
+                    action: () => handleSelectModule("suite-admission"),
+                  },
+                  {
+                    label: "অপেক্ষমাণ আবেদন",
+                    sublabel: "Pending Review",
                     value: stats.pending,
-                    hint: "Awaiting board verification",
+                    hint: "যাচাইয়ের অপেক্ষায়",
+                    tone: "text-amber-300",
                     action: () => handleSelectModule("suite-admission"),
                   },
                   {
-                    label: "Approved Cadets",
+                    label: "অনুমোদিত আবেদন",
+                    sublabel: "Approved Cadets",
                     value: stats.approved,
-                    hint: "Eligible for QR cards",
+                    hint: "কিউআর কার্ডের যোগ্য",
+                    tone: "text-emerald-300",
                     action: () => handleSelectModule("suite-qr"),
                   },
                   {
-                    label: "Published Broadcasts",
-                    value: notifications.filter((n) => n.targetId === "ALL").length,
-                    hint: "Cadet notice center",
-                    action: () => handleSelectModule("notifications"),
+                    label: "বাতিল আবেদন",
+                    sublabel: "Rejected Applications",
+                    value: stats.rejected,
+                    hint: "বাতিলকৃত তালিকা",
+                    tone: "text-rose-300",
+                    action: () => handleSelectModule("suite-admission"),
                   },
                 ].map((stat, idx) => (
                   <button
@@ -929,8 +1249,9 @@ export function AdminDashboard() {
                     onClick={stat.action}
                     className="text-left bg-[#061830] hover:bg-[#092040] border border-white/10 rounded-2xl p-5 space-y-1 transition-colors cursor-pointer"
                   >
-                    <p className="text-xs font-semibold text-slate-400">{stat.label}</p>
-                    <p className="text-3xl font-black font-mono tabular-nums text-white">
+                    <p className="text-xs font-bold text-slate-300">{stat.label}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500">{stat.sublabel}</p>
+                    <p className={`text-3xl font-black font-mono tabular-nums ${stat.tone}`}>
                       {stat.value}
                     </p>
                     <p className="text-[11px] text-[#C5A059]">{stat.hint}</p>
@@ -1359,6 +1680,9 @@ export function AdminDashboard() {
           {activeModule === "suite-admission" && (
             <AdmissionPortalWorkspace
               applicants={applicants}
+              loadingApplicants={loading}
+              applicantsError={applicantsError}
+              onRefreshApplicants={() => void fetchServerApplicants(false)}
               adminSession={adminSession}
               onUpdateStatus={updateStatus}
               onToggleActivation={toggleAccountActivation}

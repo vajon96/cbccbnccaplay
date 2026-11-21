@@ -17,9 +17,11 @@ export function AdmitCard() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const rawPassword = (location.state as { generatedPassword?: string } | null)?.generatedPassword;
-  const [applicant, setApplicant] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const navState = (location.state as { generatedPassword?: string; applicantData?: any; submittedJustNow?: boolean } | null) || null;
+  const rawPassword = navState?.generatedPassword;
+  const submittedJustNow = Boolean(navState?.submittedJustNow);
+  const [applicant, setApplicant] = useState<any>(navState?.applicantData || null);
+  const [loading, setLoading] = useState(!navState?.applicantData);
   const [downloading, setDownloading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -29,23 +31,58 @@ export function AdmitCard() {
         setLoading(false);
         return;
       }
+      if (navState?.applicantData) {
+        setApplicant(navState.applicantData);
+        setLoading(false);
+        return;
+      }
+      try {
+        const cached = sessionStorage.getItem(`bncc_admit_preview_${id}`);
+        if (cached) {
+          setApplicant(JSON.parse(cached));
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // Ignore sessionStorage parse/access issues
+      }
+      let found: any = null;
       try {
         const docRef = doc(db, "applicants", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setApplicant(docSnap.data());
+          found = { ...docSnap.data(), id: docSnap.id };
         }
       } catch (error: any) {
         if (error?.code !== "permission-denied") {
-          console.error("Failed to fetch admit card:", error);
+          console.error("Failed to fetch admit card from Firestore:", error);
         }
-      } finally {
-        setLoading(false);
       }
+
+      if (!found) {
+        try {
+          const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+            credentials: "include",
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.application) {
+              found = data.application;
+            }
+          }
+        } catch {
+          // Ignore network errors
+        }
+      }
+
+      if (found) {
+        setApplicant(found);
+      }
+      setLoading(false);
     };
 
     fetchApplicant();
-  }, [id]);
+  }, [id, navState?.applicantData]);
 
   useEffect(() => {
     if (applicant && searchParams.get("download") === "true") {
@@ -168,6 +205,20 @@ export function AdmitCard() {
           </div>
         </div>
       </div>
+
+      {submittedJustNow && (
+        <div className="max-w-7xl mx-auto px-4 mb-6 print:hidden">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3 text-emerald-900 shadow-sm">
+            <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
+            <div>
+              <p className="font-black text-sm">আপনার ক্যাডেট ভর্তি আবেদন সফলভাবে জমা হয়েছে! (Application ID: {applicant.id})</p>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                আপনার আবেদনটি অ্যাডমিন প্যানেলে সংরক্ষিত হয়েছে। নিচে থেকে প্রবেশপত্র প্রিন্ট বা PDF ডাউনলোড করুন।
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-10">
         {/* Sidebar Info */}

@@ -197,7 +197,20 @@ service cloud.firestore {
     match /public_qr_cards/{id} {
       allow get: if isValidId(id);
       allow list: if false;
-      allow create, update: if isValidId(id)
+      allow create: if isValidId(id)
+        && !('password' in incoming())
+        && !('passwordHash' in incoming())
+        && !('nidBirthReg' in incoming())
+        && !('studentPhone' in incoming())
+        && !('studentEmail' in incoming())
+        && !('presentAddress' in incoming())
+        && !('permanentAddress' in incoming())
+        && (
+          isAdmin() ||
+          (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid) ||
+          (incoming().ownerUid == 'public_applicant' && incoming().status == 'Pending' && incoming().isValidCadet == false)
+        );
+      allow update: if isValidId(id)
         && (isAdmin() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid))
         && !('password' in incoming())
         && !('passwordHash' in incoming())
@@ -223,7 +236,14 @@ service cloud.firestore {
         && isValidApplicantCreate(incoming())
         && (
           isAdmin() ||
-          (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid && incoming().status == 'Pending')
+          (
+            incoming().status == 'Pending' &&
+            (!('role' in incoming()) || incoming().role == 'user') &&
+            (
+              (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid) ||
+              incoming().ownerUid == 'public_applicant'
+            )
+          )
         );
       allow update: if isValidId(id)
         && isValidApplicantUpdate(incoming())
@@ -269,14 +289,14 @@ service cloud.firestore {
       allow create, update, delete: if isValidId(id) && isAdmin();
     }
 
-    // 5. Counters (Monotonic +1 increment by authenticated applicant or Admin management)
+    // 5. Counters (Monotonic +1 increment during applicant submission or Admin management)
     match /counters/{id} {
-      allow get: if isValidId(id) && (isAdmin() || isAuthenticatedUser());
+      allow get: if isValidId(id) && (isAdmin() || id == 'applicant_id' || isAuthenticatedUser());
       allow list: if isAdmin();
-      allow create: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && id == 'applicant_id' && incoming().currentId == 1111));
+      allow create: if isValidId(id) && (isAdmin() || (id == 'applicant_id' && incoming().currentId == 1111));
       allow update: if isValidId(id) && (
         isAdmin() ||
-        (isAuthenticatedUser() && id == 'applicant_id'
+        (id == 'applicant_id'
           && incoming().currentId is int
           && existing().currentId is int
           && incoming().currentId == existing().currentId + 1)

@@ -24,7 +24,9 @@ interface Message {
   ownerUid?: string;
   candidateId?: string;
   content: string;
-  timestamp: any;
+  timestamp?: any;
+  timestampIso?: string;
+  timestampMs?: number;
   role: string;
   isRead?: boolean;
 }
@@ -42,7 +44,7 @@ export function Messenger() {
   const [isSending, setIsSending] = useState(false);
   const [activeChannel, setActiveChannel] = useState<"ALL" | string>("ALL");
   const [channelMode, setChannelMode] = useState<"broadcast" | "support">("broadcast");
-  const [messengerError, setMessengerError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +52,7 @@ export function Messenger() {
   const { firebaseUser, loading: authLoading } = useAuth();
   const session = getSession();
   const isAdmin = isAdminRole(session?.role);
+  const useFirestore = Boolean(firebaseUser);
 
   useEffect(() => {
     if (authLoading) return;
@@ -59,39 +62,34 @@ export function Messenger() {
       return;
     }
 
-    if (!firebaseUser) {
-      setMessengerError("মেসেঞ্জার ব্যবহার করতে অনুগ্রহ করে নিবন্ধিত ইমেইল ও পাসওয়ার্ড দিয়ে সাইন-ইন করুন।");
-      setLoading(false);
-      return;
-    }
-
-    setMessengerError(null);
+    setActionError(null);
     let cancelled = false;
+
     const fetchUser = async () => {
       try {
         if (isAdmin) {
           if (!cancelled) {
             setUser({
               id: session.id,
-              uid: auth.currentUser?.uid || session.id,
+              uid: firebaseUser?.uid || session.uid || session.id,
               fullNameEnglish: session.name || "Platoon Admin",
               role: session.role,
             });
           }
         } else {
-          const authUid = auth.currentUser?.uid;
-          if (session.id) {
+          const authUid = firebaseUser?.uid || session.uid || session.id;
+          if (firebaseUser && session.id) {
             const docRef = doc(db, "applicants", session.id);
             const docSnap = await getDoc(docRef).catch(() => null);
             if (!cancelled && docSnap && docSnap.exists()) {
-              setUser({ ...docSnap.data(), id: docSnap.id, uid: authUid || session.id, role: session.role || "cadet" });
+              setUser({ ...docSnap.data(), id: docSnap.id, uid: authUid, role: session.role || "cadet" });
               return;
             }
           }
           if (!cancelled) {
             setUser({
               id: session.id,
-              uid: authUid || session.id,
+              uid: authUid,
               fullNameEnglish: session.name || "BNCC Cadet",
               role: session.role || "cadet",
             });
@@ -100,7 +98,7 @@ export function Messenger() {
       } catch (err) {
         console.error("Error fetching user:", err);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !firebaseUser) setLoading(false);
       }
     };
 
@@ -108,14 +106,36 @@ export function Messenger() {
 
     const toMillis = (ts: any) => {
       if (!ts) return 0;
+      if (typeof ts === "number") return ts;
       if (typeof ts.toMillis === "function") return ts.toMillis();
       if (typeof ts.toDate === "function") return ts.toDate().getTime();
       return new Date(ts).getTime() || 0;
     };
 
     const unsubscribers: Array<() => void> = [];
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-    if (isAdmin) {
+    const loadServerMessages = async () => {
+      try {
+        const res = await fetch("/api/messages", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data?.messages)) {
+          setMessages(data.messages);
+        }
+      } catch {
+        // Ignore transient network failures during polling
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    if (!firebaseUser) {
+      void loadServerMessages();
+      pollTimer = setInterval(() => {
+        void loadServerMessages();
+      }, 4000);
+    } else if (isAdmin) {
       const qAll = query(collection(db, "messages"), orderBy("timestamp", "asc"), limit(200));
       unsubscribers.push(
         onSnapshot(
@@ -127,8 +147,7 @@ export function Messenger() {
           },
           (err) => {
             reportFirestoreListenerError(err, OperationType.LIST, "messages");
-            setMessengerError("বার্তা লোড করতে অনুমতি বা সংযোগ সমস্যা হয়েছে।");
-            setLoading(false);
+            void loadServerMessages();
           }
         )
       );
@@ -138,7 +157,7 @@ export function Messenger() {
 
       const flushMerged = () => {
         const list = Array.from(mergedMap.values()).sort(
-          (a, b) => toMillis(a.timestamp) - toMillis(b.timestamp)
+          (a, b) => toMillis(a.timestamp || a.timestampMs || a.timestampIso) - toMillis(b.timestamp || b.timestampMs || b.timestampIso)
         );
         setMessages(list);
         setLoading(false);
@@ -154,8 +173,7 @@ export function Messenger() {
           },
           (err) => {
             reportFirestoreListenerError(err, OperationType.LIST, "messages");
-            setMessengerError("ঘোষণা বার্তা লোড করতে সমস্যা হয়েছে।");
-            setLoading(false);
+            void loadServerMessages();
           }
         )
       );
@@ -180,6 +198,7 @@ export function Messenger() {
     return () => {
       cancelled = true;
       unsubscribers.forEach((u) => u());
+      if (pollTimer) clearInterval(pollTimer);
     };
   }, [navigate, authLoading, firebaseUser?.uid, session?.id, session?.role, isAdmin]);
 
@@ -228,60 +247,93 @@ export function Messenger() {
     if (channelMode === "broadcast") {
       return messages.filter((m) => m.recipientId === "ALL");
     }
-    const uid = auth.currentUser?.uid || user?.uid;
+    const uid = firebaseUser?.uid || user?.uid;
     return messages.filter((m) => m.recipientId !== "ALL" && (!uid || m.ownerUid === uid));
-  }, [messages, isAdmin, activeChannel, channelMode, user?.uid]);
+  }, [messages, isAdmin, activeChannel, channelMode, firebaseUser?.uid, user?.uid]);
 
   // Mark unread messages as read when viewed
   useEffect(() => {
-    const myUid = auth.currentUser?.uid || user?.uid;
+    const myUid = firebaseUser?.uid || user?.uid;
     visibleMessages.forEach((m) => {
       if (!m.isRead && m.senderId !== myUid && m.senderId !== user?.id) {
         if (isAdmin || m.recipientId === myUid || m.ownerUid === myUid) {
-          void updateDoc(doc(db, "messages", m.id), {
-            isRead: true,
-            readAt: new Date().toISOString(),
-          }).catch(() => {});
+          if (useFirestore) {
+            void updateDoc(doc(db, "messages", m.id), {
+              isRead: true,
+              readAt: new Date().toISOString(),
+            }).catch(() => {});
+          } else {
+            void fetch(`/api/messages/${encodeURIComponent(m.id)}/read`, {
+              method: "PATCH",
+              credentials: "include",
+            }).catch(() => {});
+          }
         }
       }
     });
-  }, [visibleMessages, isAdmin, user?.id, user?.uid]);
+  }, [visibleMessages, isAdmin, useFirestore, firebaseUser?.uid, user?.id, user?.uid]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user || isSending) return;
 
     setIsSending(true);
+    setActionError(null);
     try {
-      const authUid = auth.currentUser?.uid || user.uid || user.id;
-      const payload = isAdmin
-        ? {
-            senderId: authUid,
-            senderName: user.fullNameEnglish || "Platoon Admin",
-            recipientId: activeChannel === "ALL" ? "ALL" : activeChannel,
-            ownerUid: activeChannel === "ALL" ? "ALL" : activeChannel,
-            content: newMessage.trim(),
-            timestamp: Timestamp.now(),
-            role: "admin",
-            isRead: false,
-          }
-        : {
-            senderId: authUid,
-            senderName: user.fullNameEnglish || user.fullNameBangla || "BNCC Cadet",
-            candidateId: session?.id || user.id,
-            recipientId: "ADMIN",
-            ownerUid: authUid,
-            content: newMessage.trim(),
-            timestamp: Timestamp.now(),
-            role: "cadet",
-            isRead: false,
-          };
+      const text = newMessage.trim();
+      if (useFirestore) {
+        const authUid = firebaseUser?.uid || auth.currentUser?.uid || user.uid || user.id;
+        const payload = isAdmin
+          ? {
+              senderId: authUid,
+              senderName: user.fullNameEnglish || "Platoon Admin",
+              recipientId: activeChannel === "ALL" ? "ALL" : activeChannel,
+              ownerUid: activeChannel === "ALL" ? "ALL" : activeChannel,
+              content: text,
+              timestamp: Timestamp.now(),
+              role: "admin",
+              isRead: false,
+            }
+          : {
+              senderId: authUid,
+              senderName: user.fullNameEnglish || user.fullNameBangla || "BNCC Cadet",
+              candidateId: session?.id || user.id,
+              recipientId: "ADMIN",
+              ownerUid: authUid,
+              content: text,
+              timestamp: Timestamp.now(),
+              role: "cadet",
+              isRead: false,
+            };
 
-      await addDoc(collection(db, "messages"), payload);
+        await addDoc(collection(db, "messages"), payload);
+      } else {
+        const res = await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            content: text,
+            recipientId: isAdmin ? (activeChannel === "ALL" ? "ALL" : activeChannel) : "ADMIN",
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.error || "বার্তা পাঠানো যায়নি।");
+        }
+        const data = await res.json();
+        if (data?.message) {
+          setMessages((prev) => [...prev, data.message]);
+        }
+      }
       setNewMessage("");
       setShowEmojiPicker(false);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, "messages");
+    } catch (err: any) {
+      if (useFirestore) {
+        handleFirestoreError(err, OperationType.CREATE, "messages");
+      } else {
+        setActionError(err?.message || "বার্তা পাঠাতে সমস্যা হয়েছে।");
+      }
     } finally {
       setIsSending(false);
     }
@@ -292,9 +344,22 @@ export function Messenger() {
     if (!window.confirm("Delete this message?")) return;
 
     try {
-      await deleteDoc(doc(db, "messages", id));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `messages/${id}`);
+      if (useFirestore) {
+        await deleteDoc(doc(db, "messages", id));
+      } else {
+        const res = await fetch(`/api/messages/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("বার্তা মুছে ফেলা যায়নি।");
+        setMessages((prev) => prev.filter((m) => m.id !== id));
+      }
+    } catch (err: any) {
+      if (useFirestore) {
+        handleFirestoreError(err, OperationType.DELETE, `messages/${id}`);
+      } else {
+        setActionError(err?.message || "বার্তা মুছে ফেলতে সমস্যা হয়েছে।");
+      }
     }
   };
 
@@ -302,28 +367,16 @@ export function Messenger() {
     setNewMessage((prev) => prev + emojiData.emoji);
   };
 
+  const formatMessageTime = (msg: Message) => {
+    const d = msg.timestamp?.toDate?.() || (msg.timestampIso ? new Date(msg.timestampIso) : msg.timestampMs ? new Date(msg.timestampMs) : null);
+    if (!d || Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#00152e] text-white">
         <Loader2 className="w-8 h-8 text-[#C5A059] animate-spin" />
-      </div>
-    );
-  }
-
-  if (messengerError && messages.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-[#00152e] text-white p-6 text-center space-y-5">
-        <Shield className="w-14 h-14 text-[#C5A059]" />
-        <h2 className="text-xl font-bold">মেসেঞ্জার যাচাই প্রয়োজন</h2>
-        <p className="text-sm text-slate-300 max-w-md">{messengerError}</p>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate(isAdmin ? "/admin/dashboard" : "/login")}
-            className="px-6 py-2.5 bg-[#C5A059] text-[#00152e] font-black rounded-xl hover:bg-[#b59048] transition-all cursor-pointer"
-          >
-            {isAdmin ? "অ্যাডমিন ড্যাশবোর্ডে ফিরে যান" : "লগইন করুন"}
-          </button>
-        </div>
       </div>
     );
   }
@@ -396,6 +449,12 @@ export function Messenger() {
         </div>
       </header>
 
+      {actionError && (
+        <div className="px-4 py-2 bg-rose-500/20 border-b border-rose-400/30 text-rose-200 text-xs font-semibold text-center">
+          {actionError}
+        </div>
+      )}
+
       <div className="flex flex-1 min-h-0">
         {/* Admin Thread Sidebar */}
         {isAdmin && (
@@ -449,7 +508,7 @@ export function Messenger() {
               ) : (
                 <AnimatePresence initial={false}>
                   {visibleMessages.map((msg) => {
-                    const myUid = auth.currentUser?.uid || user?.uid;
+                    const myUid = firebaseUser?.uid || user?.uid;
                     const isMe = msg.senderId === myUid || msg.senderId === user?.id;
                     const msgIsAdmin = isAdminRole(msg.role);
 
@@ -472,7 +531,7 @@ export function Messenger() {
                               </span>
                             )}
                             <span className="text-[10px] text-slate-400 font-semibold">
-                              {msg.timestamp?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              {formatMessageTime(msg)}
                             </span>
                           </div>
 

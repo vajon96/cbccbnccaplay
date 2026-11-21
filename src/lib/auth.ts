@@ -706,7 +706,7 @@ export async function centralAuthenticate(
     // Permission denied if unauthenticated in Firestore rules
   }
 
-  // 3. Cadet / Applicant Check
+  // 3. Cadet / Applicant Check (Firestore first, then server fallback registry)
   try {
     const docRef = doc(db, "applicants", cleanId);
     const docSnap = await getDoc(docRef);
@@ -769,10 +769,32 @@ export async function centralAuthenticate(
       return { success: false, error: "ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।" };
     }
   } catch {
-    return {
-      success: false,
-      error: "ক্যাডেট প্রোফাইলে প্রবেশ করতে আপনার নিবন্ধিত ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন।",
-    };
+    // Fall through to server-verified cadet login when Firestore requires Firebase Auth
+  }
+
+  try {
+    const cadetRes = await fetch("/api/auth/cadet-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ applicantId: cleanId, password: cleanPassword }),
+    });
+    if (cadetRes.ok) {
+      const data = await cadetRes.json();
+      if (data?.user) {
+        resetLoginAttempts();
+        return { success: true, user: data.user };
+      }
+    } else if (cadetRes.status === 401 || cadetRes.status === 403) {
+      const errBody = await cadetRes.json().catch(() => ({}));
+      recordFailedLoginAttempt();
+      return {
+        success: false,
+        error: errBody?.error || "ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।",
+      };
+    }
+  } catch {
+    // Network issue
   }
 
   recordFailedLoginAttempt();

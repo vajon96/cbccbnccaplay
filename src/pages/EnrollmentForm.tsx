@@ -1,13 +1,12 @@
 import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
-import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit, BookOpen, AlertCircle, Clock, Loader2, ShieldCheck, Lock } from "lucide-react";
-import { auth, db, collection, setDoc, doc, getDocs, query, where, Timestamp, handleFirestoreError, OperationType, addDoc, runTransaction } from "../firebase";
+import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit, BookOpen, AlertCircle, Lock, FileText, Trash2 } from "lucide-react";
+import { auth, db, collection, setDoc, doc, Timestamp, serverTimestamp, reportFirestoreListenerError, OperationType, addDoc, runTransaction } from "../firebase";
 import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
-import { authenticateWithEmailPassword, authenticateWithGoogle, registerWithEmailPassword, generatePassword, hashPassword, setSession, syncServerSession, getSession } from "../lib/auth";
+import { generatePassword, hashPassword, setSession, syncServerSession, getSession } from "../lib/auth";
 import { isAdminRole } from "../lib/rbac";
 import { useCMS } from "../context/CMSContext";
-import { GoogleSignInButton } from "../components/GoogleSignInButton";
 
 export function EnrollmentForm() {
   const { settings: cmsSettings, loading: cmsLoading } = useCMS();
@@ -16,13 +15,6 @@ export function EnrollmentForm() {
   const isAdminSession = Boolean(currentSession && isAdminRole(currentSession.role));
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [portalSignedInEmail, setPortalSignedInEmail] = useState<string | null>(
-    auth.currentUser && auth.currentUser.email ? auth.currentUser.email : null
-  );
-  const [portalAccountMode, setPortalAccountMode] = useState<"register" | "login">("register");
-  const [portalPassword, setPortalPassword] = useState("");
-  const [portalAuthLoading, setPortalAuthLoading] = useState(false);
-  const [portalGoogleLoading, setPortalGoogleLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -42,7 +34,7 @@ export function EnrollmentForm() {
     presentAddress: "",
     permanentAddress: "",
     studentPhone: "",
-    studentEmail: auth.currentUser?.email || "",
+    studentEmail: "",
     heightFeet: "",
     heightInches: "",
     weightKg: "",
@@ -73,61 +65,13 @@ export function EnrollmentForm() {
     serviceDuration: "",
     registrationNumber: "",
     coCurricularActivities: [] as string[],
-    otherCoCurricularActivity: ""
+    otherCoCurricularActivity: "",
+    uploadedDocuments: [] as Array<{ name: string; type: string; size: number; dataUrl: string }>
   });
 
   const [aiPhotoFeedback, setAiPhotoFeedback] = useState("");
   const [aiFormFeedback, setAiFormFeedback] = useState("");
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
-
-  const handlePortalAuth = async () => {
-    setSubmitError(null);
-    const email = formData.studentEmail.trim();
-    if (!email || !email.includes("@")) {
-      setSubmitError("অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা লিখুন।");
-      return;
-    }
-    if (portalPassword.length < 6) {
-      setSubmitError("পোর্টাল অ্যাকাউন্টের পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।");
-      return;
-    }
-    setPortalAuthLoading(true);
-    try {
-      const displayName = formData.fullNameEnglish || formData.fullNameBangla || "BNCC Applicant";
-      const res =
-        portalAccountMode === "register"
-          ? await registerWithEmailPassword(email, portalPassword, displayName)
-          : await authenticateWithEmailPassword(email, portalPassword);
-      if (!res.success || !auth.currentUser) {
-        setSubmitError(res.error || "ইমেইল অ্যাকাউন্ট যাচাই সম্পন্ন করা যায়নি।");
-        return;
-      }
-      setPortalSignedInEmail(auth.currentUser.email || email);
-    } finally {
-      setPortalAuthLoading(false);
-    }
-  };
-
-  const handlePortalGoogleAuth = async () => {
-    setSubmitError(null);
-    setPortalGoogleLoading(true);
-    try {
-      const res = await authenticateWithGoogle();
-      if (!res.success || !auth.currentUser) {
-        setSubmitError(res.error || "Google অ্যাকাউন্ট সংযুক্ত করা যায়নি।");
-        return;
-      }
-      const connectedEmail = auth.currentUser.email || res.user?.email || "";
-      setPortalSignedInEmail(connectedEmail);
-      setFormData((prev) => ({
-        ...prev,
-        studentEmail: prev.studentEmail || connectedEmail,
-        fullNameEnglish: prev.fullNameEnglish || res.user?.name || "",
-      }));
-    } finally {
-      setPortalGoogleLoading(false);
-    }
-  };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -183,6 +127,11 @@ export function EnrollmentForm() {
         context.drawImage(videoRef.current, 0, 0);
         const photoData = canvasRef.current.toDataURL("image/jpeg", 0.9);
         const compressedPhoto = await compressImage(photoData);
+        if (compressedPhoto.length > 350000) {
+          setSubmitError("কম্প্রেস করার পরও ছবির আকার বেশি; অনুগ্রহ করে আবার ছবি তুলুন বা ছোট ছবি আপলোড করুন।");
+          return;
+        }
+        setSubmitError(null);
         setFormData({ ...formData, photo: compressedPhoto });
         
         // AI Photo Check
@@ -191,8 +140,8 @@ export function EnrollmentForm() {
         setAiPhotoFeedback(feedback);
 
         // Stop camera
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
+        const stream = videoRef.current.srcObject as MediaStream | null;
+        stream?.getTracks().forEach(track => track.stop());
       }
     }
   };
@@ -228,6 +177,41 @@ export function EnrollmentForm() {
     }
   };
 
+  const handleSupportingDocUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
+    if (!allowed.includes(file.type)) {
+      setSubmitError("ডকুমেন্টের জন্য শুধুমাত্র JPG, PNG, WEBP অথবা PDF ফাইল আপলোড করুন।");
+      return;
+    }
+    if (formData.uploadedDocuments.length >= 3) {
+      setSubmitError("সর্বোচ্চ ৩টি সহায়ক ডকুমেন্ট সংযুক্ত করা যাবে।");
+      return;
+    }
+    setSubmitError(null);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      let dataUrl = String(reader.result || "");
+      if (file.type.startsWith("image/")) {
+        dataUrl = await compressImage(dataUrl, 900, 900);
+      }
+      if (dataUrl.length > 260000) {
+        setSubmitError("ফাইলটির আকার খুব বেশি (সর্বোচ্চ ~২০০ কেবি)। অনুগ্রহ করে ছোট ছবি বা সংকুচিত PDF দিন।");
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        uploadedDocuments: [
+          ...prev.uploadedDocuments,
+          { name: file.name, type: file.type, size: dataUrl.length, dataUrl },
+        ],
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const runAiReview = async () => {
     setIsAiAnalyzing(true);
     const feedback = await analyzeEnrollment(formData);
@@ -236,6 +220,7 @@ export function EnrollmentForm() {
   };
 
   const handleSubmit = async () => {
+    if (loading) return;
     setSubmitError(null);
     const requiredFields = [
       'fullNameBangla', 'fullNameEnglish', 'fatherNameBangla', 'fatherNameEnglish', 
@@ -283,116 +268,196 @@ export function EnrollmentForm() {
       return;
     }
 
+    if (formData.studentPhone.trim().length < 6) {
+      setSubmitError("অনুগ্রহ করে কমপক্ষে ৬ সংখ্যার সঠিক মোবাইল নম্বর প্রদান করুন।");
+      return;
+    }
+
+    if (formData.photo.length > 480000) {
+      setSubmitError("ছবির আকার সীমার চেয়ে বেশি। অনুগ্রহ করে পুনরায় ছবি আপলোড করুন।");
+      return;
+    }
+
     setLoading(true);
     try {
-      // Ensure Firebase Email/Password Auth session before writing private applicant doc
-      if (!auth.currentUser || auth.currentUser.isAnonymous) {
-        const email = formData.studentEmail.trim();
-        if (!email || !email.includes("@") || portalPassword.length < 6) {
-          setSubmitError("আবেদন জমা দেওয়ার আগে উপরের পোর্টাল অ্যাকাউন্ট সেকশনে ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিয়ে সাইন-ইন বা অ্যাকাউন্ট তৈরি করুন।");
-          setLoading(false);
-          return;
-        }
-        const displayName = formData.fullNameEnglish || formData.fullNameBangla || "BNCC Applicant";
-        const authRes =
-          portalAccountMode === "register"
-            ? await registerWithEmailPassword(email, portalPassword, displayName)
-            : await authenticateWithEmailPassword(email, portalPassword);
-        if (!authRes.success || !auth.currentUser) {
-          setSubmitError(authRes.error || "পোর্টাল অ্যাকাউন্ট যাচাই করা যায়নি।");
-          setLoading(false);
-          return;
-        }
-        setPortalSignedInEmail(auth.currentUser.email || email);
+      const hasFirebaseUser = Boolean(auth.currentUser && !auth.currentUser.isAnonymous);
+      const ownerUid = hasFirebaseUser && auth.currentUser ? auth.currentUser.uid : "public_applicant";
+
+      const generateFallbackUniqueId = () =>
+        `CBCC-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+
+      let id = "";
+      try {
+        // Sequential ID Generation starting from 1111
+        id = await runTransaction(db, async (transaction) => {
+          const counterDocRef = doc(db, "counters", "applicant_id");
+          const counterDoc = await transaction.get(counterDocRef);
+
+          let nextId = 1111;
+          if (counterDoc.exists()) {
+            nextId = (counterDoc.data().currentId || 1110) + 1;
+            transaction.update(counterDocRef, { currentId: nextId });
+          } else {
+            transaction.set(counterDocRef, { currentId: nextId });
+          }
+          return nextId.toString();
+        });
+      } catch (counterErr) {
+        reportFirestoreListenerError(counterErr, OperationType.WRITE, "counters/applicant_id");
+        id = generateFallbackUniqueId();
       }
-
-      const ownerUid = auth.currentUser.uid;
-
-      // Duplicate check for same authenticated user
-      const existingSnap = await getDocs(
-        query(collection(db, "applicants"), where("ownerUid", "==", ownerUid))
-      );
-      if (!existingSnap.empty) {
-        const existingDoc = existingSnap.docs[0];
-        setSubmitError(`আপনার এই ইমেইল অ্যাকাউন্ট থেকে ইতিমধ্যেই একটি আবেদন জমা দেওয়া হয়েছে (ID: ${existingDoc.id})।`);
-        setLoading(false);
-        return;
-      }
-
-      // Sequential ID Generation starting from 1111
-      const id = await runTransaction(db, async (transaction) => {
-        const counterDocRef = doc(db, "counters", "applicant_id");
-        const counterDoc = await transaction.get(counterDocRef);
-
-        let nextId = 1111;
-        if (counterDoc.exists()) {
-          nextId = (counterDoc.data().currentId || 1110) + 1;
-          transaction.update(counterDocRef, { currentId: nextId });
-        } else {
-          transaction.set(counterDocRef, { currentId: nextId });
-        }
-        return nextId.toString();
-      });
 
       const rawPassword = generatePassword();
       const hashedPassword = await hashPassword(rawPassword);
-      const applicantData = {
+      const createdAtIso = new Date().toISOString();
+
+      const buildApplicantPayload = (targetId: string, useServerTs: boolean) => ({
         ...formData,
-        id,
-        registrationNumber: id,
+        id: targetId,
+        registrationNumber: formData.registrationNumber.trim() || targetId,
         ownerUid,
-        studentEmail: formData.studentEmail || auth.currentUser.email || "",
+        studentEmail: formData.studentEmail.trim() || (hasFirebaseUser ? auth.currentUser?.email || "" : ""),
         passwordHash: hashedPassword,
         role: "user",
         status: "Pending",
+        isActive: true,
+        accountStatus: "Active",
         attendanceStatus: "Absent",
-        createdAt: Timestamp.now(),
-      };
+        createdAtIso,
+        createdAt: useServerTs ? serverTimestamp() : Timestamp.now(),
+      });
 
-      await setDoc(doc(db, "applicants", id), applicantData);
+      let firestoreSaved = false;
+      let lastFirestoreError: any = null;
+
+      try {
+        await setDoc(doc(db, "applicants", id), buildApplicantPayload(id, true));
+        firestoreSaved = true;
+      } catch (firstWriteErr: any) {
+        lastFirestoreError = firstWriteErr;
+        // Counter might have collided with an existing legacy applicant ID -> retry once with guaranteed unique ID
+        const retryId = generateFallbackUniqueId();
+        try {
+          await setDoc(doc(db, "applicants", retryId), buildApplicantPayload(retryId, true));
+          id = retryId;
+          firestoreSaved = true;
+          lastFirestoreError = null;
+        } catch (retryErr: any) {
+          lastFirestoreError = retryErr;
+          reportFirestoreListenerError(retryErr, OperationType.WRITE, `applicants/${retryId}`);
+        }
+      }
+
+      // Mirror / fallback persistence on Express registry so credential-only admins also see every submission immediately
+      let serverSaved = false;
+      let serverErrorMsg = "";
+      try {
+        const serverPayload = {
+          ...formData,
+          id,
+          registrationNumber: formData.registrationNumber.trim() || id,
+          ownerUid,
+          studentEmail: formData.studentEmail.trim() || (hasFirebaseUser ? auth.currentUser?.email || "" : ""),
+          passwordHash: hashedPassword,
+          createdAtIso,
+          firestoreSynced: firestoreSaved,
+        };
+        const apiRes = await fetch("/api/applications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(serverPayload),
+        });
+        if (apiRes.ok) {
+          const data = await apiRes.json();
+          if (data?.application?.id) {
+            id = data.application.id;
+          }
+          serverSaved = true;
+        } else {
+          const errData = await apiRes.json().catch(() => ({}));
+          serverErrorMsg = errData?.error || `Server status ${apiRes.status}`;
+        }
+      } catch (netErr: any) {
+        serverErrorMsg = netErr?.message || "Network unavailable";
+      }
+
+      if (!firestoreSaved && !serverSaved) {
+        const reason = lastFirestoreError?.message || serverErrorMsg || "ডাটাবেজ সংযোগ বিচ্ছিন্ন রয়েছে।";
+        setSubmitError(`আবেদন জমা দেওয়া যায়নি! অনুগ্রহ করে ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন। (${reason})`);
+        return;
+      }
 
       // Non-PII public QR card projection (no phone, email, NID, address, password)
-      await setDoc(doc(db, "public_qr_cards", id), {
-        id,
-        cadetId: id,
-        ownerUid,
-        fullNameEnglish: formData.fullNameEnglish,
-        fullNameBangla: formData.fullNameBangla,
-        studyStatus: formData.studyStatus,
-        collegeName: formData.collegeName,
-        platoonName: "Cox's Bazar City College BNCC Platoon",
-        status: "Pending",
-        isValidCadet: false,
-        photo: formData.photo || "",
-        updatedAt: Timestamp.now(),
-      }).catch(() => {});
+      if (firestoreSaved) {
+        await setDoc(doc(db, "public_qr_cards", id), {
+          id,
+          cadetId: id,
+          ownerUid,
+          fullNameEnglish: formData.fullNameEnglish,
+          fullNameBangla: formData.fullNameBangla,
+          studyStatus: formData.studyStatus,
+          collegeName: formData.collegeName,
+          platoonName: "Cox's Bazar City College BNCC Platoon",
+          status: "Pending",
+          isValidCadet: false,
+          photo: formData.photo || "",
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
 
-      await addDoc(collection(db, "activity_logs"), {
-        type: "ACCOUNT_CREATED",
-        targetId: id,
-        actorId: ownerUid,
-        timestamp: Timestamp.now(),
-        details: "New applicant account created via enrollment form",
-      }).catch(() => {});
+        if (hasFirebaseUser) {
+          await addDoc(collection(db, "activity_logs"), {
+            type: "ACCOUNT_CREATED",
+            targetId: id,
+            actorId: ownerUid,
+            timestamp: serverTimestamp(),
+            details: "New applicant submitted via enrollment form",
+          }).catch(() => {});
+        }
+      }
+
+      const applicantEmail =
+        formData.studentEmail.trim() || (hasFirebaseUser ? auth.currentUser?.email || "" : "");
 
       const sessionUser = {
         id,
-        uid: ownerUid,
-        email: auth.currentUser.email,
+        ...(hasFirebaseUser ? { uid: ownerUid } : {}),
+        email: applicantEmail || undefined,
         name: formData.fullNameEnglish || formData.fullNameBangla,
         role: "user" as const,
         registrationNumber: id,
-        authSource: "firebase" as const,
+        authSource: (hasFirebaseUser ? "firebase" : "credential") as "firebase" | "credential",
       };
       setSession(sessionUser);
       await syncServerSession(sessionUser);
 
-      // Navigate passing password exclusively in memory router state (never ?pw= query string!)
-      navigate(`/admit-card/${id}`, { state: { generatedPassword: rawPassword } });
+      const previewApplicant = {
+        ...formData,
+        id,
+        registrationNumber: formData.registrationNumber.trim() || id,
+        ownerUid,
+        studentEmail: applicantEmail,
+        role: "user",
+        status: "Pending",
+        attendanceStatus: "Absent",
+        createdAtIso,
+      };
+      try {
+        sessionStorage.setItem(`bncc_admit_preview_${id}`, JSON.stringify(previewApplicant));
+      } catch {
+        // Ignore storage quota errors if photo is large; router state still carries it
+      }
+
+      navigate(`/admit-card/${id}`, {
+        state: {
+          generatedPassword: rawPassword,
+          applicantData: previewApplicant,
+          submittedJustNow: true,
+        },
+      });
     } catch (error: any) {
       console.error("Submission error:", error);
-      setSubmitError(`আবেদন জমা দিতে সমস্যা হয়েছে: ${error?.message || "Unknown error"}`);
-      handleFirestoreError(error, OperationType.WRITE, `applicants/new`);
+      setSubmitError(`আবেদন জমা দিতে সমস্যা হয়েছে: ${error?.message || "অনুগ্রহ করে পুনরায় চেষ্টা করুন।"}`);
     } finally {
       setLoading(false);
     }
@@ -457,99 +522,6 @@ export function EnrollmentForm() {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-[#002147] mb-2 font-display">ক্যাডেট ভর্তি আবেদন ফরম</h1>
         <p className="text-slate-600">সঠিক তথ্য দিয়ে নিচের ধাপগুলো পূরণ করুন</p>
-      </div>
-
-      {/* Email / Password Portal Account Setup Banner */}
-      <div className="mb-8 p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 text-sm">
-            <ShieldCheck className={portalSignedInEmail ? "text-emerald-600 shrink-0" : "text-[#C5A059] shrink-0"} size={22} />
-            <div>
-              {portalSignedInEmail ? (
-                <p className="font-semibold text-slate-800">
-                  পোর্টাল অ্যাকাউন্ট সংযুক্ত: <span className="text-[#002147] font-mono">{portalSignedInEmail}</span>
-                </p>
-              ) : (
-                <p className="font-semibold text-slate-800">
-                  আবেদন জমার জন্য আপনার পোর্টাল ইমেইল ও পাসওয়ার্ড সেট করুন
-                </p>
-              )}
-              <p className="text-xs text-slate-500">
-                {portalSignedInEmail
-                  ? "আপনার আবেদন ও এডমিট কার্ড এই অ্যাকাউন্টের সাথে নিরাপদভাবে সংযুক্ত হবে।"
-                  : "আপনার নতুন অ্যাকাউন্ট তৈরি করতে অথবা পূর্বের ইমেইল দিয়ে সাইন-ইন করতে নিচের তথ্য দিন।"}
-              </p>
-            </div>
-          </div>
-          {!portalSignedInEmail && (
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg self-start sm:self-center">
-              <button
-                type="button"
-                onClick={() => setPortalAccountMode("register")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md cursor-pointer transition-colors ${
-                  portalAccountMode === "register" ? "bg-[#002147] text-white" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                নতুন অ্যাকাউন্ট
-              </button>
-              <button
-                type="button"
-                onClick={() => setPortalAccountMode("login")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md cursor-pointer transition-colors ${
-                  portalAccountMode === "login" ? "bg-[#002147] text-white" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                সাইন ইন
-              </button>
-            </div>
-          )}
-        </div>
-
-        {!portalSignedInEmail && (
-          <div className="space-y-3 pt-1">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <input
-                type="email"
-                name="studentEmail"
-                value={formData.studentEmail}
-                onChange={handleChange}
-                placeholder="আপনার ইমেইল (example@mail.com)"
-                aria-label="Portal Email Address"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 focus:border-[#002147] outline-none"
-              />
-              <input
-                type="password"
-                value={portalPassword}
-                onChange={(e) => setPortalPassword(e.target.value)}
-                placeholder="পোর্টাল পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)"
-                aria-label="Portal Account Password"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 focus:border-[#002147] outline-none"
-              />
-              <button
-                type="button"
-                onClick={handlePortalAuth}
-                disabled={portalAuthLoading || portalGoogleLoading}
-                className="px-4 py-2.5 bg-[#002147] hover:bg-[#002e63] disabled:opacity-60 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors flex items-center justify-center gap-2"
-              >
-                {portalAuthLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {portalAccountMode === "register" ? "অ্যাকাউন্ট যুক্ত করুন" : "ইমেইল যাচাই করুন"}
-              </button>
-            </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
-                অথবা ১ ক্লিকে যুক্ত করুন:
-              </span>
-              <GoogleSignInButton
-                variant="light"
-                onClick={() => void handlePortalGoogleAuth()}
-                loading={portalGoogleLoading}
-                disabled={portalAuthLoading}
-                label="Google দিয়ে অ্যাকাউন্ট সংযুক্ত করুন"
-                className="sm:max-w-xs py-2.5!"
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {submitError && (
@@ -1204,14 +1176,16 @@ export function EnrollmentForm() {
 
                 <div className="flex flex-wrap justify-center gap-4">
                   <button
+                    type="button"
                     onClick={startCamera}
-                    className="px-6 py-2 bg-white border border-sand rounded-xl text-sm font-bold hover:bg-sand/10"
+                    className="px-6 py-2 bg-white border border-sand rounded-xl text-sm font-bold hover:bg-sand/10 cursor-pointer"
                   >
                     ক্যামেরা চালু করুন
                   </button>
                   <button
+                    type="button"
                     onClick={capturePhoto}
-                    className="px-6 py-2 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90"
+                    className="px-6 py-2 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 cursor-pointer"
                   >
                     ছবি তুলুন
                   </button>
@@ -1220,6 +1194,56 @@ export function EnrollmentForm() {
                     <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                   </label>
                 </div>
+              </div>
+
+              {/* Optional Supporting Documents Upload */}
+              <div className="bg-slate-50/60 border border-slate-200 rounded-3xl p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <FileText className="w-5 h-5 text-primary" />
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900">সহায়ক ডকুমেন্ট সংযুক্তি (ঐচ্ছিক)</h3>
+                      <p className="text-[11px] text-slate-500">এসএসসি মার্কশিট / জন্ম নিবন্ধন / কলেজ আইডি কার্ড (JPG/PNG/PDF, সর্বোচ্চ ৩টি)</p>
+                    </div>
+                  </div>
+                  <label className="px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-100 cursor-pointer inline-flex items-center gap-1.5">
+                    <Upload className="w-4 h-4" /> ফাইল যুক্ত করুন
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={handleSupportingDocUpload}
+                    />
+                  </label>
+                </div>
+                {formData.uploadedDocuments.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    {formData.uploadedDocuments.map((docItem, idx) => (
+                      <div
+                        key={`${docItem.name}-${idx}`}
+                        className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="w-4 h-4 text-primary shrink-0" />
+                          <span className="font-bold text-slate-800 truncate">{docItem.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              uploadedDocuments: prev.uploadedDocuments.filter((_, i) => i !== idx),
+                            }))
+                          }
+                          className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                          aria-label="Remove document"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

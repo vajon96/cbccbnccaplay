@@ -2,6 +2,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -1157,6 +1158,159 @@ app.get("/api/contact", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
 });
 
 // =========================================================================
+// INTERNAL PLATOON MESSENGER API (CREDENTIAL & FIREBASE SESSION COMPATIBLE)
+// =========================================================================
+
+const DATA_ROOT_DIR = path.join(process.cwd(), ".bncc-data");
+const MESSAGES_DATA_FILE = path.join(DATA_ROOT_DIR, "messages.json");
+
+interface StoredPlatoonMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  ownerUid: string;
+  candidateId?: string;
+  content: string;
+  timestampIso: string;
+  timestampMs: number;
+  role: string;
+  isRead: boolean;
+  readAt?: string;
+}
+
+function readStoredMessages(): StoredPlatoonMessage[] {
+  try {
+    if (!fs.existsSync(MESSAGES_DATA_FILE)) return [];
+    const raw = fs.readFileSync(MESSAGES_DATA_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredMessages(items: StoredPlatoonMessage[]) {
+  fs.mkdirSync(DATA_ROOT_DIR, { recursive: true });
+  const trimmed = items.slice(-1000);
+  fs.writeFileSync(MESSAGES_DATA_FILE, JSON.stringify(trimmed, null, 2), "utf8");
+}
+
+function verifySameOriginMutation(req: express.Request): boolean {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
+  if (!host) return false;
+  try {
+    const parsedOrigin = new URL(origin);
+    return parsedOrigin.host === host;
+  } catch {
+    return false;
+  }
+}
+
+app.get("/api/messages", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdminUser = ADMIN_ROLE_LIST.includes(String(serverUser.role || "").toLowerCase());
+  const callerKey = String(serverUser.uid || serverUser.id);
+  const all = readStoredMessages().sort((a, b) => a.timestampMs - b.timestampMs);
+
+  const visible = isAdminUser
+    ? all.slice(-200)
+    : all.filter((m) => m.recipientId === "ALL" || m.ownerUid === callerKey).slice(-200);
+
+  return res.json({ messages: visible });
+});
+
+app.post("/api/messages", rateLimit(60 * 1000, 60), requireAuth(), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdminUser = ADMIN_ROLE_LIST.includes(String(serverUser.role || "").toLowerCase());
+  const callerKey = String(serverUser.uid || serverUser.id);
+
+  const rawContent = typeof req.body?.content === "string" ? req.body.content.trim() : "";
+  if (!rawContent) {
+    return res.status(400).json({ error: "Message content is required" });
+  }
+  const content = rawContent.slice(0, 2000);
+  const now = Date.now();
+  const requestedChannel =
+    typeof req.body?.recipientId === "string" ? req.body.recipientId.trim().slice(0, 128) : "ALL";
+
+  const created: StoredPlatoonMessage = isAdminUser
+    ? {
+        id: `msg_${now}_${crypto.randomBytes(4).toString("hex")}`,
+        senderId: callerKey,
+        senderName: String(serverUser.name || "Platoon Admin").slice(0, 120),
+        recipientId: requestedChannel || "ALL",
+        ownerUid: requestedChannel || "ALL",
+        content,
+        timestampIso: new Date(now).toISOString(),
+        timestampMs: now,
+        role: "admin",
+        isRead: false,
+      }
+    : {
+        id: `msg_${now}_${crypto.randomBytes(4).toString("hex")}`,
+        senderId: callerKey,
+        senderName: String(serverUser.name || "BNCC Cadet").slice(0, 120),
+        candidateId: String(serverUser.registrationNumber || serverUser.id).slice(0, 64),
+        recipientId: "ADMIN",
+        ownerUid: callerKey,
+        content,
+        timestampIso: new Date(now).toISOString(),
+        timestampMs: now,
+        role: "cadet",
+        isRead: false,
+      };
+
+  const items = readStoredMessages();
+  items.push(created);
+  writeStoredMessages(items);
+  return res.status(201).json({ message: created });
+});
+
+app.patch("/api/messages/:id/read", requireAuth(), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdminUser = ADMIN_ROLE_LIST.includes(String(serverUser.role || "").toLowerCase());
+  const callerKey = String(serverUser.uid || serverUser.id);
+  const id = String(req.params.id || "").trim();
+
+  const items = readStoredMessages();
+  const target = items.find((m) => m.id === id);
+  if (!target) {
+    return res.status(404).json({ error: "Message not found" });
+  }
+  if (!isAdminUser && target.recipientId !== callerKey && target.ownerUid !== callerKey) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  target.isRead = true;
+  target.readAt = new Date().toISOString();
+  writeStoredMessages(items);
+  return res.json({ success: true });
+});
+
+app.delete("/api/messages/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const id = String(req.params.id || "").trim();
+  const items = readStoredMessages();
+  const next = items.filter((m) => m.id !== id);
+  if (next.length === items.length) {
+    return res.status(404).json({ error: "Message not found" });
+  }
+  writeStoredMessages(next);
+  return res.json({ success: true });
+});
+
+// =========================================================================
 // AUTHENTICATED MEDIA MANAGEMENT VAULT (PUBLIC VS PRIVATE ISOLATION)
 // =========================================================================
 
@@ -1898,6 +2052,448 @@ app.get("/api/media/private/:fileName", requireAuth(ADMIN_ROLE_LIST), (req, res)
   }
   res.setHeader("Cache-Control", "no-store");
   return res.sendFile(fullPath);
+});
+
+// =========================================================================
+// ONLINE CADET APPLICATION REGISTRY (DUAL-SYNC WITH FIRESTORE)
+// =========================================================================
+
+const APPLICANTS_DATA_FILE = path.join(DATA_ROOT_DIR, "applicants.json");
+
+interface StoredOnlineApplicant {
+  id: string;
+  registrationNumber: string;
+  ownerUid: string;
+  fullNameBangla: string;
+  fullNameEnglish: string;
+  fatherNameBangla?: string;
+  fatherNameEnglish?: string;
+  motherNameBangla?: string;
+  motherNameEnglish?: string;
+  dob?: string;
+  nidBirthReg?: string;
+  gender?: string;
+  religion?: string;
+  presentAddress?: string;
+  permanentAddress?: string;
+  studentPhone: string;
+  studentEmail?: string;
+  heightFeet?: string | number;
+  heightInches?: string | number;
+  weightKg?: string | number;
+  bloodGroup?: string;
+  sscGpa?: string;
+  sscGroup?: string;
+  sscYear?: string;
+  sscBoard?: string;
+  hscGpa?: string;
+  hscGroup?: string;
+  hscYear?: string;
+  hscBoard?: string;
+  hscOptionalSubject?: string;
+  studyStatus?: string;
+  subject?: string;
+  classRoll?: string;
+  section?: string;
+  session?: string;
+  emisId?: string;
+  collegeName?: string;
+  photo?: string;
+  uploadedDocuments?: Array<{
+    name: string;
+    type: string;
+    size?: number;
+    dataUrl: string;
+  }>;
+  previousBNCC?: boolean;
+  isEthnicMinority?: boolean;
+  previousInstitution?: string;
+  previousBattalionRegiment?: string;
+  previousRank?: string;
+  previousRankOther?: string;
+  serviceDuration?: string;
+  coCurricularActivities?: string[];
+  otherCoCurricularActivity?: string;
+  role: string;
+  status: "Pending" | "Approved" | "Rejected";
+  isActive?: boolean;
+  accountStatus?: string;
+  attendanceStatus?: string;
+  passwordHash?: string;
+  password?: string;
+  createdAtIso: string;
+  updatedAtIso?: string;
+  submissionSource?: string;
+  firestoreSynced?: boolean;
+}
+
+function readStoredApplicants(): StoredOnlineApplicant[] {
+  try {
+    if (!fs.existsSync(APPLICANTS_DATA_FILE)) return [];
+    const raw = fs.readFileSync(APPLICANTS_DATA_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredApplicants(items: StoredOnlineApplicant[]) {
+  fs.mkdirSync(DATA_ROOT_DIR, { recursive: true });
+  fs.writeFileSync(APPLICANTS_DATA_FILE, JSON.stringify(items, null, 2), "utf8");
+}
+
+function normalizeApplicantStatus(val: unknown): "Pending" | "Approved" | "Rejected" {
+  const s = String(val || "").trim().toLowerCase();
+  if (s === "approved" || s === "joined") return "Approved";
+  if (s === "rejected") return "Rejected";
+  return "Pending";
+}
+
+function sanitizePublicApplicantOut(app: StoredOnlineApplicant) {
+  const { passwordHash: _ph, password: _pw, ...safe } = app;
+  return {
+    ...safe,
+    hasPassword: Boolean(_ph || _pw),
+  };
+}
+
+function safeCleanText(v: unknown, maxLen: number): string {
+  return String(v ?? "").trim().slice(0, maxLen);
+}
+
+function resolveApplicantCreatedIso(raw: any): string {
+  if (typeof raw?.createdAtIso === "string" && !Number.isNaN(Date.parse(raw.createdAtIso))) {
+    return raw.createdAtIso;
+  }
+  if (typeof raw?.createdAt === "string" && !Number.isNaN(Date.parse(raw.createdAt))) {
+    return raw.createdAt;
+  }
+  if (typeof raw?.createdAt?.seconds === "number") {
+    return new Date(raw.createdAt.seconds * 1000).toISOString();
+  }
+  if (typeof raw?.submittedAt === "string" && !Number.isNaN(Date.parse(raw.submittedAt))) {
+    return raw.submittedAt;
+  }
+  return new Date().toISOString();
+}
+
+function sanitizeApplicantDocuments(rawDocs: unknown) {
+  if (!Array.isArray(rawDocs)) return [];
+  const out: Array<{ name: string; type: string; size?: number; dataUrl: string }> = [];
+  for (const d of rawDocs.slice(0, 4)) {
+    if (!d || typeof d !== "object") continue;
+    const dataUrl = typeof (d as any).dataUrl === "string" ? (d as any).dataUrl : "";
+    if (!dataUrl.startsWith("data:") || dataUrl.length > 650000) continue;
+    out.push({
+      name: safeCleanText((d as any).name || "Document", 140),
+      type: safeCleanText((d as any).type || "application/octet-stream", 80),
+      size: Number((d as any).size) || dataUrl.length,
+      dataUrl,
+    });
+  }
+  return out;
+}
+
+app.post("/api/applications", rateLimit(10 * 60 * 1000, 30), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const body = req.body || {};
+  const fullNameEnglish = safeCleanText(body.fullNameEnglish, 200);
+  const fullNameBangla = safeCleanText(body.fullNameBangla, 200);
+  const studentPhone = safeCleanText(body.studentPhone, 32);
+
+  if (!fullNameEnglish || studentPhone.length < 6) {
+    return res.status(400).json({
+      error: "সঠিক ইংরেজি নাম এবং কমপক্ষে ৬ সংখ্যার মোবাইল নম্বর প্রদান করুন।",
+    });
+  }
+
+  const all = readStoredApplicants();
+  let candidateId = safeCleanText(body.id, 128).replace(/[^a-zA-Z0-9_.:-]/g, "");
+  if (candidateId) {
+    const existingSameId = all.find((a) => a.id === candidateId);
+    if (existingSameId) {
+      return res.status(200).json({
+        success: true,
+        duplicate: false,
+        application: sanitizePublicApplicantOut(existingSameId),
+      });
+    }
+  } else {
+    const numericIds = all
+      .map((a) => (/^\d+$/.test(a.id) ? Number(a.id) : 0))
+      .filter((n) => n >= 1111 && n < 1000000);
+    const nextNum = Math.max(1110, ...numericIds) + 1;
+    candidateId = String(nextNum);
+  }
+
+  // Prevent accidental double-click duplicate within 2 minutes for same phone + NID
+  const cleanNid = safeCleanText(body.nidBirthReg, 80);
+  const twoMinsAgo = Date.now() - 2 * 60 * 1000;
+  const recentDup = all.find(
+    (a) =>
+      a.studentPhone === studentPhone &&
+      (!cleanNid || a.nidBirthReg === cleanNid) &&
+      new Date(a.createdAtIso).getTime() >= twoMinsAgo
+  );
+  if (recentDup) {
+    return res.status(200).json({
+      success: true,
+      duplicate: true,
+      application: sanitizePublicApplicantOut(recentDup),
+    });
+  }
+
+  const nowIso = new Date().toISOString();
+  const safePhoto =
+    typeof body.photo === "string" && body.photo.length <= 500000 ? body.photo : "";
+
+  const newRecord: StoredOnlineApplicant = {
+    id: candidateId,
+    registrationNumber: safeCleanText(body.registrationNumber, 80) || candidateId,
+    ownerUid: safeCleanText(body.ownerUid, 128) || "public_applicant",
+    fullNameBangla: fullNameBangla || fullNameEnglish,
+    fullNameEnglish,
+    fatherNameBangla: safeCleanText(body.fatherNameBangla, 200),
+    fatherNameEnglish: safeCleanText(body.fatherNameEnglish, 200),
+    motherNameBangla: safeCleanText(body.motherNameBangla, 200),
+    motherNameEnglish: safeCleanText(body.motherNameEnglish, 200),
+    dob: safeCleanText(body.dob, 40),
+    nidBirthReg: cleanNid,
+    gender: safeCleanText(body.gender, 32),
+    religion: safeCleanText(body.religion, 40),
+    presentAddress: safeCleanText(body.presentAddress, 400),
+    permanentAddress: safeCleanText(body.permanentAddress, 400),
+    studentPhone,
+    studentEmail: safeCleanText(body.studentEmail, 160),
+    heightFeet: safeCleanText(body.heightFeet, 12),
+    heightInches: safeCleanText(body.heightInches, 12),
+    weightKg: safeCleanText(body.weightKg, 12),
+    bloodGroup: safeCleanText(body.bloodGroup, 16),
+    sscGpa: safeCleanText(body.sscGpa, 20),
+    sscGroup: safeCleanText(body.sscGroup, 60),
+    sscYear: safeCleanText(body.sscYear, 16),
+    sscBoard: safeCleanText(body.sscBoard, 60),
+    hscGpa: safeCleanText(body.hscGpa, 20),
+    hscGroup: safeCleanText(body.hscGroup, 60),
+    hscYear: safeCleanText(body.hscYear, 16),
+    hscBoard: safeCleanText(body.hscBoard, 60),
+    hscOptionalSubject: safeCleanText(body.hscOptionalSubject, 100),
+    studyStatus: safeCleanText(body.studyStatus, 80),
+    subject: safeCleanText(body.subject, 120),
+    classRoll: safeCleanText(body.classRoll, 40),
+    section: safeCleanText(body.section, 40),
+    session: safeCleanText(body.session, 40),
+    emisId: safeCleanText(body.emisId, 80),
+    collegeName: safeCleanText(body.collegeName, 200),
+    photo: safePhoto,
+    uploadedDocuments: sanitizeApplicantDocuments(body.uploadedDocuments),
+    previousBNCC: Boolean(body.previousBNCC),
+    isEthnicMinority: Boolean(body.isEthnicMinority),
+    previousInstitution: safeCleanText(body.previousInstitution, 200),
+    previousBattalionRegiment: safeCleanText(body.previousBattalionRegiment, 160),
+    previousRank: safeCleanText(body.previousRank, 80),
+    previousRankOther: safeCleanText(body.previousRankOther, 80),
+    serviceDuration: safeCleanText(body.serviceDuration, 80),
+    coCurricularActivities: Array.isArray(body.coCurricularActivities)
+      ? body.coCurricularActivities.slice(0, 30).map((x: unknown) => safeCleanText(x, 80))
+      : [],
+    otherCoCurricularActivity: safeCleanText(body.otherCoCurricularActivity, 200),
+    role: "user",
+    status: "Pending",
+    isActive: true,
+    attendanceStatus: "Absent",
+    passwordHash: typeof body.passwordHash === "string" ? body.passwordHash.slice(0, 200) : undefined,
+    createdAtIso: resolveApplicantCreatedIso(body),
+    updatedAtIso: nowIso,
+    submissionSource: body.firestoreSynced ? "firestore+server" : "server_fallback",
+    firestoreSynced: Boolean(body.firestoreSynced),
+  };
+
+  all.unshift(newRecord);
+  writeStoredApplicants(all);
+  return res.status(201).json({
+    success: true,
+    application: sanitizePublicApplicantOut(newRecord),
+  });
+});
+
+app.get("/api/applications", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
+  const all = readStoredApplicants()
+    .map((app) => ({
+      ...app,
+      status: normalizeApplicantStatus(app.status),
+      createdAtIso: resolveApplicantCreatedIso(app),
+    }))
+    .sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
+    .map(sanitizePublicApplicantOut);
+  return res.json({ applications: all });
+});
+
+app.get("/api/applications/:id", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdminUser = ADMIN_ROLE_LIST.includes(String(serverUser.role || "").toLowerCase());
+  const id = String(req.params.id || "").trim();
+  const match = readStoredApplicants().find((a) => a.id === id || a.registrationNumber === id);
+  if (!match) {
+    return res.status(404).json({ error: "Applicant not found" });
+  }
+  const callerKey = String(serverUser.uid || serverUser.id);
+  if (!isAdminUser && match.id !== callerKey && match.ownerUid !== callerKey) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  return res.json({ application: sanitizePublicApplicantOut(match) });
+});
+
+app.post(
+  "/api/applications/sync-batch",
+  rateLimit(5 * 60 * 1000, 60),
+  requireAuth(ADMIN_ROLE_LIST),
+  (req, res) => {
+    if (!verifySameOriginMutation(req)) {
+      return res.status(403).json({ error: "Cross-origin request rejected" });
+    }
+    const items = Array.isArray(req.body?.applications) ? req.body.applications : [];
+    const current = readStoredApplicants();
+    const map = new Map<string, StoredOnlineApplicant>();
+    for (const item of current) {
+      map.set(item.id, item);
+    }
+
+    for (const raw of items.slice(0, 1000)) {
+      if (!raw || typeof raw !== "object" || !raw.id) continue;
+      const id = safeCleanText(raw.id, 128);
+      if (!id) continue;
+      const existing = map.get(id);
+      const createdAtIso = resolveApplicantCreatedIso(raw);
+      const merged: StoredOnlineApplicant = {
+        ...(existing || {}),
+        ...raw,
+        id,
+        registrationNumber: safeCleanText(raw.registrationNumber || existing?.registrationNumber, 80) || id,
+        ownerUid: safeCleanText(raw.ownerUid || existing?.ownerUid, 128) || "public_applicant",
+        fullNameEnglish: safeCleanText(raw.fullNameEnglish || existing?.fullNameEnglish || raw.fullNameBangla, 200),
+        fullNameBangla: safeCleanText(raw.fullNameBangla || existing?.fullNameBangla || raw.fullNameEnglish, 200),
+        studentPhone: safeCleanText(raw.studentPhone || existing?.studentPhone, 32),
+        role: raw.role || existing?.role || "user",
+        status: normalizeApplicantStatus(raw.status ?? existing?.status),
+        createdAtIso: existing?.createdAtIso && createdAtIso === raw.createdAtIso ? existing.createdAtIso : createdAtIso,
+        updatedAtIso: new Date().toISOString(),
+        firestoreSynced: true,
+      };
+      map.set(id, merged);
+    }
+
+    const updatedList = Array.from(map.values()).sort(
+      (a, b) => new Date(resolveApplicantCreatedIso(b)).getTime() - new Date(resolveApplicantCreatedIso(a)).getTime()
+    );
+    writeStoredApplicants(updatedList);
+    return res.json({ success: true, count: updatedList.length });
+  }
+);
+
+app.patch("/api/applications/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const id = String(req.params.id || "").trim();
+  const { status, isActive, accountStatus, passwordHash } = req.body || {};
+  const all = readStoredApplicants();
+  const idx = all.findIndex((a) => a.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Applicant not found" });
+  }
+
+  const next = { ...all[idx] };
+  if (status !== undefined) {
+    next.status = normalizeApplicantStatus(status);
+  }
+  if (typeof isActive === "boolean") {
+    next.isActive = isActive;
+    next.accountStatus = accountStatus ? safeCleanText(accountStatus, 40) : isActive ? "Active" : "Suspended";
+  }
+  if (typeof passwordHash === "string" && passwordHash.length > 0) {
+    next.passwordHash = passwordHash.slice(0, 200);
+    next.password = passwordHash.slice(0, 200);
+  }
+  next.updatedAtIso = new Date().toISOString();
+
+  all[idx] = next;
+  writeStoredApplicants(all);
+  return res.json({ success: true, application: sanitizePublicApplicantOut(next) });
+});
+
+app.post("/api/applications/bulk", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+  const action = String(req.body?.action || "");
+  if (ids.length === 0 || !["Approve", "Reject", "Delete"].includes(action)) {
+    return res.status(400).json({ error: "Valid ids and action required" });
+  }
+  const idSet = new Set(ids);
+  let all = readStoredApplicants();
+  if (action === "Delete") {
+    all = all.filter((a) => !idSet.has(a.id));
+  } else {
+    const nextStatus = action === "Approve" ? "Approved" : "Rejected";
+    const nowIso = new Date().toISOString();
+    all = all.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus, updatedAtIso: nowIso } : a));
+  }
+  writeStoredApplicants(all);
+  return res.json({ success: true });
+});
+
+app.delete("/api/applications/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const id = String(req.params.id || "").trim();
+  const all = readStoredApplicants();
+  const next = all.filter((a) => a.id !== id);
+  if (next.length === all.length) {
+    return res.status(404).json({ error: "Applicant not found" });
+  }
+  writeStoredApplicants(next);
+  return res.json({ success: true });
+});
+
+app.post("/api/auth/cadet-login", rateLimit(10 * 60 * 1000, 30), async (req, res) => {
+  const cleanId = safeCleanText(req.body?.applicantId, 128);
+  const cleanPw = safeCleanText(req.body?.password, 200);
+  if (!cleanId || !cleanPw) {
+    return res.status(400).json({ error: "ক্যাডেট আইডি এবং পাসওয়ার্ড উভয়ই দিন।" });
+  }
+  const all = readStoredApplicants();
+  const match = all.find(
+    (a) => a.id === cleanId || a.registrationNumber === cleanId || a.studentPhone === cleanId
+  );
+  if (!match) {
+    return res.status(404).json({ error: "আবেদনকারী খুঁজে পাওয়া যায়নি।" });
+  }
+  if (match.isActive === false || match.accountStatus === "Suspended") {
+    return res.status(403).json({ error: "আপনার ক্যাডেট অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে।" });
+  }
+  const storedHash = match.passwordHash || match.password || "";
+  if (!storedHash || !(await bcrypt.compare(cleanPw, storedHash))) {
+    return res.status(401).json({ error: "ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।" });
+  }
+
+  const cadetUser: ServerSessionUser = {
+    id: match.id,
+    uid: match.ownerUid && match.ownerUid !== "public_applicant" ? match.ownerUid : undefined,
+    email: match.studentEmail || null,
+    name: match.fullNameEnglish || match.fullNameBangla || "BNCC Cadet",
+    role: match.role || "cadet",
+    registrationNumber: match.registrationNumber || match.id,
+    authSource: "credential",
+    exp: Date.now() + 1000 * 60 * 60 * 12,
+  };
+  setSessionCookie(res, cadetUser, req);
+  return res.json({ authenticated: true, user: cadetUser });
 });
 
 app.get("/api/exam/health", (_req, res) => {

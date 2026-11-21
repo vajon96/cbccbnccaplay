@@ -13,7 +13,7 @@ import {
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, where, onSnapshot, getDocFromServer, Timestamp, addDoc, limit, writeBatch, runTransaction } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, where, onSnapshot, getDocFromServer, Timestamp, serverTimestamp, addDoc, limit, writeBatch, runTransaction } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import firebaseConfig from "../firebase-applet-config.json";
 
@@ -47,6 +47,7 @@ export {
   onSnapshot, 
   getDocFromServer,
   Timestamp,
+  serverTimestamp,
   addDoc,
   limit,
   writeBatch,
