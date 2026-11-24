@@ -7,6 +7,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
 const app = express();
+app.set("trust proxy", 1);
 function resolvePort(): number {
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
@@ -25,10 +26,20 @@ const PORT = resolvePort();
 const FIREBASE_PROJECT_ID = "gen-lang-client-0584243831";
 const SUPER_ADMIN_EMAIL = (process.env.VITE_ADMIN_EMAIL || "sajondey102@gmail.com").trim().toLowerCase();
 
-// Ephemeral fallback secrets generated at startup only when env vars are unset
-const SESSION_SECRET =
-  process.env.SESSION_SECRET ||
-  crypto.createHmac("sha256", `${FIREBASE_PROJECT_ID}-session`).update(process.cwd()).digest("hex");
+const DATA_ROOT_DIR = path.join(process.cwd(), ".bncc-data");
+const STAFF_AUTH_FILE = path.join(DATA_ROOT_DIR, "staff-auth.json");
+const QR_TOKENS_FILE = path.join(DATA_ROOT_DIR, "qr-tokens.json");
+const PASSWORD_RESETS_FILE = path.join(DATA_ROOT_DIR, "password-resets.json");
+const SECURITY_AUDIT_FILE = path.join(DATA_ROOT_DIR, "security-audit.json");
+
+// Ephemeral cryptographic secret generated per process boot when SESSION_SECRET env var is unset
+const EPHEMERAL_SESSION_SECRET = crypto.randomBytes(32).toString("hex");
+if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+  console.warn(
+    "[SECURITY WARNING] SESSION_SECRET is unset in production; using ephemeral startup secret (sessions will reset on restart)."
+  );
+}
+const SESSION_SECRET = process.env.SESSION_SECRET || EPHEMERAL_SESSION_SECRET;
 
 const EXAM_KEY_SECRET = crypto
   .createHash("sha256")
@@ -178,16 +189,18 @@ function isHttpsRequest(req?: express.Request): boolean {
   return Boolean(req.secure || proto === "https" || process.env.NODE_ENV === "production");
 }
 
-function setSessionCookie(res: express.Response, user: ServerSessionUser, req?: express.Request) {
+function setSessionCookie(res: express.Response, user: ServerSessionUser, req?: express.Request): string {
   const signed = signPayload(user);
   const isHttps = isHttpsRequest(req);
   res.cookie("bncc_sid", signed, {
     httpOnly: true,
     sameSite: isHttps ? "none" : "lax",
     secure: isHttps,
+    partitioned: isHttps,
     maxAge: 1000 * 60 * 60 * 12,
     path: "/",
   });
+  return signed;
 }
 
 function getServerSession(req: express.Request): ServerSessionUser | null {
@@ -260,7 +273,91 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseC
   }
 }
 
-const ADMIN_ROLE_LIST = ["super_admin", "admin", "exam_admin", "qr_admin", "sub_admin", "attendance_officer"];
+const FULL_ADMIN_ROLES = ["super_admin", "admin", "moderator", "sub_admin"];
+const QR_INSPECTOR_ROLES = ["super_admin", "admin", "qr_admin", "attendance_officer"];
+const ADMIN_ROLE_LIST = [
+  "super_admin",
+  "admin",
+  "moderator",
+  "exam_admin",
+  "qr_admin",
+  "sub_admin",
+  "attendance_officer",
+];
+
+interface StoredStaffCredential {
+  id: string;
+  uid?: string;
+  username: string;
+  email?: string;
+  name: string;
+  role: string;
+  passwordHash?: string;
+  permissions?: Record<string, boolean>;
+  isActive?: boolean;
+  updatedAt: string;
+}
+
+interface StoredQrToken {
+  id: string;
+  qrToken: string;
+  username: string;
+  name: string;
+  role: string;
+  permissions?: Record<string, boolean>;
+  expiresAtMs: number | null;
+  createdAt: string;
+}
+
+interface StoredPasswordReset {
+  id: string;
+  applicantId: string;
+  identifier: string;
+  name: string;
+  mobile: string;
+  note: string;
+  status: "pending" | "resolved";
+  matchedApplicant: boolean;
+  ipAddress: string;
+  createdAtIso: string;
+  resolvedAtIso?: string;
+  resolvedBy?: string;
+}
+
+function readJsonArrayFile<T>(filePath: string): T[] {
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeJsonArrayFile<T>(filePath: string, items: T[]): void {
+  fs.mkdirSync(DATA_ROOT_DIR, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(items, null, 2), "utf8");
+}
+
+function appendSecurityAudit(entry: {
+  event: string;
+  actorId?: string;
+  targetId?: string;
+  role?: string;
+  details: string;
+}) {
+  try {
+    const existing = readJsonArrayFile<any>(SECURITY_AUDIT_FILE);
+    existing.unshift({
+      id: `sec_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`,
+      ...entry,
+      timestamp: new Date().toISOString(),
+    });
+    writeJsonArrayFile(SECURITY_AUDIT_FILE, existing.slice(0, 500));
+  } catch {
+    // Non-blocking audit log
+  }
+}
 
 async function resolveRequestSession(req: express.Request): Promise<ServerSessionUser | null> {
   const cookieSession = getServerSession(req);
@@ -270,17 +367,54 @@ async function resolveRequestSession(req: express.Request): Promise<ServerSessio
   const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!bearer) return null;
 
+  // Accept server-signed session Bearer token (ensures auth works inside cross-site iframes even if 3P cookies are restricted)
+  const signedSession = verifySignedToken<ServerSessionUser>(bearer);
+  if (signedSession && (!signedSession.exp || Date.now() <= signedSession.exp)) {
+    return signedSession;
+  }
+
   const claims = await verifyFirebaseIdToken(bearer);
   if (!claims) return null;
 
   const email = (claims.email || "").toLowerCase();
   const isSuper = email === SUPER_ADMIN_EMAIL && claims.email_verified === true;
+  const staffMatch = !isSuper
+    ? readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE).find(
+        (s) =>
+          s.isActive !== false &&
+          ((s.uid && s.uid === claims.sub) || (s.email && s.email.toLowerCase() === email))
+      )
+    : undefined;
+
+  let resolvedRole = "user";
+  let resolvedName = claims.name || email || "BNCC User";
+  let resolvedPermissions: Record<string, boolean> | undefined;
+  let resolvedReg: string | undefined;
+
+  if (isSuper) {
+    resolvedRole = "super_admin";
+  } else if (staffMatch) {
+    resolvedRole = staffMatch.role || "admin";
+    resolvedName = staffMatch.name || resolvedName;
+    resolvedPermissions = staffMatch.permissions;
+  } else {
+    const matchedApp = readStoredApplicants().find((a) => a.ownerUid === claims.sub);
+    if (matchedApp) {
+      const st = String(matchedApp.status || "").toLowerCase();
+      resolvedRole = st === "approved" || st === "joined" || matchedApp.role === "cadet" ? "cadet" : "user";
+      resolvedName = matchedApp.fullNameEnglish || matchedApp.fullNameBangla || resolvedName;
+      resolvedReg = matchedApp.registrationNumber || matchedApp.id;
+    }
+  }
+
   return {
     id: claims.sub,
     uid: claims.sub,
     email: claims.email || null,
-    name: claims.name || email || "BNCC User",
-    role: isSuper ? "super_admin" : "user",
+    name: resolvedName,
+    role: resolvedRole,
+    registrationNumber: resolvedReg,
+    permissions: resolvedPermissions,
     authSource: "firebase",
     exp: Date.now() + 1000 * 60 * 60 * 12,
   };
@@ -315,77 +449,202 @@ app.post("/api/auth/firebase", rateLimit(10 * 60 * 1000, 40), async (req, res) =
   }
   const email = (claims.email || "").toLowerCase();
   const isSuper = email === SUPER_ADMIN_EMAIL && claims.email_verified === true;
-  const current = getServerSession(req);
+  const current = await resolveRequestSession(req);
+
+  let derivedRole = "user";
+  let derivedName = claims.name || email || "BNCC User";
+  let derivedId = claims.sub;
+  let derivedPermissions: Record<string, boolean> | undefined;
+  let derivedReg: string | undefined;
+
+  if (isSuper) {
+    derivedRole = "super_admin";
+  } else {
+    const staffMatch = readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE).find(
+      (s) =>
+        s.isActive !== false &&
+        ((s.uid && s.uid === claims.sub) || (s.email && s.email.toLowerCase() === email))
+    );
+    if (staffMatch) {
+      derivedRole = staffMatch.role || "admin";
+      derivedName = staffMatch.name || derivedName;
+      derivedPermissions = staffMatch.permissions;
+    } else {
+      const matchedApp = readStoredApplicants().find((a) => a.ownerUid === claims.sub);
+      if (matchedApp) {
+        const st = String(matchedApp.status || "").toLowerCase();
+        derivedRole = st === "approved" || st === "joined" || matchedApp.role === "cadet" ? "cadet" : "user";
+        derivedId = matchedApp.id;
+        derivedName = matchedApp.fullNameEnglish || matchedApp.fullNameBangla || derivedName;
+        derivedReg = matchedApp.registrationNumber || matchedApp.id;
+      } else if (current && current.uid === claims.sub && current.role) {
+        derivedRole = current.role;
+      }
+    }
+  }
 
   const sessionUser: ServerSessionUser = {
-    id: current?.id || claims.sub,
+    id: derivedId,
     uid: claims.sub,
     email: claims.email || null,
-    name: claims.name || email || "BNCC User",
-    role: isSuper ? "super_admin" : current?.role || "user",
+    name: derivedName,
+    role: derivedRole,
+    registrationNumber: derivedReg,
+    permissions: derivedPermissions,
     authSource: "firebase",
     exp: Date.now() + 1000 * 60 * 60 * 12,
   };
-  setSessionCookie(res, sessionUser, req);
-  return res.json({ authenticated: true, user: sessionUser });
+  const token = setSessionCookie(res, sessionUser, req);
+  return res.json({ authenticated: true, user: sessionUser, token });
 });
 
 app.post("/api/auth/session-sync", rateLimit(10 * 60 * 1000, 60), async (req, res) => {
   const { user } = req.body || {};
-  if (!user || !user.id || !user.role) {
+  if (!user || !user.id) {
     return res.status(400).json({ error: "Invalid session payload" });
   }
 
   const authHeader = req.headers.authorization || "";
   const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-  const claims = bearer ? await verifyFirebaseIdToken(bearer) : null;
-  const existingSession = getServerSession(req);
+  const bearerServerSession = bearer ? verifySignedToken<ServerSessionUser>(bearer) : null;
+  const claims =
+    bearer && (!bearerServerSession || (bearerServerSession.exp && Date.now() > bearerServerSession.exp))
+      ? await verifyFirebaseIdToken(bearer)
+      : null;
+  const existingSession = await resolveRequestSession(req);
 
-  // Prevent unverified super_admin elevation
-  let safeRole = String(user.role);
-  if (safeRole === "super_admin") {
-    const emailMatches =
-      claims &&
-      (claims.email || "").toLowerCase() === SUPER_ADMIN_EMAIL &&
-      claims.email_verified === true;
-    const activeSuperCookie = existingSession?.role === "super_admin";
-    const restoredAdmin = existingSession?.impersonatedBy?.role === "super_admin";
-    if (!emailMatches && !activeSuperCookie && !restoredAdmin) {
-      return res.status(403).json({ error: "Super admin elevation requires verified email or admin credentials" });
+  // Require an active verified Firebase token or active server session (never allow unauthenticated role minting)
+  if (!claims && !existingSession) {
+    appendSecurityAudit({
+      event: "SESSION_SYNC_REJECTED",
+      targetId: String(user.id).slice(0, 128),
+      details: "Rejected unauthenticated session-sync request.",
+    });
+    return res.status(401).json({ error: "Verified authentication token or active session required" });
+  }
+
+  let safeRole = "user";
+  let safeId = String(user.id).slice(0, 128);
+  let safeName = String(user.name || "BNCC User").slice(0, 160);
+  let safePermissions = existingSession?.permissions;
+  let safeImpersonatedBy = existingSession?.impersonatedBy || null;
+  let safeReg = user.registrationNumber ? String(user.registrationNumber).slice(0, 64) : undefined;
+  let safeUsername = existingSession?.username;
+
+  // 1. Handle admin impersonation start / restore cleanly for already-verified admin sessions
+  if (existingSession && ADMIN_ROLE_LIST.includes(existingSession.role) && user.impersonatedBy) {
+    // Admin starting impersonation of a cadet/applicant view
+    safeRole = String(user.role) === "user" ? "user" : "cadet";
+    safeImpersonatedBy = {
+      id: existingSession.id,
+      name: existingSession.name,
+      role: existingSession.role,
+      uid: existingSession.uid,
+      email: existingSession.email || null,
+    };
+    safePermissions = undefined;
+  } else if (existingSession?.impersonatedBy && !user.impersonatedBy) {
+    // Admin restoring original verified admin role from server-held impersonatedBy
+    safeRole = existingSession.impersonatedBy.role;
+    safeId = existingSession.impersonatedBy.id;
+    safeName = existingSession.impersonatedBy.name;
+    safeImpersonatedBy = null;
+  } else if (claims) {
+    // 2. Derive role strictly server-side from verified Firebase claims + server registries
+    const emailLower = (claims.email || "").toLowerCase();
+    const isSuper = emailLower === SUPER_ADMIN_EMAIL && claims.email_verified === true;
+    const staffMatch = !isSuper
+      ? readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE).find(
+          (s) =>
+            s.isActive !== false &&
+            ((s.uid && s.uid === claims.sub) || (s.email && s.email.toLowerCase() === emailLower))
+        )
+      : undefined;
+
+    if (isSuper) {
+      safeRole = "super_admin";
+      safeUsername = "admin";
+      safePermissions = {
+        canAdd: true,
+        canEdit: true,
+        canDelete: true,
+        canViewLogs: true,
+        canResetPW: true,
+        canApprove: true,
+        canExport: true,
+        canChat: true,
+      };
+    } else if (staffMatch) {
+      safeRole = staffMatch.role;
+      safeUsername = staffMatch.username;
+      safePermissions = staffMatch.permissions;
+    } else if (existingSession && existingSession.uid === claims.sub && ADMIN_ROLE_LIST.includes(existingSession.role)) {
+      safeRole = existingSession.role;
+      safePermissions = existingSession.permissions;
+    } else {
+      const matchedApp = readStoredApplicants().find((a) => a.ownerUid === claims.sub);
+      if (matchedApp) {
+        const st = String(matchedApp.status || "").toLowerCase();
+        safeRole = st === "approved" || st === "joined" || matchedApp.role === "cadet" ? "cadet" : "user";
+        safeId = matchedApp.id;
+        safeReg = matchedApp.registrationNumber || matchedApp.id;
+      } else {
+        safeRole = "user";
+      }
     }
+  } else if (existingSession) {
+    // 3. Preserve already-verified server session role (prevent lateral/upward escalation from client body)
+    safeRole = existingSession.role;
+    safeId = existingSession.id;
+    safeReg = existingSession.registrationNumber;
   }
 
   const sessionUser: ServerSessionUser = {
-    id: String(user.id).slice(0, 128),
-    uid: claims?.sub || user.uid || existingSession?.uid,
-    email: claims?.email || user.email || null,
-    name: String(user.name || "BNCC User").slice(0, 160),
+    id: safeId,
+    uid: claims?.sub || existingSession?.uid,
+    email: claims?.email || existingSession?.email || null,
+    name: safeName,
     role: safeRole,
-    username: user.username ? String(user.username).slice(0, 80) : undefined,
-    registrationNumber: user.registrationNumber ? String(user.registrationNumber).slice(0, 64) : undefined,
-    permissions: user.permissions || undefined,
-    authSource: claims ? "firebase" : user.authSource || "credential",
-    impersonatedBy: user.impersonatedBy || null,
+    username: safeUsername,
+    registrationNumber: safeReg,
+    permissions: safePermissions,
+    authSource: claims ? "firebase" : existingSession?.authSource || "credential",
+    impersonatedBy: safeImpersonatedBy,
     exp: Date.now() + 1000 * 60 * 60 * 12,
   };
-  setSessionCookie(res, sessionUser, req);
-  return res.json({ authenticated: true, user: sessionUser });
+
+  appendSecurityAudit({
+    event: "SESSION_SYNC",
+    actorId: sessionUser.uid || sessionUser.id,
+    role: sessionUser.role,
+    details: `Verified session sync (${sessionUser.authSource})`,
+  });
+
+  const token = setSessionCookie(res, sessionUser, req);
+  return res.json({ authenticated: true, user: sessionUser, token });
 });
 
-const DEFAULT_ADMIN_SCRYPT_SALT = "63b807846d1c70acc80b777d2615af57";
-const DEFAULT_ADMIN_SCRYPT_HASH =
-  "6bbd0519937369e0efac171dc47bff93a502abeb35a744592961f35d0b386056df5453cfb5fc2247c8a73e27306be0dd491eb118317957e83977798d9b53c33a";
+function timingSafeComparePlaintext(aStr: string, bStr: string): boolean {
+  const hashA = crypto.createHash("sha256").update(aStr, "utf8").digest();
+  const hashB = crypto.createHash("sha256").update(bStr, "utf8").digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
 
-function verifyAdminPassword(candidate: string): boolean {
-  const configuredSecret = process.env.ADMIN_LOGIN_PASSWORD;
-  if (configuredSecret && configuredSecret.length > 0) {
-    const a = Buffer.from(candidate, "utf8");
-    const b = Buffer.from(configuredSecret, "utf8");
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
+async function verifyAdminPassword(candidate: string): Promise<{ valid: boolean; configured: boolean }> {
+  const configuredSecret = (process.env.ADMIN_LOGIN_PASSWORD || "").trim();
+  if (configuredSecret.length > 0) {
+    return {
+      valid: timingSafeComparePlaintext(candidate, configuredSecret),
+      configured: true,
+    };
   }
-  const derived = crypto.scryptSync(candidate, DEFAULT_ADMIN_SCRYPT_SALT, 64);
-  const expected = Buffer.from(DEFAULT_ADMIN_SCRYPT_HASH, "hex");
-  return derived.length === expected.length && crypto.timingSafeEqual(derived, expected);
+  const staff = readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE);
+  const adminEntry = staff.find((s) => s.username.toLowerCase() === "admin" && s.passwordHash);
+  if (adminEntry?.passwordHash) {
+    const valid = await bcrypt.compare(candidate, adminEntry.passwordHash);
+    return { valid, configured: true };
+  }
+  return { valid: false, configured: false };
 }
 
 app.post("/api/auth/credential-login", rateLimit(10 * 60 * 1000, 30), async (req, res) => {
@@ -394,8 +653,17 @@ app.post("/api/auth/credential-login", rateLimit(10 * 60 * 1000, 30), async (req
     return res.status(400).json({ error: "Username and password required" });
   }
   const cleanId = String(username).trim().toLowerCase();
+  const cleanPw = String(password);
+
   if (cleanId === "admin") {
-    if (verifyAdminPassword(String(password))) {
+    const check = await verifyAdminPassword(cleanPw);
+    if (!check.configured) {
+      return res.status(401).json({
+        error:
+          "সার্ভার অ্যাডমিন পাসওয়ার্ড কনফিগার করা হয়নি। অনুগ্রহ করে সুপার অ্যাডমিন ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন অথবা .env-এ ADMIN_LOGIN_PASSWORD সেট করুন।",
+      });
+    }
+    if (check.valid) {
       const superUser: ServerSessionUser = {
         id: "admin",
         username: "admin",
@@ -415,20 +683,436 @@ app.post("/api/auth/credential-login", rateLimit(10 * 60 * 1000, 30), async (req
         },
         exp: Date.now() + 1000 * 60 * 60 * 12,
       };
-      setSessionCookie(res, superUser, req);
-      return res.json({ authenticated: true, user: superUser });
+      appendSecurityAudit({
+        event: "CREDENTIAL_LOGIN_SUCCESS",
+        actorId: "admin",
+        role: "super_admin",
+        details: "Super admin credential login succeeded.",
+      });
+      const token = setSessionCookie(res, superUser, req);
+      return res.json({ authenticated: true, user: superUser, token });
     }
+    appendSecurityAudit({
+      event: "CREDENTIAL_LOGIN_FAILED",
+      actorId: "admin",
+      details: "Invalid super admin password attempt.",
+    });
     return res.status(401).json({ error: "Invalid admin password." });
   }
+
+  // Check synced staff credentials in .bncc-data/staff-auth.json
+  const staff = readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE);
+  const staffMatch = staff.find(
+    (s) => s.username.toLowerCase() === cleanId || (s.email && s.email.toLowerCase() === cleanId)
+  );
+  if (staffMatch) {
+    if (staffMatch.isActive === false) {
+      return res.status(403).json({ error: "এই অফিসার অ্যাকাউন্টটি সাময়িকভাবে স্থগিত রয়েছে।" });
+    }
+    if (!staffMatch.passwordHash || !(await bcrypt.compare(cleanPw, staffMatch.passwordHash))) {
+      appendSecurityAudit({
+        event: "STAFF_LOGIN_FAILED",
+        actorId: cleanId,
+        details: "Invalid officer password attempt.",
+      });
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।" });
+    }
+    const staffUser: ServerSessionUser = {
+      id: staffMatch.id || staffMatch.username,
+      uid: staffMatch.uid,
+      email: staffMatch.email || null,
+      username: staffMatch.username,
+      name: staffMatch.name || "BNCC Officer",
+      role: staffMatch.role || "admin",
+      authSource: "credential",
+      permissions: staffMatch.permissions || {},
+      exp: Date.now() + 1000 * 60 * 60 * 12,
+    };
+    const token = setSessionCookie(res, staffUser, req);
+    return res.json({ authenticated: true, user: staffUser, token });
+  }
+
   return res.status(404).json({ error: "Delegate to verified Firestore/Firebase check" });
 });
 
-app.get("/api/auth/session", (req, res) => {
-  const session = getServerSession(req);
-  if (!session) {
-    return res.json({ authenticated: false, user: null });
+app.post("/api/auth/staff", requireAuth(["super_admin"]), async (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
   }
-  return res.json({ authenticated: true, user: session });
+  const { id, uid, username, email, name, role, passwordHash, plainPassword, permissions, isActive } =
+    req.body || {};
+  const cleanUsername = safeCleanText(username, 80).toLowerCase();
+  if (!cleanUsername) {
+    return res.status(400).json({ error: "Username is required" });
+  }
+  let finalHash = typeof passwordHash === "string" ? passwordHash.slice(0, 200) : "";
+  if (!finalHash && typeof plainPassword === "string" && plainPassword.length >= 6) {
+    finalHash = await bcrypt.hash(plainPassword, 10);
+  }
+  const staff = readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE);
+  const idx = staff.findIndex((s) => s.username.toLowerCase() === cleanUsername);
+  const record: StoredStaffCredential = {
+    id: safeCleanText(id || (idx >= 0 ? staff[idx].id : `staff_${Date.now()}`), 128),
+    uid: uid ? safeCleanText(uid, 128) : idx >= 0 ? staff[idx].uid : undefined,
+    username: cleanUsername,
+    email: email ? safeCleanText(email, 160).toLowerCase() : idx >= 0 ? staff[idx].email : undefined,
+    name: safeCleanText(name || (idx >= 0 ? staff[idx].name : cleanUsername), 160),
+    role: safeCleanText(role || (idx >= 0 ? staff[idx].role : "admin"), 40),
+    passwordHash: finalHash || (idx >= 0 ? staff[idx].passwordHash : undefined),
+    permissions: permissions || (idx >= 0 ? staff[idx].permissions : {}),
+    isActive: typeof isActive === "boolean" ? isActive : idx >= 0 ? staff[idx].isActive !== false : true,
+    updatedAt: new Date().toISOString(),
+  };
+  if (idx >= 0) {
+    staff[idx] = record;
+  } else {
+    staff.push(record);
+  }
+  writeJsonArrayFile(STAFF_AUTH_FILE, staff);
+  return res.json({ success: true, username: cleanUsername });
+});
+
+app.post("/api/auth/staff/sync-batch", requireAuth(["super_admin"]), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const items = Array.isArray(req.body?.staff) ? req.body.staff : [];
+  const staff = readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE);
+  const byUsername = new Map<string, StoredStaffCredential>();
+  for (const s of staff) {
+    if (s.username) byUsername.set(s.username.toLowerCase(), s);
+  }
+  for (const raw of items.slice(0, 100)) {
+    const cleanUser = safeCleanText(raw?.username, 80).toLowerCase();
+    if (!cleanUser) continue;
+    const prev = byUsername.get(cleanUser);
+    byUsername.set(cleanUser, {
+      id: safeCleanText(raw.id || prev?.id || cleanUser, 128),
+      uid: raw.uid ? safeCleanText(raw.uid, 128) : prev?.uid,
+      username: cleanUser,
+      email: raw.email ? safeCleanText(raw.email, 160).toLowerCase() : prev?.email,
+      name: safeCleanText(raw.name || prev?.name || cleanUser, 160),
+      role: safeCleanText(raw.role || prev?.role || "admin", 40),
+      passwordHash:
+        typeof raw.password === "string" && raw.password.startsWith("$2")
+          ? raw.password
+          : typeof raw.passwordHash === "string" && raw.passwordHash.startsWith("$2")
+          ? raw.passwordHash
+          : prev?.passwordHash,
+      permissions: raw.permissions || prev?.permissions || {},
+      isActive: typeof raw.isActive === "boolean" ? raw.isActive : prev?.isActive !== false,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+  writeJsonArrayFile(STAFF_AUTH_FILE, Array.from(byUsername.values()));
+  return res.json({ success: true });
+});
+
+app.delete("/api/auth/staff/:idOrUsername", requireAuth(["super_admin"]), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const target = String(req.params.idOrUsername || "").trim().toLowerCase();
+  const staff = readJsonArrayFile<StoredStaffCredential>(STAFF_AUTH_FILE);
+  const next = staff.filter((s) => s.id.toLowerCase() !== target && s.username.toLowerCase() !== target);
+  writeJsonArrayFile(STAFF_AUTH_FILE, next);
+  return res.json({ success: true });
+});
+
+app.post("/api/auth/qr-token", requireAuth(QR_INSPECTOR_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const { qrToken, username, name, role, expiresAtMs, permissions } = req.body || {};
+  const cleanToken = safeCleanText(qrToken, 200);
+  const cleanUser = safeCleanText(username, 80).toLowerCase();
+  if (!cleanToken.startsWith("adm_qr_") || !cleanUser) {
+    return res.status(400).json({ error: "Valid adm_qr_ token and username required" });
+  }
+  const tokens = readJsonArrayFile<StoredQrToken>(QR_TOKENS_FILE).filter(
+    (t) => t.username.toLowerCase() !== cleanUser
+  );
+  const record: StoredQrToken = {
+    id: `qr_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`,
+    qrToken: cleanToken,
+    username: cleanUser,
+    name: safeCleanText(name || cleanUser, 160),
+    role: safeCleanText(role || "qr_admin", 40),
+    permissions: permissions || {},
+    expiresAtMs: typeof expiresAtMs === "number" ? expiresAtMs : null,
+    createdAt: new Date().toISOString(),
+  };
+  tokens.unshift(record);
+  writeJsonArrayFile(QR_TOKENS_FILE, tokens);
+  return res.json({ success: true, id: record.id });
+});
+
+app.post("/api/auth/qr-login", rateLimit(10 * 60 * 1000, 30), (req, res) => {
+  const cleanToken = safeCleanText(req.body?.qrToken, 200);
+  if (!cleanToken || !cleanToken.startsWith("adm_qr_")) {
+    return res.status(400).json({ error: "অবৈধ অ্যাডমিন QR কোড ফরম্যাট।" });
+  }
+  const tokens = readJsonArrayFile<StoredQrToken>(QR_TOKENS_FILE);
+  const match = tokens.find((t) => t.qrToken === cleanToken);
+  if (!match) {
+    appendSecurityAudit({
+      event: "QR_LOGIN_FAILED",
+      details: "Invalid admin QR token presented.",
+    });
+    return res.status(401).json({ error: "অবৈধ বা অনিবন্ধিত অ্যাডমিন QR কোড।" });
+  }
+  if (match.expiresAtMs && Date.now() > match.expiresAtMs) {
+    return res.status(401).json({ error: "এই অ্যাডমিন QR কোডের মেয়াদ শেষ হয়ে গেছে।" });
+  }
+  const safeRole = QR_INSPECTOR_ROLES.includes(match.role) ? match.role : "attendance_officer";
+  const qrUser: ServerSessionUser = {
+    id: match.id,
+    username: match.username,
+    name: match.name || "Attendance Officer",
+    role: safeRole,
+    authSource: "qr_token",
+    permissions: match.permissions || {},
+    exp: Date.now() + 1000 * 60 * 60 * 12,
+  };
+  appendSecurityAudit({
+    event: "QR_LOGIN_SUCCESS",
+    actorId: match.username,
+    role: safeRole,
+    details: "QR token login verified by server vault.",
+  });
+  const token = setSessionCookie(res, qrUser, req);
+  return res.json({ authenticated: true, user: qrUser, token });
+});
+
+app.post("/api/auth/link-applicant", rateLimit(10 * 60 * 1000, 20), async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const claims = bearer ? await verifyFirebaseIdToken(bearer) : null;
+  if (!claims) {
+    return res.status(401).json({ error: "প্রথমে ইমেইল ও পাসওয়ার্ড দিয়ে সাইন-ইন করুন।" });
+  }
+
+  const applicantId = safeCleanText(req.body?.applicantId, 128);
+  const plainPw = safeCleanText(req.body?.password, 200);
+  if (!applicantId || !plainPw) {
+    return res.status(400).json({ error: "ক্যাডেট / আবেদন আইডি এবং পাসওয়ার্ড দিন।" });
+  }
+
+  const all = readStoredApplicants();
+  const idx = all.findIndex(
+    (a) => a.id === applicantId || a.registrationNumber === applicantId
+  );
+  if (idx < 0) {
+    return res.status(404).json({ error: "উক্ত আইডি সংবলিত কোনো আবেদন পাওয়া যায়নি।" });
+  }
+  const match = all[idx];
+  if (match.ownerUid && match.ownerUid !== "public_applicant" && match.ownerUid !== claims.sub) {
+    appendSecurityAudit({
+      event: "LINK_APPLICANT_CONFLICT",
+      actorId: claims.sub,
+      targetId: match.id,
+      details: "Attempted to link applicant already owned by another UID.",
+    });
+    return res.status(409).json({
+      error: "এই ক্যাডেট / আবেদন আইডি ইতিমধ্যেই অন্য একটি ইমেইল অ্যাকাউন্টের সাথে যুক্ত রয়েছে।",
+    });
+  }
+
+  const storedHash = match.passwordHash || match.password || "";
+  if (!storedHash || !(await bcrypt.compare(plainPw, storedHash))) {
+    return res.status(401).json({ error: "ক্যাডেট আইডি বা পাসওয়ার্ড সঠিক নয়।" });
+  }
+
+  const st = String(match.status || "").toLowerCase();
+  const derivedRole = st === "approved" || st === "joined" || match.role === "cadet" ? "cadet" : "user";
+  all[idx] = {
+    ...match,
+    ownerUid: claims.sub,
+    role: derivedRole,
+    updatedAtIso: new Date().toISOString(),
+  };
+  writeStoredApplicants(all);
+
+  const linkedUser: ServerSessionUser = {
+    id: match.id,
+    uid: claims.sub,
+    email: claims.email || match.studentEmail || null,
+    name: match.fullNameEnglish || match.fullNameBangla || claims.name || "BNCC Member",
+    role: derivedRole,
+    registrationNumber: match.registrationNumber || match.id,
+    authSource: "firebase",
+    exp: Date.now() + 1000 * 60 * 60 * 12,
+  };
+  (linkedUser as any).applicantId = match.id;
+
+  appendSecurityAudit({
+    event: "APPLICANT_LINKED",
+    actorId: claims.sub,
+    targetId: match.id,
+    role: derivedRole,
+    details: `Linked applicant ${match.id} to UID ${claims.sub}`,
+  });
+
+  const token = setSessionCookie(res, linkedUser, req);
+  return res.json({ authenticated: true, user: linkedUser, token });
+});
+
+app.post("/api/auth/password-reset-request", rateLimit(15 * 60 * 1000, 10), (req, res) => {
+  const identifier = safeCleanText(req.body?.identifier, 128);
+  const mobile = safeCleanText(req.body?.mobile, 32);
+  const note = safeCleanText(req.body?.note, 400);
+  if (!identifier || !mobile || mobile.length < 6) {
+    return res.status(400).json({
+      error: "ক্যাডেট / আবেদন আইডি এবং সঠিক মোবাইল নম্বর প্রদান করুন।",
+    });
+  }
+
+  const ip =
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+    req.socket.remoteAddress ||
+    "unknown";
+
+  const match = readStoredApplicants().find(
+    (a) =>
+      a.id === identifier ||
+      a.registrationNumber === identifier ||
+      (a.studentEmail && a.studentEmail.toLowerCase() === identifier.toLowerCase())
+  );
+
+  const resetRecord: StoredPasswordReset = {
+    id: `pwr_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`,
+    applicantId: match?.id || identifier,
+    identifier,
+    name: match?.fullNameEnglish || match?.fullNameBangla || `Request (${identifier})`,
+    mobile,
+    note: note || "Officer-assisted password reset request submitted from portal.",
+    status: "pending",
+    matchedApplicant: Boolean(match),
+    ipAddress: ip,
+    createdAtIso: new Date().toISOString(),
+  };
+
+  const resets = readJsonArrayFile<StoredPasswordReset>(PASSWORD_RESETS_FILE);
+  resets.unshift(resetRecord);
+  writeJsonArrayFile(PASSWORD_RESETS_FILE, resets.slice(0, 300));
+
+  appendSecurityAudit({
+    event: "PASSWORD_RESET_REQUESTED",
+    targetId: resetRecord.applicantId,
+    details: `Officer-assisted reset request submitted from IP ${ip}`,
+  });
+
+  // Always return uniform confirmation without leaking account existence
+  return res.status(201).json({
+    success: true,
+    id: resetRecord.id,
+    message:
+      "আপনার রিকভারি অনুরোধটি নিরাপদে প্লাটুন অ্যাডমিন প্যানেলে জমা হয়েছে। যাচাই সম্পন্ন হলে প্লাটুন অফিসার সহায়তা করবেন।",
+  });
+});
+
+app.get("/api/auth/password-resets", requireAuth(FULL_ADMIN_ROLES), (_req, res) => {
+  const resets = readJsonArrayFile<StoredPasswordReset>(PASSWORD_RESETS_FILE);
+  return res.json({ resets });
+});
+
+app.patch("/api/auth/password-resets/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const id = String(req.params.id || "").trim();
+  const status = req.body?.status === "resolved" ? "resolved" : "pending";
+  const resets = readJsonArrayFile<StoredPasswordReset>(PASSWORD_RESETS_FILE);
+  const idx = resets.findIndex((r) => r.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Reset request not found" });
+  }
+  resets[idx] = {
+    ...resets[idx],
+    status,
+    resolvedAtIso: status === "resolved" ? new Date().toISOString() : undefined,
+    resolvedBy: serverUser.username || serverUser.id,
+  };
+  writeJsonArrayFile(PASSWORD_RESETS_FILE, resets);
+  return res.json({ success: true, reset: resets[idx] });
+});
+
+app.delete("/api/auth/password-resets/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const id = String(req.params.id || "").trim();
+  const resets = readJsonArrayFile<StoredPasswordReset>(PASSWORD_RESETS_FILE);
+  const next = resets.filter((r) => r.id !== id);
+  if (next.length === resets.length) {
+    return res.status(404).json({ error: "Reset request not found" });
+  }
+  writeJsonArrayFile(PASSWORD_RESETS_FILE, next);
+  return res.json({ success: true });
+});
+
+app.get("/api/qr/applicant/:id", requireAuth(QR_INSPECTOR_ROLES), (req, res) => {
+  const id = String(req.params.id || "").trim();
+  const match = readStoredApplicants().find((a) => a.id === id || a.registrationNumber === id);
+  if (!match) {
+    return res.status(404).json({ error: "আবেদনকারী পাওয়া যায়নি।" });
+  }
+  const { passwordHash: _ph, password: _pw, uploadedDocuments: _docs, ...safeQrProfile } = match;
+  return res.json({ applicant: safeQrProfile });
+});
+
+app.post("/api/qr/attendance", requireAuth(QR_INSPECTOR_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const id = safeCleanText(req.body?.id, 128);
+  const status = safeCleanText(req.body?.attendanceStatus || "Present", 32);
+  if (!id) {
+    return res.status(400).json({ error: "Applicant ID is required" });
+  }
+  const all = readStoredApplicants();
+  const idx = all.findIndex((a) => a.id === id || a.registrationNumber === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "আবেদনকারী পাওয়া যায়নি।" });
+  }
+  const alreadyPresent = all[idx].attendanceStatus === "Present";
+  if (!alreadyPresent) {
+    all[idx] = {
+      ...all[idx],
+      attendanceStatus: status || "Present",
+      attendanceTime: new Date().toISOString(),
+      updatedAtIso: new Date().toISOString(),
+    };
+    writeStoredApplicants(all);
+  }
+  const { passwordHash: _ph, password: _pw, uploadedDocuments: _docs, ...safeQrProfile } = all[idx];
+  return res.json({ success: true, alreadyPresent, applicant: safeQrProfile });
+});
+
+app.get("/api/qr/attendance-report", requireAuth(QR_INSPECTOR_ROLES), (_req, res) => {
+  const presentRecords = readStoredApplicants()
+    .filter((a) => a.attendanceStatus === "Present")
+    .map((a) => ({
+      id: a.id,
+      registrationNumber: a.registrationNumber || a.id,
+      fullNameEnglish: a.fullNameEnglish || "",
+      fullNameBangla: a.fullNameBangla || "",
+      classRoll: a.classRoll || "N/A",
+      studyStatus: a.studyStatus || "",
+      attendanceStatus: a.attendanceStatus || "Present",
+      attendanceTime: a.attendanceTime || a.updatedAtIso || "",
+    }));
+  return res.json({ records: presentRecords });
+});
+
+app.get("/api/auth/session", async (req, res) => {
+  const session = await resolveRequestSession(req);
+  if (!session) {
+    return res.json({ authenticated: false, user: null, token: null });
+  }
+  const token = signPayload(session);
+  return res.json({ authenticated: true, user: session, token });
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -438,6 +1122,7 @@ app.post("/api/auth/logout", (req, res) => {
     httpOnly: true,
     sameSite: isHttps ? "none" : "lax",
     secure: isHttps,
+    partitioned: isHttps,
   });
   return res.json({ success: true });
 });
@@ -458,6 +1143,151 @@ interface SealedExamPackage {
   keys: AnswerKeyEntry[];
   negativePenalty: number;
   passMarks: number;
+}
+
+const EXAM_ADMIN_ROLES = ["super_admin", "admin", "exam_admin"];
+const EXAM_STORE_DATA_DIR = DATA_ROOT_DIR;
+const EXAM_STORE_FILE = path.join(EXAM_STORE_DATA_DIR, "exam-store.json");
+
+interface StoredExamData {
+  questions: any[];
+  exams: any[];
+  attempts: any[];
+  results: any[];
+  settings: any;
+  activityLogs: any[];
+  auditLogs: any[];
+}
+
+function getDefaultExamSettings() {
+  return {
+    id: "global",
+    defaultDurationMinutes: 60,
+    defaultPassPercentage: 40,
+    enableNegativeMarkingDefault: false,
+    defaultWrongPenalty: 0.25,
+    allowStudentReviewAnswers: false,
+    showLeaderboardToStudents: true,
+    autoSubmitOnTimeExpiry: true,
+    preventTabSwitching: false,
+    updatedAt: new Date().toISOString(),
+    updatedBy: "system",
+  };
+}
+
+function readExamStore(): StoredExamData {
+  try {
+    if (!fs.existsSync(EXAM_STORE_FILE)) {
+      return {
+        questions: [],
+        exams: [],
+        attempts: [],
+        results: [],
+        settings: getDefaultExamSettings(),
+        activityLogs: [],
+        auditLogs: [],
+      };
+    }
+    const raw = fs.readFileSync(EXAM_STORE_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      questions: Array.isArray(parsed?.questions) ? parsed.questions : [],
+      exams: Array.isArray(parsed?.exams) ? parsed.exams : [],
+      attempts: Array.isArray(parsed?.attempts) ? parsed.attempts : [],
+      results: Array.isArray(parsed?.results) ? parsed.results : [],
+      settings: parsed?.settings && typeof parsed.settings === "object" ? parsed.settings : getDefaultExamSettings(),
+      activityLogs: Array.isArray(parsed?.activityLogs) ? parsed.activityLogs : [],
+      auditLogs: Array.isArray(parsed?.auditLogs) ? parsed.auditLogs : [],
+    };
+  } catch {
+    return {
+      questions: [],
+      exams: [],
+      attempts: [],
+      results: [],
+      settings: getDefaultExamSettings(),
+      activityLogs: [],
+      auditLogs: [],
+    };
+  }
+}
+
+function writeExamStore(data: StoredExamData): void {
+  fs.mkdirSync(EXAM_STORE_DATA_DIR, { recursive: true });
+  const trimmed: StoredExamData = {
+    ...data,
+    activityLogs: (data.activityLogs || []).slice(-500),
+    auditLogs: (data.auditLogs || []).slice(-1000),
+  };
+  fs.writeFileSync(EXAM_STORE_FILE, JSON.stringify(trimmed, null, 2), "utf8");
+}
+
+function stripExamQuestionKeysServer(q: any) {
+  if (!q || typeof q !== "object") return q;
+  const { correctAnswer: _c, acceptedAnswers: _a, expectedAnswer: _e, explanation: _ex, ...safeQ } = q;
+  return safeQ;
+}
+
+function sanitizeExamForCaller(exam: any, isAdmin: boolean) {
+  if (!exam || typeof exam !== "object") return exam;
+  if (isAdmin) return exam;
+  return {
+    ...exam,
+    questionSnapshots: Array.isArray(exam.questionSnapshots)
+      ? exam.questionSnapshots.map(stripExamQuestionKeysServer)
+      : [],
+  };
+}
+
+function resolveExamPackageFromStore(examId: string, attemptId?: string): SealedExamPackage | undefined {
+  const store = readExamStore();
+  const exam = store.exams.find((e) => e.id === examId);
+  if (!exam) return undefined;
+
+  const qMap = new Map<string, any>();
+  for (const q of store.questions) {
+    if (q?.id) qMap.set(String(q.id), q);
+  }
+
+  const attempt = attemptId ? store.attempts.find((a) => a.id === attemptId) : undefined;
+  const sourceList: any[] =
+    Array.isArray(exam.questionSnapshots) && exam.questionSnapshots.length > 0
+      ? exam.questionSnapshots
+      : Array.isArray(attempt?.questionSnapshot) && attempt.questionSnapshot.length > 0
+      ? attempt.questionSnapshot
+      : Array.isArray(exam.selectedQuestionIds)
+      ? exam.selectedQuestionIds.map((id: string) => ({ id }))
+      : [];
+
+  const keys: AnswerKeyEntry[] = [];
+  for (const snap of sourceList) {
+    const id = String(snap?.id || "");
+    if (!id) continue;
+    const full = qMap.get(id);
+    if (!full && snap?.correctAnswer === undefined && !snap?.acceptedAnswers) continue;
+    keys.push({
+      id,
+      questionType: String(full?.questionType || snap?.questionType || "mcq"),
+      correctAnswer: full?.correctAnswer ?? snap?.correctAnswer ?? "",
+      acceptedAnswers: Array.isArray(full?.acceptedAnswers)
+        ? full.acceptedAnswers.map(String)
+        : Array.isArray(snap?.acceptedAnswers)
+        ? snap.acceptedAnswers.map(String)
+        : [],
+      marks: Number(full?.marks || snap?.marks) || 1,
+    });
+  }
+
+  if (keys.length === 0) return undefined;
+  const negativePenalty =
+    exam.negativeMarking?.enabled && Number(exam.negativeMarking.marksPerWrongAnswer) > 0
+      ? Number(exam.negativeMarking.marksPerWrongAnswer)
+      : 0;
+  return {
+    keys,
+    negativePenalty,
+    passMarks: Number(exam.passMarks) || 0,
+  };
 }
 
 const examKeyVault = new Map<string, SealedExamPackage>();
@@ -526,6 +1356,8 @@ app.post(
       return res.status(400).json({ error: "examId and attemptId are required" });
     }
 
+    const serverUser = (req as any).serverUser as ServerSessionUser;
+    const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser?.role || "").toLowerCase());
     let pkg: SealedExamPackage | undefined = examKeyVault.get(String(examId));
     if (!pkg && typeof sealedPayload === "string" && sealedPayload.length > 0) {
       try {
@@ -535,10 +1367,17 @@ app.post(
         return res.status(400).json({ error: "Invalid sealed answer key envelope" });
       }
     }
+    if (!pkg) {
+      pkg = resolveExamPackageFromStore(String(examId), String(attemptId));
+      if (pkg) {
+        examKeyVault.set(String(examId), pkg);
+      }
+    }
 
-    const metaList: AnswerKeyEntry[] = pkg?.keys || (Array.isArray(questionsMeta) ? questionsMeta : []);
-    const penalty = pkg ? pkg.negativePenalty : Number(reqPenalty) || 0;
-    const passMarks = pkg ? pkg.passMarks : Number(reqPassMarks) || 0;
+    const metaList: AnswerKeyEntry[] =
+      pkg?.keys || (isAdmin && Array.isArray(questionsMeta) ? questionsMeta : []);
+    const penalty = pkg ? pkg.negativePenalty : isAdmin ? Number(reqPenalty) || 0 : 0;
+    const passMarks = pkg ? pkg.passMarks : isAdmin ? Number(reqPassMarks) || 0 : 0;
     if (metaList.length === 0) {
       return res.status(404).json({ error: "Answer key vault entry not found for this exam" });
     }
@@ -783,7 +1622,7 @@ app.post("/api/gemini/quick-faq", rateLimit(10 * 60 * 1000, 30), async (req, res
 app.post(
   "/api/gemini/admin-insights",
   rateLimit(10 * 60 * 1000, 20),
-  requireAuth(ADMIN_ROLE_LIST),
+  requireAuth(FULL_ADMIN_ROLES),
   async (req, res) => {
     try {
       const { applicants } = req.body || {};
@@ -814,7 +1653,7 @@ app.post(
 app.post(
   "/api/gemini/applicant-summary",
   rateLimit(10 * 60 * 1000, 30),
-  requireAuth(ADMIN_ROLE_LIST),
+  requireAuth(FULL_ADMIN_ROLES),
   async (req, res) => {
     const { applicant } = req.body || {};
     try {
@@ -1107,7 +1946,7 @@ interface ContactInquiry {
 const contactInquiries: ContactInquiry[] = [];
 
 app.post("/api/contact", rateLimit(10 * 60 * 1000, 15), (req, res) => {
-  const { name, phone, email, subject, message } = req.body || {};
+  const { name, phone, email, subject, message, ticketId } = req.body || {};
   const clean = (v: unknown, max: number) =>
     String(v ?? "")
       .replace(/[<>]/g, "")
@@ -1119,6 +1958,7 @@ app.post("/api/contact", rateLimit(10 * 60 * 1000, 15), (req, res) => {
   const safeEmail = clean(email, 160);
   const safeSubject = clean(subject, 160) || "General Inquiry";
   const safeMessage = clean(message, 2500);
+  const safeId = clean(ticketId, 64) || `CBCC-INQ-${Date.now().toString(36).toUpperCase()}`;
 
   if (!safeName || !safePhone || !safeMessage) {
     return res.status(400).json({
@@ -1132,7 +1972,7 @@ app.post("/api/contact", rateLimit(10 * 60 * 1000, 15), (req, res) => {
   }
 
   const inquiry: ContactInquiry = {
-    id: `CBCC-INQ-${Date.now().toString(36).toUpperCase()}`,
+    id: safeId,
     name: safeName,
     phone: safePhone,
     email: safeEmail,
@@ -1153,7 +1993,7 @@ app.post("/api/contact", rateLimit(10 * 60 * 1000, 15), (req, res) => {
   });
 });
 
-app.get("/api/contact", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
+app.get("/api/contact", requireAuth(FULL_ADMIN_ROLES), (_req, res) => {
   return res.json({ inquiries: contactInquiries });
 });
 
@@ -1161,7 +2001,6 @@ app.get("/api/contact", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
 // INTERNAL PLATOON MESSENGER API (CREDENTIAL & FIREBASE SESSION COMPATIBLE)
 // =========================================================================
 
-const DATA_ROOT_DIR = path.join(process.cwd(), ".bncc-data");
 const MESSAGES_DATA_FILE = path.join(DATA_ROOT_DIR, "messages.json");
 
 interface StoredPlatoonMessage {
@@ -1296,7 +2135,7 @@ app.patch("/api/messages/:id/read", requireAuth(), (req, res) => {
   return res.json({ success: true });
 });
 
-app.delete("/api/messages/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+app.delete("/api/messages/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
   if (!verifySameOriginMutation(req)) {
     return res.status(403).json({ error: "Cross-origin request rejected" });
   }
@@ -1761,7 +2600,7 @@ app.get("/api/media/public-assets", (_req, res) => {
   return res.json({ items: buildPublicAssetCatalog() });
 });
 
-app.get("/api/media/list", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
+app.get("/api/media/list", requireAuth(FULL_ADMIN_ROLES), (_req, res) => {
   const vaultItems = readMediaMetaList();
   const publicCatalog = buildPublicAssetCatalog();
   const combined = [...vaultItems, ...publicCatalog].sort(
@@ -1773,7 +2612,7 @@ app.get("/api/media/list", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
 app.post(
   "/api/media/upload",
   rateLimit(5 * 60 * 1000, 120),
-  requireAuth(ADMIN_ROLE_LIST),
+  requireAuth(FULL_ADMIN_ROLES),
   (req, res) => {
     try {
       const serverUser = (req as any).serverUser as ServerSessionUser;
@@ -1904,7 +2743,7 @@ app.post(
   }
 );
 
-app.patch("/api/media/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+app.patch("/api/media/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
   const id = sanitizeMediaFilename(String(req.params.id || ""));
   const { title, altText, description, category, tags, visibility, fileName } = req.body || {};
 
@@ -1982,7 +2821,7 @@ app.patch("/api/media/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
   return res.json({ item: updated });
 });
 
-app.delete("/api/media/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+app.delete("/api/media/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
   const id = sanitizeMediaFilename(String(req.params.id || ""));
 
   if (id.startsWith("ext_")) {
@@ -2044,7 +2883,7 @@ app.get("/api/media/file/:fileName", (req, res) => {
   return res.sendFile(fullPath);
 });
 
-app.get("/api/media/private/:fileName", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+app.get("/api/media/private/:fileName", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
   const safeName = path.basename(String(req.params.fileName || ""));
   const fullPath = path.join(MEDIA_PRIVATE_DIR, safeName);
   if (!safeName || !fs.existsSync(fullPath)) {
@@ -2119,6 +2958,7 @@ interface StoredOnlineApplicant {
   isActive?: boolean;
   accountStatus?: string;
   attendanceStatus?: string;
+  attendanceTime?: string;
   passwordHash?: string;
   password?: string;
   createdAtIso: string;
@@ -2320,7 +3160,7 @@ app.post("/api/applications", rateLimit(10 * 60 * 1000, 30), (req, res) => {
   });
 });
 
-app.get("/api/applications", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
+app.get("/api/applications", requireAuth(FULL_ADMIN_ROLES), (_req, res) => {
   const all = readStoredApplicants()
     .map((app) => ({
       ...app,
@@ -2334,7 +3174,8 @@ app.get("/api/applications", requireAuth(ADMIN_ROLE_LIST), (_req, res) => {
 
 app.get("/api/applications/:id", requireAuth(), (req, res) => {
   const serverUser = (req as any).serverUser as ServerSessionUser;
-  const isAdminUser = ADMIN_ROLE_LIST.includes(String(serverUser.role || "").toLowerCase());
+  const callerRole = String(serverUser.role || "").toLowerCase();
+  const isAdminUser = FULL_ADMIN_ROLES.includes(callerRole) || QR_INSPECTOR_ROLES.includes(callerRole);
   const id = String(req.params.id || "").trim();
   const match = readStoredApplicants().find((a) => a.id === id || a.registrationNumber === id);
   if (!match) {
@@ -2350,7 +3191,7 @@ app.get("/api/applications/:id", requireAuth(), (req, res) => {
 app.post(
   "/api/applications/sync-batch",
   rateLimit(5 * 60 * 1000, 60),
-  requireAuth(ADMIN_ROLE_LIST),
+  requireAuth(FULL_ADMIN_ROLES),
   (req, res) => {
     if (!verifySameOriginMutation(req)) {
       return res.status(403).json({ error: "Cross-origin request rejected" });
@@ -2368,6 +3209,9 @@ app.post(
       if (!id) continue;
       const existing = map.get(id);
       const createdAtIso = resolveApplicantCreatedIso(raw);
+      const normStatus = normalizeApplicantStatus(raw.status ?? existing?.status);
+      const derivedRole =
+        normStatus === "Approved" || raw.role === "cadet" ? "cadet" : raw.role || existing?.role || "user";
       const merged: StoredOnlineApplicant = {
         ...(existing || {}),
         ...raw,
@@ -2377,8 +3221,8 @@ app.post(
         fullNameEnglish: safeCleanText(raw.fullNameEnglish || existing?.fullNameEnglish || raw.fullNameBangla, 200),
         fullNameBangla: safeCleanText(raw.fullNameBangla || existing?.fullNameBangla || raw.fullNameEnglish, 200),
         studentPhone: safeCleanText(raw.studentPhone || existing?.studentPhone, 32),
-        role: raw.role || existing?.role || "user",
-        status: normalizeApplicantStatus(raw.status ?? existing?.status),
+        role: derivedRole,
+        status: normStatus,
         createdAtIso: existing?.createdAtIso && createdAtIso === raw.createdAtIso ? existing.createdAtIso : createdAtIso,
         updatedAtIso: new Date().toISOString(),
         firestoreSynced: true,
@@ -2394,7 +3238,7 @@ app.post(
   }
 );
 
-app.patch("/api/applications/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+app.patch("/api/applications/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
   if (!verifySameOriginMutation(req)) {
     return res.status(403).json({ error: "Cross-origin request rejected" });
   }
@@ -2408,7 +3252,9 @@ app.patch("/api/applications/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
 
   const next = { ...all[idx] };
   if (status !== undefined) {
-    next.status = normalizeApplicantStatus(status);
+    const normStatus = normalizeApplicantStatus(status);
+    next.status = normStatus;
+    next.role = normStatus === "Approved" ? "cadet" : "user";
   }
   if (typeof isActive === "boolean") {
     next.isActive = isActive;
@@ -2425,7 +3271,7 @@ app.patch("/api/applications/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
   return res.json({ success: true, application: sanitizePublicApplicantOut(next) });
 });
 
-app.post("/api/applications/bulk", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+app.post("/api/applications/bulk", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
   if (!verifySameOriginMutation(req)) {
     return res.status(403).json({ error: "Cross-origin request rejected" });
   }
@@ -2440,14 +3286,17 @@ app.post("/api/applications/bulk", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
     all = all.filter((a) => !idSet.has(a.id));
   } else {
     const nextStatus = action === "Approve" ? "Approved" : "Rejected";
+    const nextRole = action === "Approve" ? "cadet" : "user";
     const nowIso = new Date().toISOString();
-    all = all.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus, updatedAtIso: nowIso } : a));
+    all = all.map((a) =>
+      idSet.has(a.id) ? { ...a, status: nextStatus, role: nextRole, updatedAtIso: nowIso } : a
+    );
   }
   writeStoredApplicants(all);
   return res.json({ success: true });
 });
 
-app.delete("/api/applications/:id", requireAuth(ADMIN_ROLE_LIST), (req, res) => {
+app.delete("/api/applications/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
   if (!verifySameOriginMutation(req)) {
     return res.status(403).json({ error: "Cross-origin request rejected" });
   }
@@ -2475,25 +3324,952 @@ app.post("/api/auth/cadet-login", rateLimit(10 * 60 * 1000, 30), async (req, res
     return res.status(404).json({ error: "আবেদনকারী খুঁজে পাওয়া যায়নি।" });
   }
   if (match.isActive === false || match.accountStatus === "Suspended") {
-    return res.status(403).json({ error: "আপনার ক্যাডেট অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে।" });
+    return res.status(403).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে।" });
   }
   const storedHash = match.passwordHash || match.password || "";
   if (!storedHash || !(await bcrypt.compare(cleanPw, storedHash))) {
     return res.status(401).json({ error: "ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।" });
   }
 
+  const st = String(match.status || "").toLowerCase();
+  const derivedRole = st === "approved" || st === "joined" || match.role === "cadet" ? "cadet" : "user";
+
   const cadetUser: ServerSessionUser = {
     id: match.id,
     uid: match.ownerUid && match.ownerUid !== "public_applicant" ? match.ownerUid : undefined,
     email: match.studentEmail || null,
-    name: match.fullNameEnglish || match.fullNameBangla || "BNCC Cadet",
-    role: match.role || "cadet",
+    name: match.fullNameEnglish || match.fullNameBangla || "BNCC Member",
+    role: derivedRole,
     registrationNumber: match.registrationNumber || match.id,
     authSource: "credential",
     exp: Date.now() + 1000 * 60 * 60 * 12,
   };
-  setSessionCookie(res, cadetUser, req);
-  return res.json({ authenticated: true, user: cadetUser });
+  (cadetUser as any).applicantId = match.id;
+  const token = setSessionCookie(res, cadetUser, req);
+  return res.json({ authenticated: true, user: cadetUser, token });
+});
+
+// =========================================================================
+// EXAMINATION SUBSYSTEM SERVER API (CREDENTIAL & FIREBASE DUAL-SYNC)
+// =========================================================================
+
+function isExamAttemptOwner(attempt: any, user: ServerSessionUser): boolean {
+  const callerKeys = new Set(
+    [user.uid, user.id, user.registrationNumber].filter(Boolean).map(String)
+  );
+  return Boolean(
+    (attempt?.ownerUid && callerKeys.has(String(attempt.ownerUid))) ||
+      (attempt?.userId && callerKeys.has(String(attempt.userId))) ||
+      (attempt?.candidateId && callerKeys.has(String(attempt.candidateId)))
+  );
+}
+
+function appendExamActivityInternal(
+  store: StoredExamData,
+  log: { action: string; targetId: string; actorId: string; details: string }
+) {
+  store.activityLogs.unshift({
+    id: `log_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`,
+    ...log,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+// --- Question Bank (Admin Only) ---
+app.get("/api/exam/questions", requireAuth(EXAM_ADMIN_ROLES), (_req, res) => {
+  const store = readExamStore();
+  const questions = [...store.questions].sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+  return res.json({ questions });
+});
+
+app.post("/api/exam/questions", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const body = req.body || {};
+  if (!body.question || !body.subject) {
+    return res.status(400).json({ error: "Subject and question are required" });
+  }
+  const store = readExamStore();
+  const now = new Date().toISOString();
+  const id =
+    typeof body.id === "string" && body.id.trim().length > 0
+      ? body.id.trim().slice(0, 128)
+      : `q_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
+  const item = {
+    ...body,
+    id,
+    isActive: body.isActive ?? true,
+    createdBy: body.createdBy || serverUser.username || serverUser.id || "admin",
+    createdAt: body.createdAt || now,
+    updatedAt: now,
+  };
+  const existingIdx = store.questions.findIndex((q) => q.id === id);
+  if (existingIdx >= 0) {
+    store.questions[existingIdx] = item;
+  } else {
+    store.questions.unshift(item);
+    appendExamActivityInternal(store, {
+      action: "QUESTION_CREATED",
+      targetId: id,
+      actorId: String(item.createdBy),
+      details: `Created question: ${String(item.question).substring(0, 40)}... (${item.subject} - ${item.questionType || "mcq"})`,
+    });
+  }
+  writeExamStore(store);
+  return res.status(201).json({ id, question: item });
+});
+
+app.post("/api/exam/questions/bulk", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  if (items.length === 0) {
+    return res.status(400).json({ error: "Questions items array is required" });
+  }
+  const store = readExamStore();
+  const now = new Date().toISOString();
+  const actorId = String(req.body?.actorId || serverUser.username || serverUser.id || "admin");
+  const existingMap = new Map<string, number>();
+  store.questions.forEach((q, idx) => existingMap.set(q.id, idx));
+
+  const insertedIds: string[] = [];
+  for (const raw of items.slice(0, 1000)) {
+    if (!raw || typeof raw !== "object" || !raw.question) continue;
+    const id =
+      typeof raw.id === "string" && raw.id.trim().length > 0
+        ? raw.id.trim().slice(0, 128)
+        : `q_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const record = {
+      ...raw,
+      id,
+      isActive: raw.isActive ?? true,
+      createdAt: raw.createdAt || now,
+      updatedAt: now,
+    };
+    const idx = existingMap.get(id);
+    if (idx !== undefined) {
+      store.questions[idx] = record;
+    } else {
+      store.questions.unshift(record);
+      existingMap.set(id, store.questions.length - 1);
+    }
+    insertedIds.push(id);
+  }
+  appendExamActivityInternal(store, {
+    action: "QUESTION_IMPORTED",
+    targetId: "bulk",
+    actorId,
+    details: `Successfully bulk imported ${insertedIds.length} questions into Question Bank.`,
+  });
+  writeExamStore(store);
+  return res.status(201).json({ count: insertedIds.length, ids: insertedIds });
+});
+
+app.patch("/api/exam/questions/:id", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const id = String(req.params.id || "").trim();
+  const store = readExamStore();
+  const idx = store.questions.findIndex((q) => q.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Question not found" });
+  }
+  const updates = { ...(req.body || {}) };
+  delete updates.id;
+  const now = new Date().toISOString();
+  store.questions[idx] = {
+    ...store.questions[idx],
+    ...updates,
+    id,
+    updatedAt: now,
+  };
+  appendExamActivityInternal(store, {
+    action: "QUESTION_UPDATED",
+    targetId: id,
+    actorId: String(updates.actorId || serverUser.username || serverUser.id || "admin"),
+    details: `Updated question ID ${id}`,
+  });
+  writeExamStore(store);
+  return res.json({ question: store.questions[idx] });
+});
+
+app.delete("/api/exam/questions/:id", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const id = String(req.params.id || "").trim();
+  const soft = req.query.soft !== "false";
+  const store = readExamStore();
+  const idx = store.questions.findIndex((q) => q.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Question not found" });
+  }
+  if (soft) {
+    store.questions[idx] = {
+      ...store.questions[idx],
+      isActive: false,
+      updatedAt: new Date().toISOString(),
+    };
+  } else {
+    store.questions.splice(idx, 1);
+  }
+  appendExamActivityInternal(store, {
+    action: "QUESTION_DELETED",
+    targetId: id,
+    actorId: String(serverUser.username || serverUser.id || "admin"),
+    details: `${soft ? "Soft deleted" : "Permanently deleted"} question ID ${id}`,
+  });
+  writeExamStore(store);
+  return res.json({ success: true });
+});
+
+// --- Exams Lifecycle ---
+app.get("/api/exam/exams", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const store = readExamStore();
+  let items = [...store.exams].sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+  if (!isAdmin) {
+    items = items.filter((e) => e.status === "published" || e.status === "live");
+  }
+  return res.json({ exams: items.map((e) => sanitizeExamForCaller(e, isAdmin)) });
+});
+
+app.get("/api/exam/exams/:id", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const id = String(req.params.id || "").trim();
+  const store = readExamStore();
+  const exam = store.exams.find((e) => e.id === id);
+  if (!exam) {
+    return res.status(404).json({ error: "Exam not found" });
+  }
+  if (!isAdmin && exam.status !== "published" && exam.status !== "live") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  return res.json({ exam: sanitizeExamForCaller(exam, isAdmin) });
+});
+
+app.post("/api/exam/exams", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const body = req.body || {};
+  if (!body.title) {
+    return res.status(400).json({ error: "Exam title is required" });
+  }
+  const store = readExamStore();
+  const now = new Date().toISOString();
+  const id =
+    typeof body.id === "string" && body.id.trim().length > 0
+      ? body.id.trim().slice(0, 128)
+      : `exam_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
+  let rawSnapshots: any[] = Array.isArray(body.questionSnapshots) ? body.questionSnapshots : [];
+  if (rawSnapshots.length === 0 && Array.isArray(body.selectedQuestionIds) && body.selectedQuestionIds.length > 0) {
+    const idSet = new Set(body.selectedQuestionIds.map(String));
+    rawSnapshots = store.questions.filter((q) => idSet.has(String(q.id)));
+  }
+
+  const totalMarks =
+    rawSnapshots.length > 0
+      ? rawSnapshots.reduce((acc, q) => acc + (Number(q.marks) || 1), 0)
+      : Number(body.totalMarks) || 100;
+  const negativePenalty =
+    body.negativeMarking?.enabled && Number(body.negativeMarking.marksPerWrongAnswer) > 0
+      ? Number(body.negativeMarking.marksPerWrongAnswer)
+      : 0;
+  const passMarks = Number(body.passMarks) || 0;
+
+  let sealedKeyEnvelope = body.sealedKeyEnvelope;
+  if (rawSnapshots.length > 0 && rawSnapshots.some((q) => q.correctAnswer !== undefined)) {
+    const keyEntries: AnswerKeyEntry[] = rawSnapshots.map((q) => ({
+      id: String(q.id),
+      questionType: String(q.questionType || "mcq"),
+      correctAnswer: q.correctAnswer ?? "",
+      acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers.map(String) : [],
+      marks: Number(q.marks) || 1,
+    }));
+    const pkg: SealedExamPackage = { keys: keyEntries, negativePenalty, passMarks };
+    examKeyVault.set(id, pkg);
+    sealedKeyEnvelope = sealKeys(pkg);
+  }
+
+  const exam = {
+    ...body,
+    id,
+    totalMarks,
+    questionSnapshots: rawSnapshots.map(stripExamQuestionKeysServer),
+    ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
+    createdBy: body.createdBy || serverUser.username || serverUser.id || "admin",
+    createdAt: body.createdAt || now,
+    updatedAt: now,
+  };
+
+  const idx = store.exams.findIndex((e) => e.id === id);
+  if (idx >= 0) {
+    store.exams[idx] = exam;
+  } else {
+    store.exams.unshift(exam);
+    appendExamActivityInternal(store, {
+      action: "EXAM_CREATED",
+      targetId: id,
+      actorId: String(exam.createdBy),
+      details: `Created exam '${exam.title}' (${rawSnapshots.length} questions, Total Marks: ${totalMarks})`,
+    });
+  }
+  writeExamStore(store);
+  return res.status(201).json({ id, exam });
+});
+
+app.patch("/api/exam/exams/:id", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const id = String(req.params.id || "").trim();
+  const store = readExamStore();
+  const idx = store.exams.findIndex((e) => e.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Exam not found" });
+  }
+  const existing = store.exams[idx];
+  const updates = { ...(req.body || {}) };
+  delete updates.id;
+
+  let snapshots: any[] = Array.isArray(updates.questionSnapshots)
+    ? updates.questionSnapshots
+    : Array.isArray(existing.questionSnapshots)
+    ? existing.questionSnapshots
+    : [];
+  if (updates.questionSelectionMode === "manual" && Array.isArray(updates.selectedQuestionIds)) {
+    const idSet = new Set(updates.selectedQuestionIds.map(String));
+    snapshots = store.questions.filter((q) => idSet.has(String(q.id)));
+  } else if (snapshots.length > 0) {
+    const qMap = new Map(store.questions.map((q) => [String(q.id), q]));
+    snapshots = snapshots.map((q) => qMap.get(String(q.id)) || q);
+  }
+
+  const totalMarks =
+    snapshots.length > 0
+      ? snapshots.reduce((acc, q) => acc + (Number(q.marks) || 1), 0)
+      : Number(updates.totalMarks ?? existing.totalMarks) || 100;
+  const negConfig = updates.negativeMarking ?? existing.negativeMarking;
+  const negativePenalty =
+    negConfig?.enabled && Number(negConfig.marksPerWrongAnswer) > 0
+      ? Number(negConfig.marksPerWrongAnswer)
+      : 0;
+  const passMarks = Number(updates.passMarks ?? existing.passMarks) || 0;
+
+  let sealedKeyEnvelope = updates.sealedKeyEnvelope || existing.sealedKeyEnvelope;
+  if (snapshots.length > 0 && snapshots.some((q) => q.correctAnswer !== undefined)) {
+    const keyEntries: AnswerKeyEntry[] = snapshots.map((q) => ({
+      id: String(q.id),
+      questionType: String(q.questionType || "mcq"),
+      correctAnswer: q.correctAnswer ?? "",
+      acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers.map(String) : [],
+      marks: Number(q.marks) || 1,
+    }));
+    const pkg: SealedExamPackage = { keys: keyEntries, negativePenalty, passMarks };
+    examKeyVault.set(id, pkg);
+    sealedKeyEnvelope = sealKeys(pkg);
+  }
+
+  const nextExam = {
+    ...existing,
+    ...updates,
+    id,
+    totalMarks,
+    questionSnapshots: snapshots.map(stripExamQuestionKeysServer),
+    ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
+    updatedAt: new Date().toISOString(),
+  };
+  store.exams[idx] = nextExam;
+  appendExamActivityInternal(store, {
+    action: updates.status === "published" && existing.status !== "published" ? "EXAM_PUBLISHED" : "EXAM_UPDATED",
+    targetId: id,
+    actorId: String(serverUser.username || serverUser.id || "admin"),
+    details:
+      updates.status === "published" && existing.status !== "published"
+        ? `Published exam '${nextExam.title}'`
+        : `Updated exam '${nextExam.title}'`,
+  });
+  writeExamStore(store);
+  return res.json({ exam: nextExam });
+});
+
+app.delete("/api/exam/exams/:id", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const id = String(req.params.id || "").trim();
+  const store = readExamStore();
+  const next = store.exams.filter((e) => e.id !== id);
+  if (next.length === store.exams.length) {
+    return res.status(404).json({ error: "Exam not found" });
+  }
+  store.exams = next;
+  appendExamActivityInternal(store, {
+    action: "EXAM_UPDATED",
+    targetId: id,
+    actorId: String(serverUser.username || serverUser.id || "admin"),
+    details: `Deleted exam ID ${id}`,
+  });
+  writeExamStore(store);
+  return res.json({ success: true });
+});
+
+// --- Attempts & Answer Scripts ---
+app.get("/api/exam/attempts", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const examIdFilter = req.query.examId ? String(req.query.examId) : undefined;
+  const store = readExamStore();
+  let items = [...store.attempts].sort(
+    (a, b) => new Date(b.createdAt || b.startedAt || 0).getTime() - new Date(a.createdAt || a.startedAt || 0).getTime()
+  );
+  if (!isAdmin) {
+    items = items.filter((a) => isExamAttemptOwner(a, serverUser));
+  }
+  if (examIdFilter && examIdFilter !== "ALL") {
+    items = items.filter((a) => a.examId === examIdFilter);
+  }
+  return res.json({ attempts: items });
+});
+
+app.get("/api/exam/attempts/:id", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const id = String(req.params.id || "").trim();
+  const store = readExamStore();
+  const attempt = store.attempts.find((a) => a.id === id);
+  if (!attempt) {
+    return res.status(404).json({ error: "Attempt not found" });
+  }
+  if (!isAdmin && !isExamAttemptOwner(attempt, serverUser)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  return res.json({ attempt });
+});
+
+app.post("/api/exam/attempts", requireAuth(), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const body = req.body || {};
+  const examId = String(body.examId || "").trim();
+  if (!examId) {
+    return res.status(400).json({ error: "examId is required" });
+  }
+
+  const store = readExamStore();
+  const callerOwnerUid = String(serverUser.uid || serverUser.id);
+  const callerUserId = String(body.userId || serverUser.id);
+  const callerCandidateId = String(body.candidateId || serverUser.id);
+
+  // If mirroring an already-created Firestore attempt (matching id), store safely
+  if (typeof body.id === "string" && body.id.trim().length > 0) {
+    const mirrorId = body.id.trim().slice(0, 128);
+    const existingIdx = store.attempts.findIndex((a) => a.id === mirrorId);
+    const sanitizedSnapshot = Array.isArray(body.questionSnapshot)
+      ? body.questionSnapshot.map(stripExamQuestionKeysServer)
+      : [];
+    const mirrored = {
+      ...body,
+      id: mirrorId,
+      ownerUid: isAdmin ? body.ownerUid || callerOwnerUid : callerOwnerUid,
+      questionSnapshot: sanitizedSnapshot,
+    };
+    if (existingIdx >= 0) {
+      store.attempts[existingIdx] = mirrored;
+    } else {
+      store.attempts.unshift(mirrored);
+    }
+    writeExamStore(store);
+    return res.status(201).json({ attempt: mirrored });
+  }
+
+  const exam = store.exams.find((e) => e.id === examId);
+  if (!exam) {
+    return res.status(404).json({ error: "পরীক্ষাটি পাওয়া যায়নি (Exam not found)." });
+  }
+  if (exam.status !== "published" && exam.status !== "live") {
+    return res.status(400).json({ error: "পরীক্ষাটি বর্তমানে সক্রিয় নয় (Exam is not active)." });
+  }
+
+  const callerAttempts = store.attempts.filter(
+    (a) => a.examId === examId && isExamAttemptOwner(a, serverUser)
+  );
+  const inProgress = callerAttempts.find((a) => a.status === "in_progress");
+  if (inProgress) {
+    return res.json({ attempt: inProgress });
+  }
+
+  const completedCount = callerAttempts.filter(
+    (a) => a.status === "submitted" || a.status === "auto_submitted" || a.status === "expired"
+  ).length;
+  if (exam.maxAttempts > 0 && completedCount >= exam.maxAttempts) {
+    return res.status(400).json({
+      error: `আপনার সর্বোচ্চ Attempt (${exam.maxAttempts} টি) পূর্ণ হয়ে গেছে।`,
+    });
+  }
+
+  let questions: any[] = Array.isArray(exam.questionSnapshots) ? [...exam.questionSnapshots] : [];
+  if (questions.length === 0 && Array.isArray(exam.selectedQuestionIds) && exam.selectedQuestionIds.length > 0) {
+    const idSet = new Set(exam.selectedQuestionIds.map(String));
+    questions = store.questions.filter((q) => idSet.has(String(q.id)));
+  }
+  if (questions.length === 0 && Array.isArray(exam.randomRules) && exam.randomRules.length > 0) {
+    const usedIds = new Set<string>();
+    const activeQ = store.questions.filter((q) => q.isActive !== false);
+    for (const rule of exam.randomRules) {
+      let pool = activeQ.filter((q) => q.subject === rule.subject && !usedIds.has(q.id));
+      if (rule.questionType) pool = pool.filter((q) => q.questionType === rule.questionType);
+      const shuffled = [...pool].sort(() => 0.5 - Math.random());
+      const take = Math.min(Number(rule.count) || 0, shuffled.length);
+      for (let i = 0; i < take; i++) {
+        questions.push(shuffled[i]);
+        usedIds.add(shuffled[i].id);
+      }
+    }
+  }
+  if (questions.length === 0) {
+    return res.status(400).json({
+      error: "পরীক্ষায় কোনো প্রশ্ন যুক্ত করা হয়নি। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।",
+    });
+  }
+
+  const normalizedQuestions = questions.map((q) => ({
+    ...stripExamQuestionKeysServer(q),
+    question:
+      q.question || q.questionText || q.question_text || q.text || q.title || q.content || q.name || "Question text unavailable",
+  }));
+  if (exam.shuffleQuestions) {
+    normalizedQuestions.sort(() => 0.5 - Math.random());
+  }
+
+  const now = new Date().toISOString();
+  const attemptId = `att_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  const attempt = {
+    id: attemptId,
+    examId,
+    examTitle: exam.title,
+    candidateId: callerCandidateId,
+    userId: callerUserId,
+    ownerUid: callerOwnerUid,
+    registrationNumber: String(body.registrationNumber || serverUser.registrationNumber || callerCandidateId),
+    candidateName: String(body.candidateName || serverUser.name || "Candidate"),
+    candidatePhoto: String(body.candidatePhoto || ""),
+    session: String(body.session || ""),
+    collegeName: String(body.collegeName || ""),
+    startedAt: now,
+    status: "in_progress",
+    questionSnapshot: normalizedQuestions,
+    answers: {},
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  store.attempts.unshift(attempt);
+  appendExamActivityInternal(store, {
+    action: "EXAM_STARTED",
+    targetId: examId,
+    actorId: callerUserId,
+    details: `Candidate '${attempt.candidateName}' (${callerUserId}) started attempt on '${exam.title}'`,
+  });
+  writeExamStore(store);
+  return res.status(201).json({ attempt });
+});
+
+app.post("/api/exam/attempts/:id/answers", requireAuth(), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const id = String(req.params.id || "").trim();
+  const { questionId, selectedAnswer, isMarkedForReview } = req.body || {};
+  if (!questionId) {
+    return res.status(400).json({ error: "questionId is required" });
+  }
+
+  const store = readExamStore();
+  const idx = store.attempts.findIndex((a) => a.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Attempt not found" });
+  }
+  const attempt = store.attempts[idx];
+  if (!isAdmin && !isExamAttemptOwner(attempt, serverUser)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  if (!isAdmin && attempt.status !== "in_progress") {
+    return res.status(400).json({ error: "Attempt is already submitted" });
+  }
+
+  const now = new Date().toISOString();
+  store.attempts[idx] = {
+    ...attempt,
+    answers: {
+      ...(attempt.answers || {}),
+      [String(questionId)]: {
+        questionId: String(questionId),
+        selectedAnswer,
+        answeredAt: now,
+        isMarkedForReview: Boolean(isMarkedForReview),
+      },
+    },
+    updatedAt: now,
+  };
+  writeExamStore(store);
+  return res.json({ success: true });
+});
+
+app.patch("/api/exam/attempts/:id", requireAuth(), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const id = String(req.params.id || "").trim();
+  const store = readExamStore();
+  const idx = store.attempts.findIndex((a) => a.id === id);
+  if (idx < 0) {
+    return res.status(404).json({ error: "Attempt not found" });
+  }
+  const existing = store.attempts[idx];
+  const updates = { ...(req.body || {}) };
+  delete updates.id;
+
+  if (!isAdmin) {
+    if (!isExamAttemptOwner(existing, serverUser)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (existing.status !== "in_progress") {
+      return res.status(400).json({ error: "Submitted attempt cannot be modified by candidate" });
+    }
+    if (updates.status && updates.status !== "in_progress") {
+      if (updates.status !== "submitted") {
+        return res.status(403).json({ error: "Invalid status transition" });
+      }
+      const sigData = updates.resultSignature ? verifySignedToken<any>(String(updates.resultSignature)) : null;
+      if (
+        !sigData ||
+        sigData.examId !== existing.examId ||
+        sigData.attemptId !== existing.id ||
+        Number(sigData.obtainedObjectiveMarks) !== Number(updates.score)
+      ) {
+        return res.status(403).json({ error: "Valid server grading signature is required to submit attempt score" });
+      }
+      store.attempts[idx] = {
+        ...existing,
+        status: "submitted",
+        isAutoSubmitted: Boolean(updates.isAutoSubmitted),
+        gradingStatus: updates.gradingStatus || "graded",
+        resultSignature: updates.resultSignature,
+        submittedAt: updates.submittedAt || new Date().toISOString(),
+        score: Number(sigData.obtainedObjectiveMarks),
+        percentage: Number(updates.percentage) || 0,
+        correctCount: Number(updates.correctCount) || 0,
+        wrongCount: Number(updates.wrongCount) || 0,
+        unansweredCount: Number(updates.unansweredCount) || 0,
+        isPassed: Boolean(updates.isPassed),
+        updatedAt: new Date().toISOString(),
+      };
+    } else if (updates.answers && typeof updates.answers === "object") {
+      store.attempts[idx] = {
+        ...existing,
+        answers: updates.answers,
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      return res.status(403).json({ error: "Insufficient permissions for requested update" });
+    }
+  } else {
+    store.attempts[idx] = {
+      ...existing,
+      ...updates,
+      id,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  writeExamStore(store);
+  return res.json({ attempt: store.attempts[idx] });
+});
+
+app.delete("/api/exam/attempts/:id", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const id = String(req.params.id || "").trim();
+  const store = readExamStore();
+  const target = store.attempts.find((a) => a.id === id);
+  if (!target) {
+    return res.status(404).json({ error: "Attempt not found" });
+  }
+  store.attempts = store.attempts.filter((a) => a.id !== id);
+  store.results = store.results.filter((r) => r.attemptId !== id);
+  appendExamActivityInternal(store, {
+    action: "EXAM_DELETED",
+    targetId: String(target.examId || id),
+    actorId: String(serverUser.username || serverUser.id || "admin"),
+    details: `Deleted answer script / attempt ${id} for candidate ${target.candidateName || target.candidateId}`,
+  });
+  writeExamStore(store);
+  return res.json({ success: true });
+});
+
+// --- Exam Results ---
+app.get("/api/exam/results", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const examIdFilter = req.query.examId ? String(req.query.examId) : undefined;
+  const attemptIdFilter = req.query.attemptId ? String(req.query.attemptId) : undefined;
+  const isLeaderboard = req.query.leaderboard === "true";
+
+  const store = readExamStore();
+  let items = [...store.results].sort(
+    (a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
+  );
+
+  if (attemptIdFilter) {
+    items = items.filter((r) => r.attemptId === attemptIdFilter);
+    if (!isAdmin) {
+      items = items.filter((r) => isExamAttemptOwner(r, serverUser));
+    }
+    return res.json({ results: items });
+  }
+
+  if (examIdFilter && examIdFilter !== "ALL") {
+    items = items.filter((r) => r.examId === examIdFilter);
+  }
+
+  if (isAdmin) {
+    return res.json({ results: items });
+  }
+
+  if (isLeaderboard && store.settings?.showLeaderboardToStudents !== false) {
+    const publicBoard = items.map((r) => ({
+      id: r.id,
+      examId: r.examId,
+      examTitle: r.examTitle,
+      attemptId: r.attemptId,
+      registrationNumber: r.registrationNumber,
+      candidateName: r.candidateName,
+      score: r.score,
+      totalMarks: r.totalMarks,
+      percentage: r.percentage,
+      passMarks: r.passMarks,
+      isPassed: r.isPassed,
+      timeTakenSeconds: r.timeTakenSeconds,
+      submittedAt: r.submittedAt,
+    }));
+    return res.json({ results: publicBoard });
+  }
+
+  return res.json({ results: items.filter((r) => isExamAttemptOwner(r, serverUser)) });
+});
+
+app.post("/api/exam/results", requireAuth(), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const body = req.body || {};
+  if (!body.attemptId || !body.examId) {
+    return res.status(400).json({ error: "attemptId and examId are required" });
+  }
+
+  if (!isAdmin) {
+    const sigData = body.resultSignature ? verifySignedToken<any>(String(body.resultSignature)) : null;
+    if (
+      !sigData ||
+      sigData.examId !== body.examId ||
+      sigData.attemptId !== body.attemptId ||
+      Number(sigData.obtainedObjectiveMarks) !== Number(body.score)
+    ) {
+      return res.status(403).json({ error: "Valid server grading signature is required" });
+    }
+  }
+
+  const store = readExamStore();
+  const id =
+    typeof body.id === "string" && body.id.trim().length > 0
+      ? body.id.trim().slice(0, 128)
+      : `res_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  const callerOwner = String(serverUser.uid || serverUser.id);
+  const record = {
+    ...body,
+    id,
+    ownerUid: isAdmin ? body.ownerUid || callerOwner : callerOwner,
+    submittedAt: body.submittedAt || new Date().toISOString(),
+  };
+
+  const idx = store.results.findIndex((r) => r.attemptId === record.attemptId || r.id === id);
+  if (idx >= 0) {
+    store.results[idx] = { ...store.results[idx], ...record, id: store.results[idx].id };
+  } else {
+    store.results.unshift(record);
+  }
+  appendExamActivityInternal(store, {
+    action: "EXAM_STOPPED",
+    targetId: String(record.examId),
+    actorId: String(record.userId || callerOwner),
+    details: `Candidate '${record.candidateName || "Candidate"}' submitted attempt for '${record.examTitle || record.examId}' (Score: ${record.score}/${record.totalMarks}, ${record.isPassed ? "PASSED" : "FAILED"})`,
+  });
+  writeExamStore(store);
+  return res.status(201).json({ result: idx >= 0 ? store.results[idx] : record });
+});
+
+// --- Exam Settings & Logs ---
+app.get("/api/exam/settings", requireAuth(), (_req, res) => {
+  const store = readExamStore();
+  return res.json({ settings: store.settings || getDefaultExamSettings() });
+});
+
+app.put("/api/exam/settings", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const store = readExamStore();
+  const next = {
+    ...(store.settings || getDefaultExamSettings()),
+    ...(req.body || {}),
+    id: "global",
+    updatedAt: new Date().toISOString(),
+    updatedBy: String(req.body?.updatedBy || serverUser.username || serverUser.id || "admin"),
+  };
+  store.settings = next;
+  appendExamActivityInternal(store, {
+    action: "EXAM_SETTINGS_UPDATED",
+    targetId: "global",
+    actorId: String(next.updatedBy),
+    details: "Updated global examination system settings.",
+  });
+  writeExamStore(store);
+  return res.json({ settings: next });
+});
+
+app.get("/api/exam/logs", requireAuth(EXAM_ADMIN_ROLES), (_req, res) => {
+  const store = readExamStore();
+  return res.json({ logs: store.activityLogs.slice(0, 100) });
+});
+
+app.post("/api/exam/logs", requireAuth(), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const { action, targetId, actorId, details } = req.body || {};
+  if (!action || !details) {
+    return res.status(400).json({ error: "action and details are required" });
+  }
+  const store = readExamStore();
+  appendExamActivityInternal(store, {
+    action: String(action).slice(0, 80),
+    targetId: String(targetId || "global").slice(0, 128),
+    actorId: String(actorId || serverUser.id || "user").slice(0, 128),
+    details: String(details).slice(0, 500),
+  });
+  writeExamStore(store);
+  return res.status(201).json({ success: true });
+});
+
+app.get("/api/exam/audit-logs", requireAuth(), (req, res) => {
+  const serverUser = (req as any).serverUser as ServerSessionUser;
+  const isAdmin = EXAM_ADMIN_ROLES.includes(String(serverUser.role || "").toLowerCase());
+  const attemptId = String(req.query.attemptId || "").trim();
+  const store = readExamStore();
+
+  if (!isAdmin) {
+    if (!attemptId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const attempt = store.attempts.find((a) => a.id === attemptId);
+    if (!attempt || !isExamAttemptOwner(attempt, serverUser)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+  }
+
+  let logs = store.auditLogs;
+  if (attemptId) {
+    logs = logs.filter((l) => l.attemptId === attemptId);
+  }
+  return res.json({
+    logs: [...logs].sort(
+      (a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+    ),
+  });
+});
+
+app.post("/api/exam/audit-logs", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const body = req.body || {};
+  const store = readExamStore();
+  const entry = {
+    ...body,
+    id: body.id || `audit_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`,
+    timestamp: body.timestamp || new Date().toISOString(),
+  };
+  store.auditLogs.unshift(entry);
+  writeExamStore(store);
+  return res.status(201).json({ log: entry });
+});
+
+// --- Batch Mirror from Firebase-Authenticated Admin to Server Store ---
+app.post("/api/exam/sync-batch", requireAuth(EXAM_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
+  const { questions, exams, attempts, results, settings } = req.body || {};
+  const store = readExamStore();
+
+  const mergeById = (existing: any[], incoming: any[], sanitizeSnap = false) => {
+    const map = new Map<string, any>();
+    for (const item of existing) {
+      if (item?.id) map.set(String(item.id), item);
+    }
+    for (const item of incoming) {
+      if (!item?.id) continue;
+      const nextItem = sanitizeSnap && Array.isArray(item.questionSnapshots)
+        ? { ...item, questionSnapshots: item.questionSnapshots.map(stripExamQuestionKeysServer) }
+        : item;
+      map.set(String(item.id), { ...(map.get(String(item.id)) || {}), ...nextItem });
+    }
+    return Array.from(map.values());
+  };
+
+  if (Array.isArray(questions)) store.questions = mergeById(store.questions, questions);
+  if (Array.isArray(exams)) store.exams = mergeById(store.exams, exams, true);
+  if (Array.isArray(attempts)) store.attempts = mergeById(store.attempts, attempts);
+  if (Array.isArray(results)) store.results = mergeById(store.results, results);
+  if (settings && typeof settings === "object") {
+    store.settings = { ...(store.settings || getDefaultExamSettings()), ...settings, id: "global" };
+  }
+
+  writeExamStore(store);
+  return res.json({ success: true });
 });
 
 app.get("/api/exam/health", (_req, res) => {

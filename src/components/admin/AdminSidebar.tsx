@@ -106,6 +106,7 @@ interface AdminSidebarProps {
   adminRole?: string;
   pendingApplicantsCount?: number;
   pendingResetsCount?: number;
+  unreadInquiriesCount?: number;
   canViewLogs?: boolean;
   isSuperAdmin?: boolean;
   onLogout: () => void;
@@ -122,6 +123,7 @@ export function AdminSidebar({
   adminRole = "super_admin",
   pendingApplicantsCount = 0,
   pendingResetsCount = 0,
+  unreadInquiriesCount = 0,
   canViewLogs = true,
   isSuperAdmin = true,
   onLogout,
@@ -176,7 +178,12 @@ export function AdminSidebar({
     badge?: number;
     disabled?: boolean;
   }> = [
-    { id: "notifications", label: "Notifications", icon: Bell },
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: Bell,
+      badge: unreadInquiriesCount > 0 ? unreadInquiriesCount : undefined,
+    },
     { id: "logs", label: "Activity Logs", icon: History, disabled: !canViewLogs },
     { id: "settings", label: "Settings", icon: Settings },
     {

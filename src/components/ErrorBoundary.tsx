@@ -28,6 +28,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   private handleReset = () => {
+    try {
+      sessionStorage.removeItem("cbcc_lazy_reload_ts");
+    } catch {
+      // ignore
+    }
     this.setState({ hasError: false, error: null });
     window.location.reload();
   };
@@ -36,6 +41,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       let errorMessage = "An unexpected error occurred.";
       let isFirestoreError = false;
+      let isModuleLoadError = false;
 
       try {
         if (this.state.error?.message) {
@@ -45,8 +51,18 @@ export class ErrorBoundary extends React.Component<Props, State> {
             errorMessage = `Firestore Error: ${parsed.error} (${parsed.operationType} on ${parsed.path})`;
           }
         }
-      } catch (e) {
+      } catch {
         errorMessage = this.state.error?.message || errorMessage;
+      }
+
+      const lowerMsg = errorMessage.toLowerCase();
+      if (
+        lowerMsg.includes("dynamically imported module") ||
+        lowerMsg.includes("importing a module script failed") ||
+        lowerMsg.includes("chunkloaderror") ||
+        lowerMsg.includes("loading chunk")
+      ) {
+        isModuleLoadError = true;
       }
 
       return (
@@ -55,9 +71,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-8 h-8 text-[#002147]" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Oops! Something went wrong</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              {isModuleLoadError ? "Portal Update Available" : "Oops! Something went wrong"}
+            </h2>
             <p className="text-slate-600 mb-6 text-sm leading-relaxed">
-              {isFirestoreError
+              {isModuleLoadError
+                ? "The portal was updated or the connection was interrupted while loading this page. Reload to get the latest version."
+                : isFirestoreError
                 ? "There was a problem communicating with the database."
                 : "We encountered an unexpected error while processing your request."}
             </p>
@@ -71,7 +91,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               className="w-full flex items-center justify-center gap-2 bg-[#002147] hover:bg-[#0B2545] text-white font-bold py-3.5 px-6 rounded-2xl transition-all shadow-lg cursor-pointer"
             >
               <RefreshCcw className="w-4 h-4" />
-              Try Again
+              {isModuleLoadError ? "Reload Portal" : "Try Again"}
             </button>
           </div>
         </div>

@@ -47,7 +47,7 @@ export interface GuideContent {
   updatedAt?: any;
 }
 
-const DEFAULT_GUIDE_DATA: GuideContent = {
+export const DEFAULT_GUIDE_DATA: GuideContent = {
   title: "অনলাইন ভর্তি আবেদন নির্দেশিকা ও নিয়মাবলী (OFFICIAL APPLICANT GUIDE)",
   refNumber: "CBCC-BNCC-GUIDE-2026",
   publishDate: "",

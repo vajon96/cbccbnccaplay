@@ -17,6 +17,7 @@ import {
   CMSBackupData 
 } from "../types/cms";
 import { CMSService } from "../services/cmsService";
+import { db, doc, onSnapshot } from "../firebase";
 import { 
   DEFAULT_CMS_SETTINGS, 
   DEFAULT_UNIVERSAL_TEXT_ITEMS, 
@@ -132,6 +133,19 @@ export const CMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     refreshAll();
+    const unsubSettings = onSnapshot(
+      doc(db, "system_settings", "portal_config"),
+      (snap) => {
+        if (snap.exists()) {
+          const remote = snap.data() as Partial<CMSSiteSettings>;
+          setSettings((prev) => ({ ...DEFAULT_CMS_SETTINGS, ...prev, ...remote }));
+        }
+      },
+      () => {
+        // Fallback to cached/defaults if offline
+      }
+    );
+    return () => unsubSettings();
   }, [refreshAll]);
 
   // Index text items by id for O(1) lookup

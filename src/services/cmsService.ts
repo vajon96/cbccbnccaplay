@@ -10,7 +10,9 @@ import {
   setDoc, 
   getDocs, 
   deleteDoc, 
-  writeBatch 
+  writeBatch,
+  reportFirestoreListenerError,
+  OperationType
 } from "../firebase";
 import { 
   CMSContentItem, 
@@ -46,6 +48,17 @@ const LS_NOTICES_KEY = "cbcc_cms_notices";
 const LS_ACTIVITIES_KEY = "cbcc_cms_activities";
 const LS_GALLERY_KEY = "cbcc_cms_gallery";
 
+export function sanitizeCmsDocId(rawId: string, fallbackPrefix: string = "doc"): string {
+  const cleaned = String(rawId || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_.:-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!cleaned) {
+    return `${fallbackPrefix}_${Date.now()}`;
+  }
+  return cleaned.slice(0, 128);
+}
+
 export class CMSService {
   private static syncListener: ((error: string | null) => void) | null = null;
 
@@ -57,7 +70,8 @@ export class CMSService {
     this.syncListener?.(null);
   }
 
-  private static notifySyncError(op: string, e: any) {
+  private static notifySyncError(op: string, e: any, path?: string) {
+    reportFirestoreListenerError(e, OperationType.WRITE, path || op);
     const reason = e?.code === "permission-denied"
       ? "ক্লাউড সিঙ্ক অনুমতি নেই — গুগল অ্যাডমিন অ্যাকাউন্ট দিয়ে লগইন করুন। লোকাল ড্রাফট সংরক্ষিত রয়েছে।"
       : `ক্লাউড সিঙ্ক ব্যর্থ হয়েছে (${op})। লোকাল ড্রাফট সংরক্ষিত রয়েছে।`;
@@ -65,9 +79,15 @@ export class CMSService {
     this.syncListener?.(reason);
   }
 
-  // 1. Settings
+  // 1. Settings (reads system_settings/portal_config and cms_settings/global_config)
   static async getSettings(): Promise<CMSSiteSettings> {
     try {
+      const sysSnap = await getDocs(collection(db, "system_settings"));
+      if (!sysSnap.empty) {
+        const data = sysSnap.docs[0].data() as CMSSiteSettings;
+        localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(data));
+        return { ...DEFAULT_CMS_SETTINGS, ...data };
+      }
       const snap = await getDocs(collection(db, "cms_settings"));
       if (!snap.empty) {
         const data = snap.docs[0].data() as CMSSiteSettings;
@@ -96,7 +116,10 @@ export class CMSService {
     };
     localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(updated));
     try {
-      await setDoc(doc(db, "cms_settings", "global_config"), updated);
+      await Promise.all([
+        setDoc(doc(db, "cms_settings", "global_config"), updated),
+        setDoc(doc(db, "system_settings", "portal_config"), updated),
+      ]);
       this.notifySyncOk();
     } catch (e) {
       this.notifySyncError("saveSettings", e);
@@ -152,10 +175,11 @@ export class CMSService {
     localStorage.setItem(LS_CONTENT_KEY, JSON.stringify(current));
 
     try {
-      await setDoc(doc(db, "cms_content", item.id.replace(/\//g, "_")), updated);
+      const safeId = sanitizeCmsDocId(item.id, "content");
+      await setDoc(doc(db, "cms_content", safeId), updated);
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("saveContentItem", e);
+      this.notifySyncError("saveContentItem", e, `cms_content/${item.id}`);
     }
   }
 
@@ -195,10 +219,11 @@ export class CMSService {
     localStorage.setItem(LS_SECTIONS_KEY, JSON.stringify(sections));
 
     try {
-      await setDoc(doc(db, "cms_sections", section.id.replace(/\//g, "_")), section);
+      const safeId = sanitizeCmsDocId(section.id, "section");
+      await setDoc(doc(db, "cms_sections", safeId), section);
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("saveSection", e);
+      this.notifySyncError("saveSection", e, `cms_sections/${section.id}`);
     }
   }
 
@@ -242,10 +267,11 @@ export class CMSService {
     localStorage.setItem(LS_CADETS_KEY, JSON.stringify(cadets));
 
     try {
-      await setDoc(doc(db, "cms_cadets", cadet.id), updated);
+      const safeId = sanitizeCmsDocId(cadet.id, "cadet");
+      await setDoc(doc(db, "cms_cadets", safeId), updated);
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("saveCadet", e);
+      this.notifySyncError("saveCadet", e, `cms_cadets/${cadet.id}`);
     }
   }
 
@@ -255,10 +281,10 @@ export class CMSService {
     localStorage.setItem(LS_CADETS_KEY, JSON.stringify(filtered));
 
     try {
-      await deleteDoc(doc(db, "cms_cadets", id));
+      await deleteDoc(doc(db, "cms_cadets", sanitizeCmsDocId(id, "cadet")));
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("deleteCadet", e);
+      this.notifySyncError("deleteCadet", e, `cms_cadets/${id}`);
     }
   }
 
@@ -298,10 +324,10 @@ export class CMSService {
     localStorage.setItem(LS_INCHARGES_KEY, JSON.stringify(list));
 
     try {
-      await setDoc(doc(db, "cms_incharges", incharge.id), incharge);
+      await setDoc(doc(db, "cms_incharges", sanitizeCmsDocId(incharge.id, "incharge")), incharge);
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("saveIncharge", e);
+      this.notifySyncError("saveIncharge", e, `cms_incharges/${incharge.id}`);
     }
   }
 
@@ -311,10 +337,10 @@ export class CMSService {
     localStorage.setItem(LS_INCHARGES_KEY, JSON.stringify(filtered));
 
     try {
-      await deleteDoc(doc(db, "cms_incharges", id));
+      await deleteDoc(doc(db, "cms_incharges", sanitizeCmsDocId(id, "incharge")));
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("deleteIncharge", e);
+      this.notifySyncError("deleteIncharge", e, `cms_incharges/${id}`);
     }
   }
 
@@ -387,10 +413,10 @@ export class CMSService {
     localStorage.setItem(LS_NOTICES_KEY, JSON.stringify(notices));
 
     try {
-      await setDoc(doc(db, "cms_notices", notice.id), notice);
+      await setDoc(doc(db, "cms_notices", sanitizeCmsDocId(notice.id, "notice")), notice);
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("saveNotice", e);
+      this.notifySyncError("saveNotice", e, `cms_notices/${notice.id}`);
     }
   }
 
@@ -400,10 +426,10 @@ export class CMSService {
     localStorage.setItem(LS_NOTICES_KEY, JSON.stringify(filtered));
 
     try {
-      await deleteDoc(doc(db, "cms_notices", id));
+      await deleteDoc(doc(db, "cms_notices", sanitizeCmsDocId(id, "notice")));
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("deleteNotice", e);
+      this.notifySyncError("deleteNotice", e, `cms_notices/${id}`);
     }
   }
 
@@ -443,10 +469,10 @@ export class CMSService {
     localStorage.setItem(LS_ACTIVITIES_KEY, JSON.stringify(list));
 
     try {
-      await setDoc(doc(db, "cms_activities", activity.id), activity);
+      await setDoc(doc(db, "cms_activities", sanitizeCmsDocId(activity.id, "activity")), activity);
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("saveActivity", e);
+      this.notifySyncError("saveActivity", e, `cms_activities/${activity.id}`);
     }
   }
 
@@ -456,10 +482,10 @@ export class CMSService {
     localStorage.setItem(LS_ACTIVITIES_KEY, JSON.stringify(filtered));
 
     try {
-      await deleteDoc(doc(db, "cms_activities", id));
+      await deleteDoc(doc(db, "cms_activities", sanitizeCmsDocId(id, "activity")));
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("deleteActivity", e);
+      this.notifySyncError("deleteActivity", e, `cms_activities/${id}`);
     }
   }
 
@@ -499,10 +525,10 @@ export class CMSService {
     localStorage.setItem(LS_GALLERY_KEY, JSON.stringify(list));
 
     try {
-      await setDoc(doc(db, "cms_gallery", item.id), item);
+      await setDoc(doc(db, "cms_gallery", sanitizeCmsDocId(item.id, "gallery")), item);
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("saveGalleryItem", e);
+      this.notifySyncError("saveGalleryItem", e, `cms_gallery/${item.id}`);
     }
   }
 
@@ -512,10 +538,10 @@ export class CMSService {
     localStorage.setItem(LS_GALLERY_KEY, JSON.stringify(filtered));
 
     try {
-      await deleteDoc(doc(db, "cms_gallery", id));
+      await deleteDoc(doc(db, "cms_gallery", sanitizeCmsDocId(id, "gallery")));
       this.notifySyncOk();
     } catch (e) {
-      this.notifySyncError("deleteGalleryItem", e);
+      this.notifySyncError("deleteGalleryItem", e, `cms_gallery/${id}`);
     }
   }
 
@@ -613,6 +639,82 @@ export class CMSService {
     }
   }
 
+  static async seedAllDefaultsToFirestore(
+    overwrite: boolean = false
+  ): Promise<{ seededCount: number; collections: Record<string, number> }> {
+    const nowIso = new Date().toISOString();
+    const collectionsReport: Record<string, number> = {};
+    const pendingWrites: Array<{ ref: ReturnType<typeof doc>; data: Record<string, any> }> = [];
+
+    const queueCollection = async <T extends Record<string, any>>(
+      collectionName: string,
+      items: Array<{ docId: string; payload: T }>
+    ) => {
+      let existingIds = new Set<string>();
+      if (!overwrite) {
+        const snap = await getDocs(collection(db, collectionName));
+        existingIds = new Set(snap.docs.map((d) => d.id));
+      }
+      let added = 0;
+      items.forEach(({ docId, payload }) => {
+        const safeId = sanitizeCmsDocId(docId, collectionName);
+        if (overwrite || !existingIds.has(safeId)) {
+          pendingWrites.push({ ref: doc(db, collectionName, safeId), data: payload });
+          added += 1;
+        }
+      });
+      collectionsReport[collectionName] = added;
+    };
+
+    const settingsPayload = { ...DEFAULT_CMS_SETTINGS, lastUpdated: nowIso };
+    await Promise.all([
+      queueCollection("system_settings", [{ docId: "portal_config", payload: settingsPayload }]),
+      queueCollection("cms_settings", [{ docId: "global_config", payload: settingsPayload }]),
+      queueCollection("cms_commander", [{ docId: "commander_profile", payload: DEFAULT_CMS_COMMANDER }]),
+      queueCollection(
+        "cms_content",
+        DEFAULT_UNIVERSAL_TEXT_ITEMS.map((item) => ({ docId: item.id, payload: item }))
+      ),
+      queueCollection(
+        "cms_sections",
+        DEFAULT_CMS_SECTIONS.map((sec) => ({ docId: sec.id, payload: sec }))
+      ),
+      queueCollection(
+        "cms_cadets",
+        DEFAULT_CMS_CADETS.map((c) => ({ docId: c.id, payload: c }))
+      ),
+      queueCollection(
+        "cms_incharges",
+        DEFAULT_CMS_INCHARGES.map((i) => ({ docId: i.id, payload: i }))
+      ),
+      queueCollection(
+        "cms_notices",
+        DEFAULT_CMS_NOTICES.map((n) => ({ docId: n.id, payload: n }))
+      ),
+      queueCollection(
+        "cms_activities",
+        DEFAULT_CMS_ACTIVITIES.map((a) => ({ docId: a.id, payload: a }))
+      ),
+      queueCollection(
+        "cms_gallery",
+        DEFAULT_CMS_GALLERY.map((g) => ({ docId: g.id, payload: g }))
+      ),
+    ]);
+
+    const CHUNK_SIZE = 350;
+    for (let i = 0; i < pendingWrites.length; i += CHUNK_SIZE) {
+      const batch = writeBatch(db);
+      const chunk = pendingWrites.slice(i, i + CHUNK_SIZE);
+      chunk.forEach(({ ref, data }) => {
+        batch.set(ref, data, { merge: true });
+      });
+      await batch.commit();
+    }
+
+    this.notifySyncOk();
+    return { seededCount: pendingWrites.length, collections: collectionsReport };
+  }
+
   static async resetToDefault(): Promise<void> {
     localStorage.removeItem(LS_SETTINGS_KEY);
     localStorage.removeItem(LS_CONTENT_KEY);
@@ -624,7 +726,10 @@ export class CMSService {
     localStorage.removeItem(LS_ACTIVITIES_KEY);
     localStorage.removeItem(LS_GALLERY_KEY);
 
-    await this.saveSettings(DEFAULT_CMS_SETTINGS);
-    await this.saveCommander(DEFAULT_CMS_COMMANDER);
+    try {
+      await this.seedAllDefaultsToFirestore(true);
+    } catch (e) {
+      this.notifySyncError("resetToDefault", e, "cms_settings/global_config");
+    }
   }
 }

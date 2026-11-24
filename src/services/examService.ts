@@ -1,22 +1,45 @@
-import { 
-  auth, db, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, 
-  query, where, orderBy, limit, Timestamp, writeBatch, handleFirestoreError, OperationType 
+import {
+  auth, db, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+  query, where, orderBy, limit, writeBatch, handleFirestoreError, OperationType
 } from "../firebase";
-import { 
-  QuestionBankItem, QuestionType, QuestionDifficulty, ExamModel, ExamStatus, 
+import { getServerAuthHeaders, getSession, isAuthorizedAdmin } from "../lib/auth";
+import {
+  QuestionBankItem, QuestionType, QuestionDifficulty, ExamModel, ExamStatus,
   ExamAttempt, ExamResult, ExamSetting, ExamActivityLog, RandomQuestionRule, AttemptStatus,
   EvaluationStatus, ManualQuestionEvaluation, MarksHistoryEntry, AnswerScriptAuditLog
 } from "../types";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  return await getServerAuthHeaders({ "Content-Type": "application/json" });
+}
+
+function isFirestorePermissionError(error: any): boolean {
+  const code = String(error?.code || "").toLowerCase();
+  const msg = String(error?.message || "").toLowerCase();
+  return code === "permission-denied" || msg.includes("missing or insufficient permissions");
+}
+
+async function examApiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = await getAuthHeaders();
+  return fetch(path, {
+    ...init,
+    headers: {
+      ...headers,
+      ...(init?.headers as Record<string, string> | undefined),
+    },
+    credentials: "include",
+  });
+}
+
+async function tryMirrorToServer(path: string, method: string, body: unknown): Promise<void> {
   try {
-    const token = await auth.currentUser?.getIdToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    await examApiFetch(path, {
+      method,
+      body: JSON.stringify(body),
+    });
   } catch {
-    // Ignore token fetch errors and rely on session cookie
+    // Non-blocking background sync to server store
   }
-  return headers;
 }
 
 export function stripQuestionKeys(q: QuestionBankItem): QuestionBankItem {
@@ -40,11 +63,8 @@ async function sealExamKeysToVault(
 
   let sealedPayload: string | undefined;
   try {
-    const headers = await getAuthHeaders();
-    const res = await fetch("/api/exam/keys", {
+    const res = await examApiFetch("/api/exam/keys", {
       method: "POST",
-      headers,
-      credentials: "include",
       body: JSON.stringify({ examId, questions: payload, negativePenalty, passMarks }),
     });
     if (res.ok) {
@@ -55,21 +75,77 @@ async function sealExamKeysToVault(
     console.warn("Could not seal exam keys on server vault:", err);
   }
 
-  try {
-    await setDoc(doc(db, "exam_answer_keys", examId), {
-      examId,
-      sealedPayload: sealedPayload || "",
-      keysCount: payload.length,
-      negativePenalty,
-      passMarks,
-      keys: payload,
-      updatedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.warn("Could not persist exam_answer_keys doc:", err);
+  if (auth.currentUser) {
+    try {
+      await setDoc(doc(db, "exam_answer_keys", examId), {
+        examId,
+        sealedPayload: sealedPayload || "",
+        keysCount: payload.length,
+        negativePenalty,
+        passMarks,
+        keys: payload,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn("Could not persist exam_answer_keys doc:", err);
+    }
   }
 
   return sealedPayload;
+}
+
+async function patchAttemptEverywhere(attemptId: string, patch: Record<string, any>): Promise<void> {
+  let firestoreUpdated = false;
+  if (auth.currentUser) {
+    try {
+      await updateDoc(doc(db, "exam_attempts", attemptId), patch);
+      firestoreUpdated = true;
+    } catch (err) {
+      if (!isFirestorePermissionError(err)) {
+        throw err;
+      }
+    }
+  }
+
+  const res = await examApiFetch(`/api/exam/attempts/${encodeURIComponent(attemptId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  if (!firestoreUpdated && !res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to update exam attempt.");
+  }
+}
+
+async function upsertExamResultEverywhere(
+  existingResultId: string | null,
+  resultPayload: Record<string, any>
+): Promise<void> {
+  let firestoreSaved = false;
+  if (auth.currentUser) {
+    try {
+      if (existingResultId) {
+        await updateDoc(doc(db, "exam_results", existingResultId), resultPayload);
+      } else {
+        const newResRef = doc(collection(db, "exam_results"));
+        await setDoc(newResRef, { ...resultPayload, id: resultPayload.id || newResRef.id });
+      }
+      firestoreSaved = true;
+    } catch (err) {
+      if (!isFirestorePermissionError(err)) {
+        throw err;
+      }
+    }
+  }
+
+  const res = await examApiFetch("/api/exam/results", {
+    method: "POST",
+    body: JSON.stringify(resultPayload),
+  });
+  if (!firestoreSaved && !res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to save exam result.");
+  }
 }
 
 // ============================================================================
@@ -83,122 +159,210 @@ export async function fetchQuestions(filters?: {
   search?: string;
   isActiveOnly?: boolean;
 }): Promise<QuestionBankItem[]> {
-  try {
-    const qRef = collection(db, "question_bank");
-    let q = query(qRef, orderBy("createdAt", "desc"));
-    const snapshot = await getDocs(q);
-    
-    let items: QuestionBankItem[] = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as QuestionBankItem));
+  let items: QuestionBankItem[] | null = null;
 
-    if (filters) {
-      if (filters.isActiveOnly) {
-        items = items.filter(q => q.isActive !== false);
-      }
-      if (filters.subject && filters.subject !== "ALL") {
-        items = items.filter(q => q.subject === filters.subject);
-      }
-      if (filters.questionType && filters.questionType !== "ALL") {
-        items = items.filter(q => q.questionType === filters.questionType);
-      }
-      if (filters.difficulty && filters.difficulty !== "ALL") {
-        items = items.filter(q => q.difficulty === filters.difficulty);
-      }
-      if (filters.search && filters.search.trim()) {
-        const s = filters.search.toLowerCase().trim();
-        items = items.filter(q => 
-          q.question.toLowerCase().includes(s) ||
-          q.subject.toLowerCase().includes(s) ||
-          (q.tags && q.tags.some(t => t.toLowerCase().includes(s))) ||
-          q.id.toLowerCase().includes(s)
-        );
+  if (auth.currentUser) {
+    try {
+      const qRef = collection(db, "question_bank");
+      const q = query(qRef, orderBy("createdAt", "desc"));
+      const snapshot = await getDocs(q);
+      items = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      } as QuestionBankItem));
+      void tryMirrorToServer("/api/exam/sync-batch", "POST", { questions: items });
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error fetching question bank from Firestore:", error);
       }
     }
-
-    return items;
-  } catch (error) {
-    console.error("Error fetching question bank:", error);
-    handleFirestoreError(error, OperationType.GET, "question_bank");
-    return [];
   }
+
+  if (items === null) {
+    try {
+      const res = await examApiFetch("/api/exam/questions");
+      if (res.ok) {
+        const data = await res.json();
+        items = Array.isArray(data?.questions) ? data.questions : [];
+      } else if (res.status === 401 || res.status === 403) {
+        items = [];
+      } else {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || "Failed to load questions from server.");
+      }
+    } catch (error) {
+      console.error("Error fetching question bank:", error);
+      if (auth.currentUser) {
+        handleFirestoreError(error, OperationType.GET, "question_bank");
+      }
+      return [];
+    }
+  }
+
+  if (filters) {
+    if (filters.isActiveOnly) {
+      items = items.filter(q => q.isActive !== false);
+    }
+    if (filters.subject && filters.subject !== "ALL") {
+      items = items.filter(q => q.subject === filters.subject);
+    }
+    if (filters.questionType && filters.questionType !== "ALL") {
+      items = items.filter(q => q.questionType === filters.questionType);
+    }
+    if (filters.difficulty && filters.difficulty !== "ALL") {
+      items = items.filter(q => q.difficulty === filters.difficulty);
+    }
+    if (filters.search && filters.search.trim()) {
+      const s = filters.search.toLowerCase().trim();
+      items = items.filter(q =>
+        q.question.toLowerCase().includes(s) ||
+        q.subject.toLowerCase().includes(s) ||
+        (q.tags && q.tags.some(t => t.toLowerCase().includes(s))) ||
+        q.id.toLowerCase().includes(s)
+      );
+    }
+  }
+
+  return items;
 }
 
 export async function addQuestion(question: Omit<QuestionBankItem, "id" | "createdAt" | "updatedAt">): Promise<string> {
-  try {
-    const docRef = doc(collection(db, "question_bank"));
-    const now = new Date().toISOString();
-    const newItem: QuestionBankItem = {
+  const now = new Date().toISOString();
+
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(collection(db, "question_bank"));
+      const newItem: QuestionBankItem = {
+        ...question,
+        id: docRef.id,
+        createdAt: now,
+        updatedAt: now,
+        isActive: question.isActive ?? true
+      };
+      await setDoc(docRef, newItem);
+      void tryMirrorToServer("/api/exam/questions", "POST", newItem);
+      await logExamActivity({
+        action: "QUESTION_CREATED",
+        targetId: docRef.id,
+        actorId: question.createdBy || "admin",
+        details: `Created question: ${question.question.substring(0, 40)}... (${question.subject} - ${question.questionType})`
+      });
+      return docRef.id;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error adding question:", error);
+        handleFirestoreError(error, OperationType.CREATE, "question_bank");
+        throw error;
+      }
+    }
+  }
+
+  const res = await examApiFetch("/api/exam/questions", {
+    method: "POST",
+    body: JSON.stringify({
       ...question,
-      id: docRef.id,
+      isActive: question.isActive ?? true,
       createdAt: now,
       updatedAt: now,
-      isActive: question.isActive ?? true
-    };
-    await setDoc(docRef, newItem);
-    await logExamActivity({
-      action: "QUESTION_CREATED",
-      targetId: docRef.id,
-      actorId: question.createdBy || "admin",
-      details: `Created question: ${question.question.substring(0, 40)}... (${question.subject} - ${question.questionType})`
-    });
-    return docRef.id;
-  } catch (error) {
-    console.error("Error adding question:", error);
-    handleFirestoreError(error, OperationType.CREATE, "question_bank");
-    throw error;
+    }),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to add question.");
   }
+  const data = await res.json();
+  return data.id;
 }
 
 export async function updateQuestion(id: string, updates: Partial<QuestionBankItem>, actorId: string = "admin"): Promise<void> {
-  try {
-    const docRef = doc(db, "question_bank", id);
-    const updatedData = {
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
-    await updateDoc(docRef, updatedData);
-    await logExamActivity({
-      action: "QUESTION_UPDATED",
-      targetId: id,
-      actorId,
-      details: `Updated question ID ${id}`
-    });
-  } catch (error) {
-    console.error("Error updating question:", error);
-    handleFirestoreError(error, OperationType.UPDATE, `question_bank/${id}`);
-    throw error;
+  const updatedData = {
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(db, "question_bank", id);
+      await updateDoc(docRef, updatedData);
+      void tryMirrorToServer(`/api/exam/questions/${encodeURIComponent(id)}`, "PATCH", { ...updatedData, actorId });
+      await logExamActivity({
+        action: "QUESTION_UPDATED",
+        targetId: id,
+        actorId,
+        details: `Updated question ID ${id}`
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error updating question:", error);
+        handleFirestoreError(error, OperationType.UPDATE, `question_bank/${id}`);
+        throw error;
+      }
+    }
+  }
+
+  const res = await examApiFetch(`/api/exam/questions/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ ...updatedData, actorId }),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to update question.");
   }
 }
 
 export async function deleteQuestion(id: string, actorId: string = "admin", softDelete = true): Promise<void> {
-  try {
-    if (softDelete) {
-      await updateQuestion(id, { isActive: false }, actorId);
-    } else {
-      await deleteDoc(doc(db, "question_bank", id));
+  if (auth.currentUser) {
+    try {
+      if (softDelete) {
+        await updateQuestion(id, { isActive: false }, actorId);
+      } else {
+        await deleteDoc(doc(db, "question_bank", id));
+        void tryMirrorToServer(`/api/exam/questions/${encodeURIComponent(id)}?soft=false`, "DELETE", {});
+      }
+      await logExamActivity({
+        action: "QUESTION_DELETED",
+        targetId: id,
+        actorId,
+        details: `${softDelete ? "Soft deleted" : "Permanently deleted"} question ID ${id}`
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error deleting question:", error);
+        handleFirestoreError(error, OperationType.DELETE, `question_bank/${id}`);
+        throw error;
+      }
     }
-    await logExamActivity({
-      action: "QUESTION_DELETED",
-      targetId: id,
-      actorId,
-      details: `${softDelete ? 'Soft deleted' : 'Permanently deleted'} question ID ${id}`
-    });
-  } catch (error) {
-    console.error("Error deleting question:", error);
-    handleFirestoreError(error, OperationType.DELETE, `question_bank/${id}`);
-    throw error;
+  }
+
+  const res = await examApiFetch(
+    `/api/exam/questions/${encodeURIComponent(id)}?soft=${softDelete ? "true" : "false"}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to delete question.");
   }
 }
 
 export async function duplicateQuestion(id: string, actorId: string = "admin"): Promise<string> {
   try {
-    const docRef = doc(db, "question_bank", id);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) throw new Error("Question not found");
-    const data = snap.data() as QuestionBankItem;
-    
+    let data: QuestionBankItem | null = null;
+    if (auth.currentUser) {
+      try {
+        const snap = await getDoc(doc(db, "question_bank", id));
+        if (snap.exists()) data = snap.data() as QuestionBankItem;
+      } catch (err) {
+        if (!isFirestorePermissionError(err)) throw err;
+      }
+    }
+    if (!data) {
+      const all = await fetchQuestions();
+      data = all.find(q => q.id === id) || null;
+    }
+    if (!data) throw new Error("Question not found");
+
     return await addQuestion({
       ...data,
       question: `${data.question} (Copy)`,
@@ -241,7 +405,6 @@ export function validateAndParseImportRows(rows: any[], createdBy: string = "adm
       return;
     }
 
-    // Determine type
     let questionType: QuestionType = "mcq";
     if (typeRaw.includes("mcq") || typeRaw.includes("বহুনির্বাচনী")) {
       questionType = "mcq";
@@ -274,14 +437,13 @@ export function validateAndParseImportRows(rows: any[], createdBy: string = "adm
         return;
       }
 
-      // Answer should be A, B, C, or D
       let normalizedAns = answerRaw.toUpperCase();
       if (!["A", "B", "C", "D"].includes(normalizedAns)) {
         if (answerRaw === optA) normalizedAns = "A";
         else if (answerRaw === optB) normalizedAns = "B";
         else if (answerRaw === optC) normalizedAns = "C";
         else if (answerRaw === optD) normalizedAns = "D";
-        else normalizedAns = "A"; // default fallback
+        else normalizedAns = "A";
       }
 
       validRows.push({
@@ -316,7 +478,6 @@ export function validateAndParseImportRows(rows: any[], createdBy: string = "adm
         createdBy
       });
     } else {
-      // fill_gaps, tag_question, changing_sentence, short_question
       const accepted = answerRaw ? [answerRaw] : [];
       validRows.push({
         subject,
@@ -338,50 +499,71 @@ export function validateAndParseImportRows(rows: any[], createdBy: string = "adm
   return { validRows, errors };
 }
 
-export async function bulkImportQuestions(items: Omit<QuestionBankItem, "id" | "createdAt" | "updatedAt">[], actorId: string = "admin"): Promise<number> {
-  try {
-    const batchSize = 400; // Firestore batch limit is 500
-    let importedCount = 0;
-    const now = new Date().toISOString();
+export async function bulkImportQuestions(
+  items: Omit<QuestionBankItem, "id" | "createdAt" | "updatedAt">[],
+  actorId: string = "admin"
+): Promise<number> {
+  const now = new Date().toISOString();
 
-    for (let i = 0; i < items.length; i += batchSize) {
-      const batch = writeBatch(db);
-      const chunk = items.slice(i, i + batchSize);
-      chunk.forEach(item => {
-        const ref = doc(collection(db, "question_bank"));
-        const data: QuestionBankItem = {
-          ...item,
-          id: ref.id,
-          createdAt: now,
-          updatedAt: now,
-          isActive: true
-        };
-        batch.set(ref, data);
-        importedCount++;
+  if (auth.currentUser) {
+    try {
+      const batchSize = 400;
+      let importedCount = 0;
+      const prepared: QuestionBankItem[] = [];
+
+      for (let i = 0; i < items.length; i += batchSize) {
+        const batch = writeBatch(db);
+        const chunk = items.slice(i, i + batchSize);
+        chunk.forEach(item => {
+          const ref = doc(collection(db, "question_bank"));
+          const data: QuestionBankItem = {
+            ...item,
+            id: ref.id,
+            createdAt: now,
+            updatedAt: now,
+            isActive: true
+          };
+          batch.set(ref, data);
+          prepared.push(data);
+          importedCount++;
+        });
+        await batch.commit();
+      }
+
+      void tryMirrorToServer("/api/exam/questions/bulk", "POST", { items: prepared, actorId });
+      await logExamActivity({
+        action: "QUESTION_IMPORTED",
+        targetId: "bulk",
+        actorId,
+        details: `Successfully bulk imported ${importedCount} questions into Question Bank.`
       });
-      await batch.commit();
+
+      return importedCount;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error bulk importing questions:", error);
+        handleFirestoreError(error, OperationType.WRITE, "question_bank");
+        throw error;
+      }
     }
-
-    await logExamActivity({
-      action: "QUESTION_IMPORTED",
-      targetId: "bulk",
-      actorId,
-      details: `Successfully bulk imported ${importedCount} questions into Question Bank.`
-    });
-
-    return importedCount;
-  } catch (error) {
-    console.error("Error bulk importing questions:", error);
-    handleFirestoreError(error, OperationType.WRITE, "question_bank");
-    throw error;
   }
+
+  const res = await examApiFetch("/api/exam/questions/bulk", {
+    method: "POST",
+    body: JSON.stringify({ items, actorId }),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to bulk import questions.");
+  }
+  const data = await res.json();
+  return Number(data?.count) || 0;
 }
 
-// Seed initial Question Bank if empty
 export async function seedDefaultQuestionsIfEmpty(actorId: string = "system"): Promise<void> {
   try {
     const questions = await fetchQuestions();
-    if (questions.length > 0) return; // already seeded
+    if (questions.length > 0) return;
 
     const defaults: Omit<QuestionBankItem, "id" | "createdAt" | "updatedAt">[] = [
       {
@@ -528,237 +710,354 @@ export async function seedDefaultQuestionsIfEmpty(actorId: string = "system"): P
 // ============================================================================
 
 export async function fetchExams(statusFilter?: ExamStatus | ExamStatus[]): Promise<ExamModel[]> {
-  try {
-    const ref = collection(db, "exams");
-    const q = query(ref, orderBy("createdAt", "desc"));
-    const snapshot = await getDocs(q);
-    let items: ExamModel[] = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as ExamModel));
+  let items: ExamModel[] | null = null;
 
-    if (statusFilter) {
-      if (Array.isArray(statusFilter)) {
-        items = items.filter(e => statusFilter.includes(e.status));
-      } else {
-        items = items.filter(e => e.status === statusFilter);
+  if (auth.currentUser) {
+    try {
+      const ref = collection(db, "exams");
+      const statusArr = statusFilter
+        ? Array.isArray(statusFilter)
+          ? statusFilter
+          : [statusFilter]
+        : null;
+      const q =
+        statusArr && statusArr.length > 0 && statusArr.length <= 10
+          ? query(ref, where("status", "in", statusArr))
+          : query(ref, orderBy("createdAt", "desc"));
+      const snapshot = await getDocs(q);
+      items = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() } as ExamModel))
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+      if (!statusFilter) {
+        void tryMirrorToServer("/api/exam/sync-batch", "POST", { exams: items });
+      }
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error fetching exams from Firestore:", error);
       }
     }
-    return items;
-  } catch (error) {
-    console.error("Error fetching exams:", error);
-    handleFirestoreError(error, OperationType.GET, "exams");
-    return [];
   }
+
+  if (items === null) {
+    try {
+      const res = await examApiFetch("/api/exam/exams");
+      if (res.ok) {
+        const data = await res.json();
+        items = Array.isArray(data?.exams) ? data.exams : [];
+      } else if (res.status === 401 || res.status === 403) {
+        items = [];
+      } else {
+        throw new Error("Failed to fetch exams from server.");
+      }
+    } catch (error) {
+      console.error("Error fetching exams:", error);
+      return [];
+    }
+  }
+
+  if (statusFilter) {
+    if (Array.isArray(statusFilter)) {
+      items = items.filter(e => statusFilter.includes(e.status));
+    } else {
+      items = items.filter(e => e.status === statusFilter);
+    }
+  }
+  return items;
 }
 
 export async function getExamById(id: string): Promise<ExamModel | null> {
+  if (auth.currentUser) {
+    try {
+      const snap = await getDoc(doc(db, "exams", id));
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as ExamModel;
+      }
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error getting exam by ID from Firestore:", error);
+      }
+    }
+  }
+
   try {
-    const docRef = doc(db, "exams", id);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return null;
-    return { id: snap.id, ...snap.data() } as ExamModel;
+    const res = await examApiFetch(`/api/exam/exams/${encodeURIComponent(id)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.exam || null;
   } catch (error) {
     console.error("Error getting exam by ID:", error);
-    handleFirestoreError(error, OperationType.GET, `exams/${id}`);
     return null;
   }
 }
 
 export async function createExam(examData: Omit<ExamModel, "id" | "createdAt" | "updatedAt">): Promise<string> {
-  try {
-    const docRef = doc(collection(db, "exams"));
-    const now = new Date().toISOString();
-    
-    // Resolve question snapshots from question_bank
-    let snapshots: QuestionBankItem[] = [];
-    if (examData.questionSelectionMode === "manual" && examData.selectedQuestionIds && examData.selectedQuestionIds.length > 0) {
-      const allQ = await fetchQuestions();
-      snapshots = allQ.filter(q => examData.selectedQuestionIds?.includes(q.id));
-    } else if (examData.questionSelectionMode === "random" && examData.randomRules) {
-      snapshots = await generateRandomQuestionSet(examData.randomRules);
-    }
+  const now = new Date().toISOString();
 
-    const calculatedTotalMarks = snapshots.length > 0 
-      ? snapshots.reduce((acc, curr) => acc + (curr.marks || 1), 0)
-      : (examData.totalMarks || 100);
-
-    const negativePenalty = (examData.negativeMarking?.enabled && examData.negativeMarking.marksPerWrongAnswer > 0)
-      ? examData.negativeMarking.marksPerWrongAnswer
-      : 0;
-
-    // Seal answer keys into admin-only exam_answer_keys + server AES-256-GCM envelope
-    const sealedKeyEnvelope = snapshots.length > 0
-      ? await sealExamKeysToVault(docRef.id, snapshots, negativePenalty, examData.passMarks || 0)
-      : undefined;
-
-    const sanitizedSnapshots = snapshots.map(stripQuestionKeys);
-
-    const newExam: ExamModel = {
-      ...examData,
-      id: docRef.id,
-      totalMarks: calculatedTotalMarks,
-      questionSnapshots: sanitizedSnapshots,
-      ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
-      createdAt: now,
-      updatedAt: now
-    };
-
-    await setDoc(docRef, newExam);
-
-    await logExamActivity({
-      action: "EXAM_CREATED",
-      targetId: docRef.id,
-      actorId: examData.createdBy || "admin",
-      details: `Created exam '${examData.title}' (${snapshots.length} questions, Total Marks: ${calculatedTotalMarks})`
-    });
-
-    return docRef.id;
-  } catch (error) {
-    console.error("Error creating exam:", error);
-    handleFirestoreError(error, OperationType.CREATE, "exams");
-    throw error;
+  let snapshots: QuestionBankItem[] = [];
+  if (examData.questionSelectionMode === "manual" && examData.selectedQuestionIds && examData.selectedQuestionIds.length > 0) {
+    const allQ = await fetchQuestions();
+    snapshots = allQ.filter(q => examData.selectedQuestionIds?.includes(q.id));
+  } else if (examData.questionSelectionMode === "random" && examData.randomRules) {
+    snapshots = await generateRandomQuestionSet(examData.randomRules);
   }
+
+  const calculatedTotalMarks = snapshots.length > 0
+    ? snapshots.reduce((acc, curr) => acc + (curr.marks || 1), 0)
+    : (examData.totalMarks || 100);
+
+  const negativePenalty = (examData.negativeMarking?.enabled && examData.negativeMarking.marksPerWrongAnswer > 0)
+    ? examData.negativeMarking.marksPerWrongAnswer
+    : 0;
+
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(collection(db, "exams"));
+      const sealedKeyEnvelope = snapshots.length > 0
+        ? await sealExamKeysToVault(docRef.id, snapshots, negativePenalty, examData.passMarks || 0)
+        : undefined;
+
+      const sanitizedSnapshots = snapshots.map(stripQuestionKeys);
+      const newExam: ExamModel = {
+        ...examData,
+        id: docRef.id,
+        totalMarks: calculatedTotalMarks,
+        questionSnapshots: sanitizedSnapshots,
+        ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
+        createdAt: now,
+        updatedAt: now
+      };
+
+      await setDoc(docRef, newExam);
+      void tryMirrorToServer("/api/exam/exams", "POST", {
+        ...newExam,
+        questionSnapshots: snapshots,
+      });
+
+      await logExamActivity({
+        action: "EXAM_CREATED",
+        targetId: docRef.id,
+        actorId: examData.createdBy || "admin",
+        details: `Created exam '${examData.title}' (${snapshots.length} questions, Total Marks: ${calculatedTotalMarks})`
+      });
+
+      return docRef.id;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error creating exam:", error);
+        handleFirestoreError(error, OperationType.CREATE, "exams");
+        throw error;
+      }
+    }
+  }
+
+  const res = await examApiFetch("/api/exam/exams", {
+    method: "POST",
+    body: JSON.stringify({
+      ...examData,
+      totalMarks: calculatedTotalMarks,
+      questionSnapshots: snapshots,
+      createdAt: now,
+      updatedAt: now,
+    }),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to create exam.");
+  }
+  const data = await res.json();
+  return data.id;
 }
 
 export async function updateExam(id: string, updates: Partial<ExamModel>, actorId: string = "admin"): Promise<void> {
-  try {
-    const docRef = doc(db, "exams", id);
-    const existing = await getExamById(id);
-    if (!existing) throw new Error("Exam not found");
+  const existing = await getExamById(id);
+  if (!existing) throw new Error("Exam not found");
 
-    let snapshots = updates.questionSnapshots || existing.questionSnapshots || [];
+  let snapshots = updates.questionSnapshots || existing.questionSnapshots || [];
 
-    if (updates.questionSelectionMode === "manual" && updates.selectedQuestionIds) {
+  if (updates.questionSelectionMode === "manual" && updates.selectedQuestionIds) {
+    const allQ = await fetchQuestions();
+    snapshots = allQ.filter(q => updates.selectedQuestionIds?.includes(q.id));
+  } else if (updates.questionSelectionMode === "random" && updates.randomRules) {
+    snapshots = await generateRandomQuestionSet(updates.randomRules);
+  } else if (snapshots.length > 0) {
+    try {
       const allQ = await fetchQuestions();
-      snapshots = allQ.filter(q => updates.selectedQuestionIds?.includes(q.id));
-    } else if (updates.questionSelectionMode === "random" && updates.randomRules) {
-      snapshots = await generateRandomQuestionSet(updates.randomRules);
-    } else if (snapshots.length > 0) {
-      try {
-        const allQ = await fetchQuestions();
-        const bankMap = new Map(allQ.map(q => [q.id, q]));
-        snapshots = snapshots.map(q => bankMap.get(q.id) || q);
-      } catch {
-        // Keep snapshots if question_bank read skipped
+      const bankMap = new Map(allQ.map(q => [q.id, q]));
+      snapshots = snapshots.map(q => bankMap.get(q.id) || q);
+    } catch {
+      // Keep snapshots if question_bank read skipped
+    }
+  }
+
+  const calculatedTotalMarks = snapshots.length > 0
+    ? snapshots.reduce((acc, curr) => acc + (curr.marks || 1), 0)
+    : (updates.totalMarks || existing.totalMarks);
+
+  const negConfig = updates.negativeMarking ?? existing.negativeMarking;
+  const negativePenalty = (negConfig?.enabled && negConfig.marksPerWrongAnswer > 0)
+    ? negConfig.marksPerWrongAnswer
+    : 0;
+  const passMarks = updates.passMarks ?? existing.passMarks ?? 0;
+
+  let sealedKeyEnvelope = existing.sealedKeyEnvelope;
+  if (snapshots.length > 0 && snapshots.some(q => q.correctAnswer !== undefined)) {
+    sealedKeyEnvelope = await sealExamKeysToVault(id, snapshots, negativePenalty, passMarks) || sealedKeyEnvelope;
+  }
+
+  const updatedData: any = {
+    ...updates,
+    questionSnapshots: snapshots.map(stripQuestionKeys),
+    ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
+    totalMarks: calculatedTotalMarks,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (auth.currentUser) {
+    try {
+      await updateDoc(doc(db, "exams", id), updatedData);
+      void tryMirrorToServer(`/api/exam/exams/${encodeURIComponent(id)}`, "PATCH", {
+        ...updates,
+        questionSnapshots: snapshots,
+        ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
+        totalMarks: calculatedTotalMarks,
+      });
+      await logExamActivity({
+        action: "EXAM_UPDATED",
+        targetId: id,
+        actorId,
+        details: `Updated exam '${updates.title || existing.title}'`
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error updating exam:", error);
+        handleFirestoreError(error, OperationType.UPDATE, `exams/${id}`);
+        throw error;
       }
     }
+  }
 
-    const calculatedTotalMarks = snapshots.length > 0 
-      ? snapshots.reduce((acc, curr) => acc + (curr.marks || 1), 0)
-      : (updates.totalMarks || existing.totalMarks);
-
-    const negConfig = updates.negativeMarking ?? existing.negativeMarking;
-    const negativePenalty = (negConfig?.enabled && negConfig.marksPerWrongAnswer > 0)
-      ? negConfig.marksPerWrongAnswer
-      : 0;
-    const passMarks = updates.passMarks ?? existing.passMarks ?? 0;
-
-    let sealedKeyEnvelope = existing.sealedKeyEnvelope;
-    if (snapshots.length > 0 && snapshots.some(q => q.correctAnswer !== undefined)) {
-      sealedKeyEnvelope = await sealExamKeysToVault(id, snapshots, negativePenalty, passMarks) || sealedKeyEnvelope;
-    }
-
-    const updatedData: any = {
+  const res = await examApiFetch(`/api/exam/exams/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
       ...updates,
-      questionSnapshots: snapshots.map(stripQuestionKeys),
+      questionSnapshots: snapshots,
       ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
       totalMarks: calculatedTotalMarks,
-      updatedAt: new Date().toISOString()
-    };
-
-    await updateDoc(docRef, updatedData);
-
-    await logExamActivity({
-      action: "EXAM_UPDATED",
-      targetId: id,
-      actorId,
-      details: `Updated exam '${updates.title || existing.title}'`
-    });
-  } catch (error) {
-    console.error("Error updating exam:", error);
-    handleFirestoreError(error, OperationType.UPDATE, `exams/${id}`);
-    throw error;
+    }),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to update exam.");
   }
 }
 
 export async function publishExam(id: string, actorId: string = "admin"): Promise<void> {
-  try {
-    const exam = await getExamById(id);
-    if (!exam) throw new Error("Exam not found");
+  const exam = await getExamById(id);
+  if (!exam) throw new Error("Exam not found");
 
-    if (!exam.title || !exam.durationMinutes || exam.durationMinutes <= 0) {
-      throw new Error("Exam must have a title and valid duration before publishing.");
+  if (!exam.title || !exam.durationMinutes || exam.durationMinutes <= 0) {
+    throw new Error("Exam must have a title and valid duration before publishing.");
+  }
+
+  if (!exam.questionSnapshots || exam.questionSnapshots.length === 0) {
+    throw new Error("Exam has no selected questions. Please add questions before publishing.");
+  }
+
+  const allQ = await fetchQuestions();
+  const bankMap = new Map(allQ.map(q => [q.id, q]));
+  const fullQuestions = exam.questionSnapshots.map(q => bankMap.get(q.id) || q);
+  const negativePenalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
+    ? exam.negativeMarking.marksPerWrongAnswer
+    : 0;
+  const sealedKeyEnvelope =
+    (await sealExamKeysToVault(id, fullQuestions, negativePenalty, exam.passMarks || 0)) ||
+    exam.sealedKeyEnvelope;
+
+  const patch = {
+    status: "published" as ExamStatus,
+    questionSnapshots: fullQuestions.map(stripQuestionKeys),
+    ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (auth.currentUser) {
+    try {
+      await updateDoc(doc(db, "exams", id), patch);
+      void tryMirrorToServer(`/api/exam/exams/${encodeURIComponent(id)}`, "PATCH", {
+        ...patch,
+        questionSnapshots: fullQuestions,
+      });
+      await logExamActivity({
+        action: "EXAM_PUBLISHED",
+        targetId: id,
+        actorId,
+        details: `Published exam '${exam.title}'`
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        throw error;
+      }
     }
+  }
 
-    if (!exam.questionSnapshots || exam.questionSnapshots.length === 0) {
-      throw new Error("Exam has no selected questions. Please add questions before publishing.");
-    }
-
-    // Ensure answer keys are sealed in exam_answer_keys and stripped from public questionSnapshots
-    const allQ = await fetchQuestions();
-    const bankMap = new Map(allQ.map(q => [q.id, q]));
-    const fullQuestions = exam.questionSnapshots.map(q => bankMap.get(q.id) || q);
-    const negativePenalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
-      ? exam.negativeMarking.marksPerWrongAnswer
-      : 0;
-    const sealedKeyEnvelope =
-      (await sealExamKeysToVault(id, fullQuestions, negativePenalty, exam.passMarks || 0)) ||
-      exam.sealedKeyEnvelope;
-
-    await updateDoc(doc(db, "exams", id), {
-      status: "published",
-      questionSnapshots: fullQuestions.map(stripQuestionKeys),
-      ...(sealedKeyEnvelope ? { sealedKeyEnvelope } : {}),
-      updatedAt: new Date().toISOString()
-    });
-
-    await logExamActivity({
-      action: "EXAM_PUBLISHED",
-      targetId: id,
-      actorId,
-      details: `Published exam '${exam.title}'`
-    });
-  } catch (error) {
-    console.error("Error publishing exam:", error);
-    throw error;
+  const res = await examApiFetch(`/api/exam/exams/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      ...patch,
+      questionSnapshots: fullQuestions,
+    }),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to publish exam.");
   }
 }
 
 export async function deleteExam(id: string, actorId: string = "admin"): Promise<void> {
-  try {
-    await deleteDoc(doc(db, "exams", id));
-    await logExamActivity({
-      action: "EXAM_UPDATED",
-      targetId: id,
-      actorId,
-      details: `Deleted exam ID ${id}`
-    });
-  } catch (error) {
-    console.error("Error deleting exam:", error);
-    handleFirestoreError(error, OperationType.DELETE, `exams/${id}`);
-    throw error;
+  if (auth.currentUser) {
+    try {
+      await deleteDoc(doc(db, "exams", id));
+      void tryMirrorToServer(`/api/exam/exams/${encodeURIComponent(id)}`, "DELETE", {});
+      await logExamActivity({
+        action: "EXAM_UPDATED",
+        targetId: id,
+        actorId,
+        details: `Deleted exam ID ${id}`
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error deleting exam:", error);
+        handleFirestoreError(error, OperationType.DELETE, `exams/${id}`);
+        throw error;
+      }
+    }
+  }
+
+  const res = await examApiFetch(`/api/exam/exams/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to delete exam.");
   }
 }
 
 export async function duplicateExam(id: string, actorId: string = "admin"): Promise<string> {
-  try {
-    const exam = await getExamById(id);
-    if (!exam) throw new Error("Exam not found");
+  const exam = await getExamById(id);
+  if (!exam) throw new Error("Exam not found");
 
-    return await createExam({
-      ...exam,
-      title: `${exam.title} (Copy)`,
-      status: "draft",
-      createdBy: actorId
-    });
-  } catch (error) {
-    console.error("Error duplicating exam:", error);
-    throw error;
-  }
+  return await createExam({
+    ...exam,
+    title: `${exam.title} (Copy)`,
+    status: "draft",
+    createdBy: actorId
+  });
 }
 
-// Helper to assemble random questions by rules
 export async function generateRandomQuestionSet(rules: RandomQuestionRule[]): Promise<QuestionBankItem[]> {
   const allQ = await fetchQuestions({ isActiveOnly: true });
   const selected: QuestionBankItem[] = [];
@@ -770,7 +1069,6 @@ export async function generateRandomQuestionSet(rules: RandomQuestionRule[]): Pr
       pool = pool.filter(q => q.questionType === rule.questionType);
     }
 
-    // Shuffle pool
     const shuffled = [...pool].sort(() => 0.5 - Math.random());
     const countToPick = Math.min(rule.count, shuffled.length);
 
@@ -797,120 +1095,124 @@ export async function startExamAttempt(params: {
   session?: string;
   collegeName?: string;
 }): Promise<ExamAttempt> {
-  try {
-    const { examId, candidateId, userId, registrationNumber, candidateName, candidatePhoto, session, collegeName } = params;
+  const { examId, candidateId, userId, registrationNumber, candidateName, candidatePhoto, session, collegeName } = params;
 
-    const exam = await getExamById(examId);
-    if (!exam) throw new Error("পরীক্ষাটি পাওয়া যায়নি (Exam not found).");
-
-    if (exam.status !== "published" && exam.status !== "live") {
-      throw new Error("পরীক্ষাটি বর্তমানে সক্রিয় নয় (Exam is not active).");
-    }
-
-    const authUid = auth.currentUser?.uid || userId;
-    const attemptsRef = collection(db, "exam_attempts");
-
-    // Query existing attempts scoped by ownerUid (matches Firestore security rules without needing composite index)
-    let existingAttempts: ExamAttempt[] = [];
+  if (auth.currentUser) {
     try {
-      const q = auth.currentUser?.uid
-        ? query(attemptsRef, where("ownerUid", "==", authUid))
-        : query(attemptsRef, where("userId", "==", userId));
-      const snap = await getDocs(q);
-      existingAttempts = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as ExamAttempt))
-        .filter(a => a.examId === examId);
-    } catch {
-      existingAttempts = [];
-    }
+      const exam = await getExamById(examId);
+      if (!exam) throw new Error("পরীক্ষাটি পাওয়া যায়নি (Exam not found).");
 
-    // Check if there is an in_progress attempt
-    const inProgress = existingAttempts.find(a => a.status === "in_progress");
-    if (inProgress) {
-      // Return active in-progress attempt for interruption recovery
-      return inProgress;
-    }
-
-    // Check attempt limit
-    const completedCount = existingAttempts.filter(
-      a => a.status === "submitted" || a.status === "auto_submitted" || a.status === "expired"
-    ).length;
-    if (exam.maxAttempts > 0 && completedCount >= exam.maxAttempts) {
-      throw new Error(`আপনার সর্বোচ্চ Attempt (${exam.maxAttempts} টি) পূর্ণ হয়ে গেছে।`);
-    }
-
-    // Prepare question set snapshot
-    let questions = exam.questionSnapshots || [];
-    if (questions.length === 0) {
-      if (exam.selectedQuestionIds && exam.selectedQuestionIds.length > 0) {
-        const allQ = await fetchQuestions();
-        questions = allQ.filter(q => exam.selectedQuestionIds?.includes(q.id));
+      if (exam.status !== "published" && exam.status !== "live") {
+        throw new Error("পরীক্ষাটি বর্তমানে সক্রিয় নয় (Exam is not active).");
       }
-      if (questions.length === 0 && exam.randomRules && exam.randomRules.length > 0) {
-        questions = await generateRandomQuestionSet(exam.randomRules);
+
+      const authUid = auth.currentUser.uid;
+      const attemptsRef = collection(db, "exam_attempts");
+
+      let existingAttempts: ExamAttempt[] = [];
+      try {
+        const q = query(attemptsRef, where("ownerUid", "==", authUid));
+        const snap = await getDocs(q);
+        existingAttempts = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as ExamAttempt))
+          .filter(a => a.examId === examId);
+      } catch {
+        existingAttempts = [];
       }
-    }
 
-    if (questions.length === 0) {
-      throw new Error("পরীক্ষায় কোনো প্রশ্ন যুক্ত করা হয়নি। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।");
-    }
+      const inProgress = existingAttempts.find(a => a.status === "in_progress");
+      if (inProgress) {
+        return inProgress;
+      }
 
-    // Normalize question text and options
-    const normalizedQuestions = questions.map(q => {
-      const qText = (q as any).question || (q as any).questionText || (q as any).question_text || (q as any).text || (q as any).title || (q as any).content || (q as any).name || "Question text unavailable";
-      return {
-        ...q,
-        question: qText
+      const completedCount = existingAttempts.filter(
+        a => a.status === "submitted" || a.status === "auto_submitted" || a.status === "expired"
+      ).length;
+      if (exam.maxAttempts > 0 && completedCount >= exam.maxAttempts) {
+        throw new Error(`আপনার সর্বোচ্চ Attempt (${exam.maxAttempts} টি) পূর্ণ হয়ে গেছে।`);
+      }
+
+      let questions = exam.questionSnapshots || [];
+      if (questions.length === 0) {
+        if (exam.selectedQuestionIds && exam.selectedQuestionIds.length > 0) {
+          const allQ = await fetchQuestions();
+          questions = allQ.filter(q => exam.selectedQuestionIds?.includes(q.id));
+        }
+        if (questions.length === 0 && exam.randomRules && exam.randomRules.length > 0) {
+          questions = await generateRandomQuestionSet(exam.randomRules);
+        }
+      }
+
+      if (questions.length === 0) {
+        throw new Error("পরীক্ষায় কোনো প্রশ্ন যুক্ত করা হয়নি। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।");
+      }
+
+      const normalizedQuestions = questions.map(q => {
+        const qText = (q as any).question || (q as any).questionText || (q as any).question_text || (q as any).text || (q as any).title || (q as any).content || (q as any).name || "Question text unavailable";
+        return {
+          ...q,
+          question: qText
+        };
+      });
+
+      let finalQuestions = [...normalizedQuestions];
+      if (exam.shuffleQuestions) {
+        finalQuestions = finalQuestions.sort(() => 0.5 - Math.random());
+      }
+
+      const candidateSafeSnapshot = finalQuestions.map(stripQuestionKeys);
+      const docRef = doc(collection(db, "exam_attempts"));
+      const now = new Date().toISOString();
+
+      const attempt: ExamAttempt = {
+        id: docRef.id,
+        examId,
+        examTitle: exam.title,
+        candidateId,
+        userId,
+        ownerUid: authUid,
+        registrationNumber,
+        candidateName: candidateName || "Candidate",
+        candidatePhoto: candidatePhoto || "",
+        session: session || "",
+        collegeName: collegeName || "",
+        startedAt: now,
+        status: "in_progress",
+        questionSnapshot: candidateSafeSnapshot,
+        answers: {},
+        createdAt: now,
+        updatedAt: now
       };
-    });
 
-    // Shuffle questions if required
-    let finalQuestions = [...normalizedQuestions];
-    if (exam.shuffleQuestions) {
-      finalQuestions = finalQuestions.sort(() => 0.5 - Math.random());
+      await setDoc(docRef, attempt);
+      void tryMirrorToServer("/api/exam/attempts", "POST", attempt);
+
+      await logExamActivity({
+        action: "EXAM_STARTED",
+        targetId: examId,
+        actorId: userId,
+        details: `Candidate '${candidateName}' (${userId}) started attempt on '${exam.title}'`
+      });
+
+      return attempt;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error starting exam attempt:", error);
+        throw error;
+      }
     }
-
-    // Create candidate-safe question snapshot (never include answer keys!)
-    const candidateSafeSnapshot = finalQuestions.map(stripQuestionKeys);
-
-    const docRef = doc(collection(db, "exam_attempts"));
-    const now = new Date().toISOString();
-
-    const attempt: ExamAttempt = {
-      id: docRef.id,
-      examId,
-      examTitle: exam.title,
-      candidateId,
-      userId,
-      ownerUid: authUid,
-      registrationNumber,
-      candidateName: candidateName || "Candidate",
-      candidatePhoto: candidatePhoto || "",
-      session: session || "",
-      collegeName: collegeName || "",
-      startedAt: now,
-      status: "in_progress",
-      questionSnapshot: candidateSafeSnapshot,
-      answers: {},
-      createdAt: now,
-      updatedAt: now
-    };
-
-    await setDoc(docRef, attempt);
-
-    await logExamActivity({
-      action: "EXAM_STARTED",
-      targetId: examId,
-      actorId: userId,
-      details: `Candidate '${candidateName}' (${userId}) started attempt on '${exam.title}'`
-    });
-
-    return attempt;
-  } catch (error) {
-    console.error("Error starting exam attempt:", error);
-    handleFirestoreError(error, OperationType.CREATE, "exam_attempts");
-    throw error;
   }
+
+  const res = await examApiFetch("/api/exam/attempts", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "পরীক্ষা শুরু করা যায়নি।");
+  }
+  const data = await res.json();
+  return data.attempt as ExamAttempt;
 }
 
 export async function saveAttemptAnswer(params: {
@@ -919,32 +1221,67 @@ export async function saveAttemptAnswer(params: {
   selectedAnswer: string | string[];
   isMarkedForReview?: boolean;
 }): Promise<void> {
-  try {
-    const { attemptId, questionId, selectedAnswer, isMarkedForReview } = params;
-    const docRef = doc(db, "exam_attempts", attemptId);
-    
-    // We update the answers map field directly in Firestore
-    await updateDoc(docRef, {
-      [`answers.${questionId}`]: {
+  const { attemptId, questionId, selectedAnswer, isMarkedForReview } = params;
+
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(db, "exam_attempts", attemptId);
+      await updateDoc(docRef, {
+        [`answers.${questionId}`]: {
+          questionId,
+          selectedAnswer,
+          answeredAt: new Date().toISOString(),
+          isMarkedForReview: isMarkedForReview ?? false
+        },
+        updatedAt: new Date().toISOString()
+      });
+      void tryMirrorToServer(`/api/exam/attempts/${encodeURIComponent(attemptId)}/answers`, "POST", {
         questionId,
         selectedAnswer,
-        answeredAt: new Date().toISOString(),
-        isMarkedForReview: isMarkedForReview ?? false
-      },
-      updatedAt: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error("Error saving attempt answer:", error);
-    handleFirestoreError(error, OperationType.UPDATE, `exam_attempts/${params.attemptId}`);
+        isMarkedForReview: isMarkedForReview ?? false,
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error saving attempt answer:", error);
+        handleFirestoreError(error, OperationType.UPDATE, `exam_attempts/${attemptId}`);
+        return;
+      }
+    }
+  }
+
+  const res = await examApiFetch(`/api/exam/attempts/${encodeURIComponent(attemptId)}/answers`, {
+    method: "POST",
+    body: JSON.stringify({
+      questionId,
+      selectedAnswer,
+      isMarkedForReview: isMarkedForReview ?? false,
+    }),
+  });
+  if (!res.ok) {
+    console.warn("Could not save answer on server:", res.status);
   }
 }
 
 export async function getAttemptById(attemptId: string): Promise<ExamAttempt | null> {
+  if (auth.currentUser) {
+    try {
+      const snap = await getDoc(doc(db, "exam_attempts", attemptId));
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as ExamAttempt;
+      }
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error getting attempt by ID:", error);
+      }
+    }
+  }
+
   try {
-    const docRef = doc(db, "exam_attempts", attemptId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return null;
-    return { id: snap.id, ...snap.data() } as ExamAttempt;
+    const res = await examApiFetch(`/api/exam/attempts/${encodeURIComponent(attemptId)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.attempt || null;
   } catch (error) {
     console.error("Error getting attempt by ID:", error);
     return null;
@@ -952,15 +1289,29 @@ export async function getAttemptById(attemptId: string): Promise<ExamAttempt | n
 }
 
 export async function getUserAttempts(userId: string): Promise<ExamAttempt[]> {
+  if (auth.currentUser) {
+    try {
+      const ref = collection(db, "exam_attempts");
+      const q = query(ref, where("ownerUid", "==", auth.currentUser.uid));
+      const snap = await getDocs(q);
+      const list = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as ExamAttempt))
+        .sort((a, b) => new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime());
+      if (list.length > 0) return list;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error getting user attempts:", error);
+      }
+    }
+  }
+
   try {
-    const ref = collection(db, "exam_attempts");
-    const authUid = auth.currentUser?.uid;
-    const q = authUid
-      ? query(ref, where("ownerUid", "==", authUid))
-      : query(ref, where("userId", "==", userId));
-    const snap = await getDocs(q);
-    return snap.docs
-      .map(d => ({ id: d.id, ...d.data() } as ExamAttempt))
+    const res = await examApiFetch("/api/exam/attempts");
+    if (!res.ok) return [];
+    const data = await res.json();
+    const all: ExamAttempt[] = Array.isArray(data?.attempts) ? data.attempts : [];
+    return all
+      .filter(a => !userId || a.userId === userId || a.candidateId === userId || a.ownerUid === userId)
       .sort((a, b) => new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime());
   } catch (error) {
     console.error("Error getting user attempts:", error);
@@ -973,210 +1324,238 @@ export async function getUserAttempts(userId: string): Promise<ExamAttempt[]> {
 // ============================================================================
 
 export async function submitExamAttempt(attemptId: string, autoSubmitted = false): Promise<ExamResult> {
-  try {
-    const attempt = await getAttemptById(attemptId);
-    if (!attempt) throw new Error("Attempt not found");
+  const attempt = await getAttemptById(attemptId);
+  if (!attempt) throw new Error("Attempt not found");
 
-    if (attempt.status === "submitted" || attempt.status === "auto_submitted" || attempt.status === "expired") {
-      const existingResult = await getResultByAttemptId(attemptId);
-      if (existingResult) return existingResult;
-    }
-
-    const exam = await getExamById(attempt.examId);
-    if (!exam) throw new Error("Associated exam not found");
-
-    const ownerUid = attempt.ownerUid || auth.currentUser?.uid || attempt.userId;
-    const candidateSnapshot = attempt.questionSnapshot || [];
-    const answersMap = attempt.answers || {};
-
-    let finalScore = 0;
-    let totalMarks = exam.totalMarks || candidateSnapshot.reduce((acc, q) => acc + (q.marks || 1), 0);
-    let percentage = 0;
-    let isPassed = false;
-    let correctCount = 0;
-    let wrongCount = 0;
-    let unansweredCount = 0;
-    let resultSignature: string | undefined;
-    let gradingStatus = "graded";
-
-    // Primary path: Grade authoritatively via Node.js AES-256-GCM Answer Key Vault (/api/exam/submit)
-    const headers = await getAuthHeaders();
-    const serverRes = await fetch("/api/exam/submit", {
-      method: "POST",
-      headers,
-      credentials: "include",
-      body: JSON.stringify({
-        examId: exam.id,
-        attemptId,
-        answers: answersMap,
-        sealedPayload: exam.sealedKeyEnvelope || undefined,
-      }),
-    });
-
-    if (serverRes.ok) {
-      const graded = await serverRes.json();
-      finalScore = Number(graded.obtainedMarks) || 0;
-      totalMarks = Number(graded.totalMarks) || totalMarks;
-      percentage = Number(graded.percentage) || 0;
-      isPassed = Boolean(graded.isPassed);
-      correctCount = Number(graded.correctCount) || 0;
-      wrongCount = Number(graded.wrongCount) || 0;
-      unansweredCount = Number(graded.unansweredCount) || 0;
-      resultSignature = graded.resultSignature;
-      gradingStatus = graded.gradingStatus || "graded";
-    } else {
-      // Admin-only fallback for legacy pre-vault exams (candidates cannot read question_bank)
-      const allQuestions = await fetchQuestions();
-      if (allQuestions.length === 0) {
-        const errBody = await serverRes.json().catch(() => ({}));
-        throw new Error(errBody?.error || "Server grading failed. Please retry submitting.");
-      }
-
-      const questionMap = new Map<string, QuestionBankItem>();
-      allQuestions.forEach(q => questionMap.set(q.id, q));
-      let earnedScore = 0;
-      const penalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
-        ? exam.negativeMarking.marksPerWrongAnswer
-        : 0;
-
-      candidateSnapshot.forEach(qItem => {
-        const fullQ = questionMap.get(qItem.id);
-        const userAnsObj = answersMap[qItem.id];
-        const qMarks = qItem.marks || fullQ?.marks || 1;
-        if (!userAnsObj || userAnsObj.selectedAnswer === undefined || userAnsObj.selectedAnswer === null || userAnsObj.selectedAnswer === "") {
-          unansweredCount++;
-          return;
-        }
-        const given = userAnsObj.selectedAnswer;
-        const key = fullQ?.correctAnswer;
-        const accepted = fullQ?.acceptedAnswers || [];
-        let isCorrect = false;
-        if (qItem.questionType === "mcq" || qItem.questionType === "true_false") {
-          if (typeof given === "string" && typeof key === "string") {
-            isCorrect = given.trim().toUpperCase() === key.trim().toUpperCase();
-          }
-        } else {
-          const normGiven = typeof given === "string" ? given.trim().toLowerCase() : "";
-          const normKey = typeof key === "string" ? key.trim().toLowerCase() : "";
-          const normAccepted = accepted.map(a => a.trim().toLowerCase());
-          if (normGiven === normKey || normAccepted.includes(normGiven)) {
-            isCorrect = true;
-          }
-        }
-        if (isCorrect) {
-          correctCount++;
-          earnedScore += qMarks;
-        } else {
-          wrongCount++;
-          if (penalty > 0) earnedScore -= penalty;
-        }
-      });
-
-      finalScore = Math.max(0, Number(earnedScore.toFixed(2)));
-      percentage = totalMarks > 0 ? Number(((finalScore / totalMarks) * 100).toFixed(2)) : 0;
-      isPassed = finalScore >= (exam.passMarks || 0);
-    }
-
-    const now = new Date().toISOString();
-    const startTime = new Date(attempt.startedAt).getTime();
-    const endTime = new Date(now).getTime();
-    const timeTakenSeconds = Math.max(0, Math.round((endTime - startTime) / 1000));
-
-    // Persist status "submitted" so Firestore candidate update rule passes cleanly
-    await updateDoc(doc(db, "exam_attempts", attemptId), {
-      ownerUid,
-      status: "submitted" as AttemptStatus,
-      isAutoSubmitted: autoSubmitted,
-      gradingStatus,
-      ...(resultSignature ? { resultSignature } : {}),
-      submittedAt: now,
-      score: finalScore,
-      percentage,
-      correctCount,
-      wrongCount,
-      unansweredCount,
-      isPassed,
-      updatedAt: now
-    });
-
-    const resultDocRef = doc(collection(db, "exam_results"));
-    const examResult: ExamResult = {
-      id: resultDocRef.id,
-      examId: exam.id,
-      examTitle: exam.title,
-      attemptId,
-      candidateId: attempt.candidateId,
-      userId: attempt.userId,
-      ownerUid,
-      registrationNumber: attempt.registrationNumber,
-      candidateName: attempt.candidateName || "Candidate",
-      candidatePhoto: attempt.candidatePhoto || "",
-      score: finalScore,
-      totalMarks,
-      percentage,
-      passMarks: exam.passMarks || 0,
-      isPassed,
-      correctCount,
-      wrongCount,
-      unansweredCount,
-      timeTakenSeconds,
-      gradingStatus,
-      ...(resultSignature ? { resultSignature } : {}),
-      submittedAt: now
-    };
-
-    await setDoc(resultDocRef, examResult);
-
-    await logExamActivity({
-      action: "EXAM_STOPPED",
-      targetId: exam.id,
-      actorId: attempt.userId,
-      details: `Candidate '${attempt.candidateName}' submitted attempt for '${exam.title}' (Score: ${finalScore}/${totalMarks}, ${isPassed ? 'PASSED' : 'FAILED'})`
-    });
-
-    return examResult;
-  } catch (error) {
-    console.error("Error submitting exam attempt:", error);
-    handleFirestoreError(error, OperationType.WRITE, `exam_attempts/${attemptId}`);
-    throw error;
+  if (attempt.status === "submitted" || attempt.status === "auto_submitted" || attempt.status === "expired") {
+    const existingResult = await getResultByAttemptId(attemptId);
+    if (existingResult) return existingResult;
   }
+
+  const exam = await getExamById(attempt.examId);
+  if (!exam) throw new Error("Associated exam not found");
+
+  const ownerUid = attempt.ownerUid || auth.currentUser?.uid || attempt.userId;
+  const candidateSnapshot = attempt.questionSnapshot || [];
+  const answersMap = attempt.answers || {};
+
+  let finalScore = 0;
+  let totalMarks = exam.totalMarks || candidateSnapshot.reduce((acc, q) => acc + (q.marks || 1), 0);
+  let percentage = 0;
+  let isPassed = false;
+  let correctCount = 0;
+  let wrongCount = 0;
+  let unansweredCount = 0;
+  let resultSignature: string | undefined;
+  let gradingStatus = "graded";
+
+  const serverRes = await examApiFetch("/api/exam/submit", {
+    method: "POST",
+    body: JSON.stringify({
+      examId: exam.id,
+      attemptId,
+      answers: answersMap,
+      sealedPayload: exam.sealedKeyEnvelope || undefined,
+    }),
+  });
+
+  if (serverRes.ok) {
+    const graded = await serverRes.json();
+    finalScore = Number(graded.obtainedMarks) || 0;
+    totalMarks = Number(graded.totalMarks) || totalMarks;
+    percentage = Number(graded.percentage) || 0;
+    isPassed = Boolean(graded.isPassed);
+    correctCount = Number(graded.correctCount) || 0;
+    wrongCount = Number(graded.wrongCount) || 0;
+    unansweredCount = Number(graded.unansweredCount) || 0;
+    resultSignature = graded.resultSignature;
+    gradingStatus = graded.gradingStatus || "graded";
+  } else {
+    const allQuestions = await fetchQuestions();
+    if (allQuestions.length === 0) {
+      const errBody = await serverRes.json().catch(() => ({}));
+      throw new Error(errBody?.error || "Server grading failed. Please retry submitting.");
+    }
+
+    const questionMap = new Map<string, QuestionBankItem>();
+    allQuestions.forEach(q => questionMap.set(q.id, q));
+    let earnedScore = 0;
+    const penalty = (exam.negativeMarking?.enabled && exam.negativeMarking.marksPerWrongAnswer > 0)
+      ? exam.negativeMarking.marksPerWrongAnswer
+      : 0;
+
+    candidateSnapshot.forEach(qItem => {
+      const fullQ = questionMap.get(qItem.id);
+      const userAnsObj = answersMap[qItem.id];
+      const qMarks = qItem.marks || fullQ?.marks || 1;
+      if (!userAnsObj || userAnsObj.selectedAnswer === undefined || userAnsObj.selectedAnswer === null || userAnsObj.selectedAnswer === "") {
+        unansweredCount++;
+        return;
+      }
+      const given = userAnsObj.selectedAnswer;
+      const key = fullQ?.correctAnswer;
+      const accepted = fullQ?.acceptedAnswers || [];
+      let isCorrect = false;
+      if (qItem.questionType === "mcq" || qItem.questionType === "true_false") {
+        if (typeof given === "string" && typeof key === "string") {
+          isCorrect = given.trim().toUpperCase() === key.trim().toUpperCase();
+        }
+      } else {
+        const normGiven = typeof given === "string" ? given.trim().toLowerCase() : "";
+        const normKey = typeof key === "string" ? key.trim().toLowerCase() : "";
+        const normAccepted = accepted.map(a => a.trim().toLowerCase());
+        if (normGiven === normKey || normAccepted.includes(normGiven)) {
+          isCorrect = true;
+        }
+      }
+      if (isCorrect) {
+        correctCount++;
+        earnedScore += qMarks;
+      } else {
+        wrongCount++;
+        if (penalty > 0) earnedScore -= penalty;
+      }
+    });
+
+    finalScore = Math.max(0, Number(earnedScore.toFixed(2)));
+    percentage = totalMarks > 0 ? Number(((finalScore / totalMarks) * 100).toFixed(2)) : 0;
+    isPassed = finalScore >= (exam.passMarks || 0);
+  }
+
+  const now = new Date().toISOString();
+  const startTime = new Date(attempt.startedAt).getTime();
+  const endTime = new Date(now).getTime();
+  const timeTakenSeconds = Math.max(0, Math.round((endTime - startTime) / 1000));
+
+  await patchAttemptEverywhere(attemptId, {
+    ownerUid,
+    status: "submitted" as AttemptStatus,
+    isAutoSubmitted: autoSubmitted,
+    gradingStatus,
+    ...(resultSignature ? { resultSignature } : {}),
+    submittedAt: now,
+    score: finalScore,
+    percentage,
+    correctCount,
+    wrongCount,
+    unansweredCount,
+    isPassed,
+    updatedAt: now
+  });
+
+  const resultId = auth.currentUser ? doc(collection(db, "exam_results")).id : `res_${Date.now()}`;
+  const examResult: ExamResult = {
+    id: resultId,
+    examId: exam.id,
+    examTitle: exam.title,
+    attemptId,
+    candidateId: attempt.candidateId,
+    userId: attempt.userId,
+    ownerUid,
+    registrationNumber: attempt.registrationNumber,
+    candidateName: attempt.candidateName || "Candidate",
+    candidatePhoto: attempt.candidatePhoto || "",
+    score: finalScore,
+    totalMarks,
+    percentage,
+    passMarks: exam.passMarks || 0,
+    isPassed,
+    correctCount,
+    wrongCount,
+    unansweredCount,
+    timeTakenSeconds,
+    gradingStatus,
+    ...(resultSignature ? { resultSignature } : {}),
+    submittedAt: now
+  };
+
+  await upsertExamResultEverywhere(null, examResult);
+
+  await logExamActivity({
+    action: "EXAM_STOPPED",
+    targetId: exam.id,
+    actorId: attempt.userId,
+    details: `Candidate '${attempt.candidateName}' submitted attempt for '${exam.title}' (Score: ${finalScore}/${totalMarks}, ${isPassed ? "PASSED" : "FAILED"})`
+  });
+
+  return examResult;
 }
 
 export async function getResultByAttemptId(attemptId: string): Promise<ExamResult | null> {
+  if (auth.currentUser) {
+    try {
+      const ref = collection(db, "exam_results");
+      const q = query(ref, where("attemptId", "==", attemptId));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return { id: snap.docs[0].id, ...snap.docs[0].data() } as ExamResult;
+      }
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error getting result by attempt ID:", error);
+      }
+    }
+  }
+
   try {
-    const ref = collection(db, "exam_results");
-    const q = query(ref, where("attemptId", "==", attemptId));
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return { id: snap.docs[0].id, ...snap.docs[0].data() } as ExamResult;
+    const res = await examApiFetch(`/api/exam/results?attemptId=${encodeURIComponent(attemptId)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const list = Array.isArray(data?.results) ? data.results : [];
+    return list[0] || null;
   } catch (error) {
     console.error("Error getting result by attempt ID:", error);
     return null;
   }
 }
 
-export async function fetchAllExamResults(examId?: string): Promise<ExamResult[]> {
-  try {
-    const ref = collection(db, "exam_results");
-    let q = query(ref, orderBy("submittedAt", "desc"));
-    const snap = await getDocs(q);
-    let items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamResult));
+export async function fetchAllExamResults(examId?: string, leaderboardMode = false): Promise<ExamResult[]> {
+  let items: ExamResult[] | null = null;
 
-    if (examId && examId !== "ALL") {
-      items = items.filter(r => r.examId === examId);
+  if (auth.currentUser) {
+    try {
+      const ref = collection(db, "exam_results");
+      const q = query(ref, orderBy("submittedAt", "desc"));
+      const snap = await getDocs(q);
+      items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamResult));
+      if (!leaderboardMode) {
+        void tryMirrorToServer("/api/exam/sync-batch", "POST", { results: items });
+      }
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error fetching all exam results from Firestore:", error);
+      }
     }
-    return items;
-  } catch (error) {
-    console.error("Error fetching all exam results:", error);
-    return [];
   }
+
+  if (items === null) {
+    try {
+      const params = new URLSearchParams();
+      if (examId && examId !== "ALL") params.set("examId", examId);
+      if (leaderboardMode) params.set("leaderboard", "true");
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const res = await examApiFetch(`/api/exam/results${qs}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      items = Array.isArray(data?.results) ? data.results : [];
+    } catch (error) {
+      console.error("Error fetching all exam results:", error);
+      return [];
+    }
+  }
+
+  if (examId && examId !== "ALL") {
+    items = items.filter(r => r.examId === examId);
+  }
+  return items;
 }
 
 export async function generateRankings(examId: string): Promise<ExamResult[]> {
   try {
-    const results = await fetchAllExamResults(examId);
-    
-    // Sort descending by score, tie-break by time taken ascending (earlier submission or faster completion)
+    const session = getSession();
+    const isAdmin = isAuthorizedAdmin(session?.role);
+    const results = await fetchAllExamResults(examId, !isAdmin);
+
     const sorted = [...results].sort((a, b) => {
       if (b.score !== a.score) {
         return b.score - a.score;
@@ -1198,90 +1577,128 @@ export async function generateRankings(examId: string): Promise<ExamResult[]> {
 // SYSTEM SETTINGS & AUDIT LOGS
 // ============================================================================
 
-export async function fetchExamSettings(): Promise<ExamSetting> {
-  try {
-    const docRef = doc(db, "exam_settings", "global");
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return { id: snap.id, ...snap.data() } as ExamSetting;
-    }
-    
-    // Default fallback settings
-    const defaultSettings: ExamSetting = {
-      id: "global",
-      defaultDurationMinutes: 60,
-      defaultPassPercentage: 40,
-      enableNegativeMarkingDefault: false,
-      defaultWrongPenalty: 0.25,
-      allowStudentReviewAnswers: false,
-      showLeaderboardToStudents: true,
-      autoSubmitOnTimeExpiry: true,
-      preventTabSwitching: false,
-      updatedAt: new Date().toISOString(),
-      updatedBy: "system"
-    };
+const DEFAULT_EXAM_SETTINGS: ExamSetting = {
+  id: "global",
+  defaultDurationMinutes: 60,
+  defaultPassPercentage: 40,
+  enableNegativeMarkingDefault: false,
+  defaultWrongPenalty: 0.25,
+  allowStudentReviewAnswers: false,
+  showLeaderboardToStudents: true,
+  autoSubmitOnTimeExpiry: true,
+  preventTabSwitching: false,
+  updatedAt: new Date().toISOString(),
+  updatedBy: "system"
+};
 
-    await setDoc(docRef, defaultSettings);
-    return defaultSettings;
-  } catch (error) {
-    console.error("Error fetching exam settings:", error);
-    return {
-      id: "global",
-      defaultDurationMinutes: 60,
-      defaultPassPercentage: 40,
-      enableNegativeMarkingDefault: false,
-      defaultWrongPenalty: 0.25,
-      allowStudentReviewAnswers: false,
-      showLeaderboardToStudents: true,
-      autoSubmitOnTimeExpiry: true,
-      preventTabSwitching: false,
-      updatedAt: new Date().toISOString(),
-      updatedBy: "system"
-    };
+export async function fetchExamSettings(): Promise<ExamSetting> {
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(db, "exam_settings", "global");
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const s = { id: snap.id, ...snap.data() } as ExamSetting;
+        void tryMirrorToServer("/api/exam/sync-batch", "POST", { settings: s });
+        return s;
+      }
+      const fallback = { ...DEFAULT_EXAM_SETTINGS, updatedAt: new Date().toISOString() };
+      await setDoc(docRef, fallback).catch(() => {});
+      return fallback;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error fetching exam settings:", error);
+      }
+    }
   }
+
+  try {
+    const res = await examApiFetch("/api/exam/settings");
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.settings) return data.settings as ExamSetting;
+    }
+  } catch (error) {
+    console.error("Error fetching exam settings from server:", error);
+  }
+  return { ...DEFAULT_EXAM_SETTINGS, updatedAt: new Date().toISOString() };
 }
 
 export async function updateExamSettings(settings: Partial<ExamSetting>, actorId: string = "admin"): Promise<void> {
-  try {
-    const docRef = doc(db, "exam_settings", "global");
-    await setDoc(docRef, {
-      ...settings,
-      updatedAt: new Date().toISOString(),
-      updatedBy: actorId
-    }, { merge: true });
+  const payload = {
+    ...settings,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actorId
+  };
 
-    await logExamActivity({
-      action: "EXAM_SETTINGS_UPDATED",
-      targetId: "global",
-      actorId,
-      details: "Updated global examination system settings."
-    });
-  } catch (error) {
-    console.error("Error updating exam settings:", error);
-    handleFirestoreError(error, OperationType.WRITE, "exam_settings/global");
+  if (auth.currentUser) {
+    try {
+      await setDoc(doc(db, "exam_settings", "global"), payload, { merge: true });
+      void tryMirrorToServer("/api/exam/settings", "PUT", payload);
+      await logExamActivity({
+        action: "EXAM_SETTINGS_UPDATED",
+        targetId: "global",
+        actorId,
+        details: "Updated global examination system settings."
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error updating exam settings:", error);
+        handleFirestoreError(error, OperationType.WRITE, "exam_settings/global");
+        return;
+      }
+    }
+  }
+
+  const res = await examApiFetch("/api/exam/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to update exam settings.");
   }
 }
 
 export async function logExamActivity(log: Omit<ExamActivityLog, "id" | "timestamp">): Promise<void> {
-  try {
-    const docRef = doc(collection(db, "exam_activity_logs"));
-    const entry: ExamActivityLog = {
-      ...log,
-      id: docRef.id,
-      timestamp: new Date().toISOString()
-    };
-    await setDoc(docRef, entry);
-  } catch (error) {
-    console.warn("Could not write exam activity log:", error);
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(collection(db, "exam_activity_logs"));
+      const entry: ExamActivityLog = {
+        ...log,
+        id: docRef.id,
+        timestamp: new Date().toISOString()
+      };
+      await setDoc(docRef, entry);
+      void tryMirrorToServer("/api/exam/logs", "POST", log);
+      return;
+    } catch {
+      // Fall back to server log
+    }
   }
+
+  await tryMirrorToServer("/api/exam/logs", "POST", log);
 }
 
 export async function fetchExamActivityLogs(): Promise<ExamActivityLog[]> {
+  if (auth.currentUser) {
+    try {
+      const ref = collection(db, "exam_activity_logs");
+      const q = query(ref, orderBy("timestamp", "desc"), limit(100));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamActivityLog));
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error fetching exam activity logs:", error);
+      }
+    }
+  }
+
   try {
-    const ref = collection(db, "exam_activity_logs");
-    const q = query(ref, orderBy("timestamp", "desc"), limit(100));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamActivityLog));
+    const res = await examApiFetch("/api/exam/logs");
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.logs) ? data.logs : [];
   } catch (error) {
     console.error("Error fetching exam activity logs:", error);
     return [];
@@ -1297,112 +1714,147 @@ export async function fetchAnswerScripts(filters?: {
   search?: string;
   evaluationStatus?: string;
   sortBy?: string;
-  timeFilter?: string; // "ALL", "TODAY", "YESTERDAY", "THIS_WEEK"
+  timeFilter?: string;
   startDate?: string;
   endDate?: string;
 }): Promise<ExamAttempt[]> {
-  try {
-    const ref = collection(db, "exam_attempts");
-    const q = query(ref, orderBy("createdAt", "desc"));
-    const snap = await getDocs(q);
+  let items: ExamAttempt[] | null = null;
 
-    let items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamAttempt));
-
-    // Filter out unstarted attempts (only show submitted, auto_submitted, expired, or in_progress with answers)
-    items = items.filter(a => a.status !== "not_started");
-
-    if (filters) {
-      if (filters.examId && filters.examId !== "ALL") {
-        items = items.filter(a => a.examId === filters.examId);
-      }
-      if (filters.evaluationStatus && filters.evaluationStatus !== "ALL") {
-        items = items.filter(a => (a.evaluationStatus || "pending") === filters.evaluationStatus);
-      }
-      if (filters.timeFilter && filters.timeFilter !== "ALL") {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        if (filters.timeFilter === "TODAY") {
-          items = items.filter(a => {
-            const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
-            return dt >= startOfToday;
-          });
-        } else if (filters.timeFilter === "YESTERDAY") {
-          const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
-          items = items.filter(a => {
-            const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
-            return dt >= startOfYesterday && dt < startOfToday;
-          });
-        } else if (filters.timeFilter === "THIS_WEEK") {
-          const startOfWeek = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
-          items = items.filter(a => {
-            const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
-            return dt >= startOfWeek;
-          });
-        }
-      }
-      if (filters.startDate) {
-        const start = new Date(filters.startDate);
-        items = items.filter(a => new Date(a.submittedAt || a.startedAt || a.createdAt) >= start);
-      }
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        end.setHours(23, 59, 59, 999);
-        items = items.filter(a => new Date(a.submittedAt || a.startedAt || a.createdAt) <= end);
-      }
-      if (filters.search && filters.search.trim()) {
-        const s = filters.search.toLowerCase().trim();
-        items = items.filter(a => 
-          (a.candidateName || "").toLowerCase().includes(s) ||
-          (a.registrationNumber || "").toLowerCase().includes(s) ||
-          (a.userId || "").toLowerCase().includes(s) ||
-          (a.examTitle || "").toLowerCase().includes(s) ||
-          a.id.toLowerCase().includes(s)
-        );
-      }
-      if (filters.sortBy) {
-        if (filters.sortBy === "highest_score") {
-          items.sort((a, b) => (b.finalScore ?? b.score ?? 0) - (a.finalScore ?? a.score ?? 0));
-        } else if (filters.sortBy === "lowest_score") {
-          items.sort((a, b) => (a.finalScore ?? a.score ?? 0) - (b.finalScore ?? b.score ?? 0));
-        } else if (filters.sortBy === "oldest") {
-          items.sort((a, b) => new Date(a.startedAt || a.createdAt).getTime() - new Date(b.startedAt || b.createdAt).getTime());
-        } else if (filters.sortBy === "candidate_name") {
-          items.sort((a, b) => (a.candidateName || "").localeCompare(b.candidateName || ""));
-        } else if (filters.sortBy === "roll_number") {
-          items.sort((a, b) => (a.registrationNumber || "").localeCompare(b.registrationNumber || ""));
-        }
+  if (auth.currentUser) {
+    try {
+      const ref = collection(db, "exam_attempts");
+      const q = query(ref, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamAttempt));
+      void tryMirrorToServer("/api/exam/sync-batch", "POST", { attempts: items });
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        console.error("Error fetching answer scripts from Firestore:", error);
       }
     }
-
-    return items;
-  } catch (error) {
-    console.error("Error fetching answer scripts:", error);
-    return [];
   }
+
+  if (items === null) {
+    try {
+      const res = await examApiFetch("/api/exam/attempts");
+      if (!res.ok) return [];
+      const data = await res.json();
+      items = Array.isArray(data?.attempts) ? data.attempts : [];
+    } catch (error) {
+      console.error("Error fetching answer scripts:", error);
+      return [];
+    }
+  }
+
+  items = items.filter(a => a.status !== "not_started");
+
+  if (filters) {
+    if (filters.examId && filters.examId !== "ALL") {
+      items = items.filter(a => a.examId === filters.examId);
+    }
+    if (filters.evaluationStatus && filters.evaluationStatus !== "ALL") {
+      items = items.filter(a => (a.evaluationStatus || "pending") === filters.evaluationStatus);
+    }
+    if (filters.timeFilter && filters.timeFilter !== "ALL") {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      if (filters.timeFilter === "TODAY") {
+        items = items.filter(a => {
+          const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
+          return dt >= startOfToday;
+        });
+      } else if (filters.timeFilter === "YESTERDAY") {
+        const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+        items = items.filter(a => {
+          const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
+          return dt >= startOfYesterday && dt < startOfToday;
+        });
+      } else if (filters.timeFilter === "THIS_WEEK") {
+        const startOfWeek = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
+        items = items.filter(a => {
+          const dt = new Date(a.submittedAt || a.startedAt || a.createdAt);
+          return dt >= startOfWeek;
+        });
+      }
+    }
+    if (filters.startDate) {
+      const start = new Date(filters.startDate);
+      items = items.filter(a => new Date(a.submittedAt || a.startedAt || a.createdAt) >= start);
+    }
+    if (filters.endDate) {
+      const end = new Date(filters.endDate);
+      end.setHours(23, 59, 59, 999);
+      items = items.filter(a => new Date(a.submittedAt || a.startedAt || a.createdAt) <= end);
+    }
+    if (filters.search && filters.search.trim()) {
+      const s = filters.search.toLowerCase().trim();
+      items = items.filter(a =>
+        (a.candidateName || "").toLowerCase().includes(s) ||
+        (a.registrationNumber || "").toLowerCase().includes(s) ||
+        (a.userId || "").toLowerCase().includes(s) ||
+        (a.examTitle || "").toLowerCase().includes(s) ||
+        a.id.toLowerCase().includes(s)
+      );
+    }
+    if (filters.sortBy) {
+      if (filters.sortBy === "highest_score") {
+        items.sort((a, b) => (b.finalScore ?? b.score ?? 0) - (a.finalScore ?? a.score ?? 0));
+      } else if (filters.sortBy === "lowest_score") {
+        items.sort((a, b) => (a.finalScore ?? a.score ?? 0) - (b.finalScore ?? b.score ?? 0));
+      } else if (filters.sortBy === "oldest") {
+        items.sort((a, b) => new Date(a.startedAt || a.createdAt).getTime() - new Date(b.startedAt || b.createdAt).getTime());
+      } else if (filters.sortBy === "candidate_name") {
+        items.sort((a, b) => (a.candidateName || "").localeCompare(b.candidateName || ""));
+      } else if (filters.sortBy === "roll_number") {
+        items.sort((a, b) => (a.registrationNumber || "").localeCompare(b.registrationNumber || ""));
+      }
+    }
+  }
+
+  return items;
 }
 
 export async function logAnswerScriptAudit(audit: Omit<AnswerScriptAuditLog, "id" | "timestamp">): Promise<void> {
-  try {
-    const docRef = doc(collection(db, "answer_script_audit_logs"));
-    const entry: AnswerScriptAuditLog = {
-      ...audit,
-      id: docRef.id,
-      timestamp: new Date().toISOString()
-    };
-    await setDoc(docRef, entry);
-  } catch (err) {
-    console.warn("Could not log answer script audit:", err);
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(collection(db, "answer_script_audit_logs"));
+      const entry: AnswerScriptAuditLog = {
+        ...audit,
+        id: docRef.id,
+        timestamp: new Date().toISOString()
+      };
+      await setDoc(docRef, entry);
+      void tryMirrorToServer("/api/exam/audit-logs", "POST", entry);
+      return;
+    } catch {
+      // Fall back to server
+    }
   }
+
+  await tryMirrorToServer("/api/exam/audit-logs", "POST", audit);
 }
 
 export async function fetchAttemptAuditLogs(attemptId: string): Promise<AnswerScriptAuditLog[]> {
+  if (auth.currentUser) {
+    try {
+      const ref = collection(db, "answer_script_audit_logs");
+      const q = query(ref, where("attemptId", "==", attemptId));
+      const snap = await getDocs(q);
+      const logs = snap.docs.map(d => ({ id: d.id, ...d.data() } as AnswerScriptAuditLog));
+      return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch (err) {
+      if (!isFirestorePermissionError(err)) {
+        console.error("Error fetching attempt audit logs:", err);
+      }
+    }
+  }
+
   try {
-    const ref = collection(db, "answer_script_audit_logs");
-    const q = query(ref, where("attemptId", "==", attemptId));
-    const snap = await getDocs(q);
-    const logs = snap.docs.map(d => ({ id: d.id, ...d.data() } as AnswerScriptAuditLog));
-    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const res = await examApiFetch(`/api/exam/audit-logs?attemptId=${encodeURIComponent(attemptId)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.logs) ? data.logs : [];
   } catch (err) {
     console.error("Error fetching attempt audit logs:", err);
     return [];
@@ -1422,7 +1874,6 @@ export async function saveQuestionEvaluation(params: {
 }): Promise<ExamAttempt> {
   const { attemptId, questionId, obtainedMarks, maxMarks, comment, actorId, actorName, overrideReason, isManuallyOverridden } = params;
 
-  // Validation Rule 13: 0 <= obtainedMarks <= maxMarks
   if (obtainedMarks < 0 || obtainedMarks > maxMarks) {
     throw new Error(`Obtained marks must be between 0 and maximum marks (${maxMarks}). (নম্বর ০ থেকে ${maxMarks} এর মধ্যে হতে হবে)`);
   }
@@ -1457,7 +1908,6 @@ export async function saveQuestionEvaluation(params: {
     [questionId]: newEval
   };
 
-  // Record history entry
   const historyEntry: MarksHistoryEntry = {
     id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     questionId,
@@ -1471,15 +1921,12 @@ export async function saveQuestionEvaluation(params: {
 
   const updatedHistory = [...(attempt.marksHistory || []), historyEntry];
 
-  // Re-calculate counts and scores across questions
   const questions = attempt.questionSnapshot || [];
-  let totalManualMarks = 0;
   let evaluatedQuestionsCount = 0;
 
   questions.forEach(q => {
     const ev = updatedEvaluations[q.id];
     if (ev !== undefined) {
-      totalManualMarks += ev.obtainedMarks;
       evaluatedQuestionsCount++;
     }
   });
@@ -1493,9 +1940,7 @@ export async function saveQuestionEvaluation(params: {
     evalStatus = "partially_evaluated";
   }
 
-  const attemptRef = doc(db, "exam_attempts", attemptId);
-
-  await updateDoc(attemptRef, {
+  await patchAttemptEverywhere(attemptId, {
     manualEvaluations: updatedEvaluations,
     marksHistory: updatedHistory,
     evaluationStatus: evalStatus,
@@ -1505,7 +1950,6 @@ export async function saveQuestionEvaluation(params: {
     updatedAt: now
   });
 
-  // Log audit
   await logAnswerScriptAudit({
     attemptId,
     questionId,
@@ -1517,7 +1961,6 @@ export async function saveQuestionEvaluation(params: {
     reason: overrideReason || comment || "Question evaluation updated",
   });
 
-  // Recalculate final combined result and sync
   return await recalculateAttemptResult(attemptId, actorId, actorName);
 }
 
@@ -1577,8 +2020,7 @@ export async function saveBulkEvaluations(params: {
   const evaluatedCount = Object.keys(updatedEvaluations).length;
   const evalStatus: EvaluationStatus = evaluatedCount >= questions.length ? "fully_evaluated" : "partially_evaluated";
 
-  const attemptRef = doc(db, "exam_attempts", attemptId);
-  await updateDoc(attemptRef, {
+  await patchAttemptEverywhere(attemptId, {
     manualEvaluations: updatedEvaluations,
     marksHistory: updatedHistory,
     evaluationStatus: evalStatus,
@@ -1599,7 +2041,7 @@ export async function saveBulkEvaluations(params: {
   return await recalculateAttemptResult(attemptId, actorId, actorName);
 }
 
-export async function recalculateAttemptResult(attemptId: string, actorId: string, actorName?: string): Promise<ExamAttempt> {
+export async function recalculateAttemptResult(attemptId: string, _actorId: string, _actorName?: string): Promise<ExamAttempt> {
   const attempt = await getAttemptById(attemptId);
   if (!attempt) throw new Error("Attempt not found");
 
@@ -1633,12 +2075,9 @@ export async function recalculateAttemptResult(attemptId: string, actorId: strin
     const fullQ = qMap.get(q.id);
     const userAnsObj = answers[q.id];
     const qMaxMarks = q.marks || fullQ?.marks || 1;
-    const isSubjective = ["short_question", "fill_gaps", "changing_sentence", "tag_question"].includes(q.questionType);
-
     const manualEval = manualEvals[q.id];
 
     if (manualEval !== undefined) {
-      // Use manual score directly
       manualMarks += manualEval.obtainedMarks;
       if (manualEval.obtainedMarks >= qMaxMarks) {
         correctCount++;
@@ -1646,7 +2085,6 @@ export async function recalculateAttemptResult(attemptId: string, actorId: strin
         wrongCount++;
       }
     } else {
-      // Evaluate objective auto score
       if (!userAnsObj || userAnsObj.selectedAnswer === undefined || userAnsObj.selectedAnswer === null || userAnsObj.selectedAnswer === "") {
         unansweredCount++;
         return;
@@ -1686,8 +2124,6 @@ export async function recalculateAttemptResult(attemptId: string, actorId: strin
   const percentage = calculatedTotalMarks > 0 ? Number(((combinedObtainedScore / calculatedTotalMarks) * 100).toFixed(2)) : 0;
   const isPassed = combinedObtainedScore >= (exam.passMarks || 0);
 
-  const attemptRef = doc(db, "exam_attempts", attemptId);
-
   const markingSummary = {
     totalQuestions: questions.length,
     attempted: questions.length - unansweredCount,
@@ -1700,7 +2136,7 @@ export async function recalculateAttemptResult(attemptId: string, actorId: strin
     isPassed
   };
 
-  await updateDoc(attemptRef, {
+  await patchAttemptEverywhere(attemptId, {
     autoScore: Math.max(0, Number(autoScore.toFixed(2))),
     manualMarks: Number(manualMarks.toFixed(2)),
     finalScore: combinedObtainedScore,
@@ -1714,12 +2150,12 @@ export async function recalculateAttemptResult(attemptId: string, actorId: strin
     updatedAt: new Date().toISOString()
   });
 
-  // Sync to exam_results collection so candidates & rankings see authoritative updated result
   const existingResult = await getResultByAttemptId(attemptId);
   const now = new Date().toISOString();
 
   if (existingResult) {
-    await updateDoc(doc(db, "exam_results", existingResult.id), {
+    await upsertExamResultEverywhere(existingResult.id, {
+      ...existingResult,
       score: combinedObtainedScore,
       totalMarks: calculatedTotalMarks,
       percentage,
@@ -1730,9 +2166,9 @@ export async function recalculateAttemptResult(attemptId: string, actorId: strin
       submittedAt: attempt.submittedAt || now
     });
   } else {
-    const newResRef = doc(collection(db, "exam_results"));
-    await setDoc(newResRef, {
-      id: newResRef.id,
+    const newId = auth.currentUser ? doc(collection(db, "exam_results")).id : `res_${Date.now()}`;
+    await upsertExamResultEverywhere(null, {
+      id: newId,
       examId: exam.id,
       examTitle: exam.title,
       attemptId,
@@ -1762,7 +2198,7 @@ export async function finalizeAttemptEvaluation(attemptId: string, actorId: stri
   const attempt = await recalculateAttemptResult(attemptId, actorId, actorName);
   const now = new Date().toISOString();
 
-  await updateDoc(doc(db, "exam_attempts", attemptId), {
+  await patchAttemptEverywhere(attemptId, {
     evaluationStatus: "finalized",
     finalizedAt: now,
     finalizedBy: actorId,
@@ -1788,7 +2224,7 @@ export async function reopenAttemptEvaluation(attemptId: string, reason: string,
   }
 
   const now = new Date().toISOString();
-  await updateDoc(doc(db, "exam_attempts", attemptId), {
+  await patchAttemptEverywhere(attemptId, {
     evaluationStatus: "reopened",
     updatedAt: now
   });
@@ -1816,17 +2252,11 @@ export async function recheckExamQuestionKey(params: {
 }): Promise<number> {
   const { examId, questionId, action, newCorrectAnswer, actorId, actorName, reason } = params;
 
-  // 1. Update Question Bank item if changing key
   if (action === "change_key" && newCorrectAnswer) {
     await updateQuestion(questionId, { correctAnswer: newCorrectAnswer }, actorId);
   }
 
-  // 2. Fetch all attempts for this exam
-  const attemptsRef = collection(db, "exam_attempts");
-  const q = query(attemptsRef, where("examId", "==", examId));
-  const snap = await getDocs(q);
-  const attempts = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamAttempt));
-
+  const attempts = await fetchAnswerScripts({ examId });
   let affectedCount = 0;
 
   for (const att of attempts) {
@@ -1842,7 +2272,7 @@ export async function recheckExamQuestionKey(params: {
         questionId,
         obtainedMarks: maxMarks,
         maxMarks,
-        comment: `Grace marks awarded (${action.replace("_", " ")}) - ${reason || 'Admin action'}`,
+        comment: `Grace marks awarded (${action.replace("_", " ")}) - ${reason || "Admin action"}`,
         isManuallyOverridden: true,
         evaluatedBy: actorId,
         evaluatedByName: actorName || "Admin",
@@ -1850,7 +2280,7 @@ export async function recheckExamQuestionKey(params: {
       };
     }
 
-    await updateDoc(doc(db, "exam_attempts", att.id), {
+    await patchAttemptEverywhere(att.id, {
       manualEvaluations: manualEvals,
       updatedAt: new Date().toISOString()
     });
@@ -1870,37 +2300,47 @@ export async function recheckExamQuestionKey(params: {
 }
 
 export async function deleteAttemptById(attemptId: string, actorId: string, actorName?: string): Promise<void> {
-  const attemptRef = doc(db, "exam_attempts", attemptId);
-  const snap = await getDoc(attemptRef);
-  if (!snap.exists()) {
+  const data = await getAttemptById(attemptId);
+  if (!data) {
     throw new Error("Answer script / attempt not found");
   }
 
-  const data = snap.data();
   const examId = data.examId;
   const candidateId = data.candidateId || data.userId;
 
-  // 1. Delete from exam_attempts
-  await deleteDoc(attemptRef);
-
-  // 2. Try deleting matching entry in leaderboard if exists
-  try {
-    const lbRef = collection(db, "leaderboard");
-    const q = query(lbRef, where("attemptId", "==", attemptId));
-    const lbSnap = await getDocs(q);
-    for (const lbDoc of lbSnap.docs) {
-      await deleteDoc(doc(db, "leaderboard", lbDoc.id));
+  if (auth.currentUser) {
+    try {
+      await deleteDoc(doc(db, "exam_attempts", attemptId));
+      try {
+        const lbRef = collection(db, "leaderboard");
+        const q = query(lbRef, where("attemptId", "==", attemptId));
+        const lbSnap = await getDocs(q);
+        for (const lbDoc of lbSnap.docs) {
+          await deleteDoc(doc(db, "leaderboard", lbDoc.id));
+        }
+      } catch (err) {
+        console.warn("Could not delete associated leaderboard entry:", err);
+      }
+      void tryMirrorToServer(`/api/exam/attempts/${encodeURIComponent(attemptId)}`, "DELETE", {});
+      await logExamActivity({
+        action: "EXAM_DELETED",
+        targetId: examId,
+        actorId,
+        details: `Deleted answer script / attempt ${attemptId} for candidate ${data.candidateName || candidateId} by ${actorName || actorId}`
+      });
+      return;
+    } catch (error) {
+      if (!isFirestorePermissionError(error)) {
+        throw error;
+      }
     }
-  } catch (err) {
-    console.warn("Could not delete associated leaderboard entry:", err);
   }
 
-  // 3. Log activity
-  await logExamActivity({
-    action: "EXAM_DELETED",
-    targetId: examId,
-    actorId,
-    details: `Deleted answer script / attempt ${attemptId} for candidate ${data.candidateName || candidateId} by ${actorName || actorId}`
+  const res = await examApiFetch(`/api/exam/attempts/${encodeURIComponent(attemptId)}`, {
+    method: "DELETE",
   });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || "Failed to delete answer script.");
+  }
 }
-

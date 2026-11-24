@@ -3,6 +3,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, RefreshCw, Calendar, Shield, Check, Copy, Printer, Download } from "lucide-react";
 import { db, doc, setDoc, getDocs, deleteDoc, collection, query, where, Timestamp } from "../firebase";
+import { getServerAuthHeaders } from "../lib/auth";
 
 interface AdminQrCodeModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface AdminQrCodeModalProps {
     username: string;
     name: string;
     role?: string;
+    permissions?: Record<string, boolean>;
   };
 }
 
@@ -23,6 +25,27 @@ export function AdminQrCodeModal({ isOpen, onClose, admin }: AdminQrCodeModalPro
 
   // Use specified role or fall back based on username
   const adminRole = admin.role || (admin.username === "admin" ? "super_admin" : "sub_admin");
+
+  const registerQrTokenOnServer = async (payload: {
+    qrToken: string;
+    username: string;
+    name: string;
+    role: string;
+    expiresAtMs: number | null;
+    permissions?: Record<string, boolean>;
+  }) => {
+    try {
+      const headers = await getServerAuthHeaders({ "Content-Type": "application/json" });
+      await fetch("/api/auth/qr-token", {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // Non-blocking server QR sync
+    }
+  };
 
   useEffect(() => {
     if (isOpen && admin) {
@@ -49,6 +72,14 @@ export function AdminQrCodeModal({ isOpen, onClose, admin }: AdminQrCodeModalPro
           const expiresAtMs = docData.expiresAt ? docData.expiresAt.toMillis() : Infinity;
           if (now < expiresAtMs) {
             setTokenData({ id: docId, ...docData });
+            await registerQrTokenOnServer({
+              qrToken: docData.qrToken,
+              username: docData.username || admin.username.toLowerCase(),
+              name: docData.name || admin.name,
+              role: docData.role || adminRole,
+              expiresAtMs: docData.expiresAt ? docData.expiresAt.toMillis() : null,
+              permissions: admin.permissions,
+            });
             setLoading(false);
             return;
           } else {
@@ -61,10 +92,9 @@ export function AdminQrCodeModal({ isOpen, onClose, admin }: AdminQrCodeModalPro
       // Generate secure unique token
       const randomPart = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const uniqueToken = `adm_qr_${admin.username.toLowerCase()}_${randomPart}`;
-      
-      const expiresAt = expiryDays === -1 
-        ? null 
-        : Timestamp.fromMillis(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+      const expiresAtMs =
+        expiryDays === -1 ? null : Date.now() + expiryDays * 24 * 60 * 60 * 1000;
+      const expiresAt = expiresAtMs === null ? null : Timestamp.fromMillis(expiresAtMs);
 
       const tokenRef = doc(collection(db, "adminTokens"));
       const newTokenPayload = {
@@ -87,6 +117,14 @@ export function AdminQrCodeModal({ isOpen, onClose, admin }: AdminQrCodeModalPro
       }
 
       await setDoc(tokenRef, newTokenPayload);
+      await registerQrTokenOnServer({
+        qrToken: uniqueToken,
+        username: admin.username.toLowerCase(),
+        name: admin.name,
+        role: adminRole,
+        expiresAtMs,
+        permissions: admin.permissions,
+      });
       setTokenData({ id: tokenRef.id, ...newTokenPayload });
     } catch (err) {
       console.error("Error managing admin token:", err);

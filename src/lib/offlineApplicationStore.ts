@@ -126,6 +126,8 @@ export async function fetchAndMergeCloudOfflineApplications(isAdminUser: boolean
 const INITIAL_SEED_DATA: OfflineApplication[] = [
   {
     id: "OFF-2026-0001",
+    applicationNumber: "OFF-2026-0001",
+    syncStatus: "Pending Sync",
     formNumber: "258",
     cadetNumber: "CDT-1042",
     applicationDate: "2026-09-10",
@@ -201,6 +203,8 @@ const INITIAL_SEED_DATA: OfflineApplication[] = [
   },
   {
     id: "OFF-2026-0002",
+    applicationNumber: "OFF-2026-0002",
+    syncStatus: "Pending Sync",
     formNumber: "258",
     cadetNumber: "CDT-2105",
     applicationDate: "2026-09-11",

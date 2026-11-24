@@ -5,6 +5,7 @@ import { Download, CheckCircle, Shield, Loader2, FileCheck, Info, Printer } from
 import { jsPDF } from "jspdf";
 import * as htmlToImage from "html-to-image";
 import { db, doc, getDoc } from "../firebase";
+import { getServerAuthHeaders } from "../lib/auth";
 import { motion } from "framer-motion";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
 
@@ -61,8 +62,10 @@ export function AdmitCard() {
 
       if (!found) {
         try {
+          const headers = await getServerAuthHeaders();
           const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
             credentials: "include",
+            headers,
           });
           if (res.ok) {
             const data = await res.json();

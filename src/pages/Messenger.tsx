@@ -8,10 +8,10 @@ import {
 import EmojiPicker, { Theme } from "emoji-picker-react";
 import {
   auth, db, collection, query, orderBy, limit, onSnapshot, where,
-  addDoc, deleteDoc, doc, Timestamp, getDoc, updateDoc,
+  addDoc, deleteDoc, doc, Timestamp, getDoc, getDocs, updateDoc,
   handleFirestoreError, reportFirestoreListenerError, OperationType
 } from "../firebase";
-import { getSession } from "../lib/auth";
+import { getSession, getServerAuthHeaders } from "../lib/auth";
 import { isAdminRole } from "../lib/rbac";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
@@ -78,12 +78,25 @@ export function Messenger() {
           }
         } else {
           const authUid = firebaseUser?.uid || session.uid || session.id;
-          if (firebaseUser && session.id) {
-            const docRef = doc(db, "applicants", session.id);
-            const docSnap = await getDoc(docRef).catch(() => null);
-            if (!cancelled && docSnap && docSnap.exists()) {
-              setUser({ ...docSnap.data(), id: docSnap.id, uid: authUid, role: session.role || "cadet" });
-              return;
+          if (firebaseUser) {
+            const targetApplicantId =
+              session.applicantId || (session.id && session.id !== firebaseUser.uid ? session.id : "");
+            if (targetApplicantId) {
+              const docRef = doc(db, "applicants", targetApplicantId);
+              const docSnap = await getDoc(docRef).catch(() => null);
+              if (!cancelled && docSnap && docSnap.exists()) {
+                setUser({ ...docSnap.data(), id: docSnap.id, uid: authUid, role: session.role || "cadet" });
+                return;
+              }
+            } else {
+              const appSnap = await getDocs(
+                query(collection(db, "applicants"), where("ownerUid", "==", firebaseUser.uid))
+              ).catch(() => null);
+              if (!cancelled && appSnap && !appSnap.empty) {
+                const docSnap = appSnap.docs[0];
+                setUser({ ...docSnap.data(), id: docSnap.id, uid: authUid, role: session.role || "cadet" });
+                return;
+              }
             }
           }
           if (!cancelled) {
@@ -307,6 +320,17 @@ export function Messenger() {
             };
 
         await addDoc(collection(db, "messages"), payload);
+        void getServerAuthHeaders({ "Content-Type": "application/json" }).then((headers) =>
+          fetch("/api/messages", {
+            method: "POST",
+            headers,
+            credentials: "include",
+            body: JSON.stringify({
+              content: text,
+              recipientId: isAdmin ? (activeChannel === "ALL" ? "ALL" : activeChannel) : "ADMIN",
+            }),
+          })
+        ).catch(() => {});
       } else {
         const res = await fetch("/api/messages", {
           method: "POST",
@@ -346,6 +370,13 @@ export function Messenger() {
     try {
       if (useFirestore) {
         await deleteDoc(doc(db, "messages", id));
+        void getServerAuthHeaders().then((headers) =>
+          fetch(`/api/messages/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            headers,
+            credentials: "include",
+          })
+        ).catch(() => {});
       } else {
         const res = await fetch(`/api/messages/${encodeURIComponent(id)}`, {
           method: "DELETE",

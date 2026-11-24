@@ -33,6 +33,7 @@ import {
   FolderKanban,
   ArrowRight,
   Power,
+  Database,
 } from "lucide-react";
 import {
   BarChart,
@@ -73,10 +74,15 @@ import {
   getSession,
   hashPassword,
   SUPER_ADMIN_EMAIL,
+  getServerAuthHeaders,
+  setServerAuthToken,
+  syncServerSession,
+  centralAuthenticate,
+  setSession,
 } from "../lib/auth";
 import { useAuth } from "../context/AuthContext";
 import { useCMS } from "../context/CMSContext";
-import { isAdminRole } from "../lib/rbac";
+import { isAdminRole, normalizeRole, UserRole } from "../lib/rbac";
 import { AuditLogs } from "../components/modular/AuditLogs";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
@@ -91,6 +97,13 @@ import { MediaManager } from "../components/admin/MediaManager";
 import { ExamPortalWorkspace } from "../components/admin/ExamPortalWorkspace";
 import { AdmissionPortalWorkspace } from "../components/admin/AdmissionPortalWorkspace";
 import { AdmissionQrWorkspace } from "../components/admin/AdmissionQrWorkspace";
+import {
+  syncAllPortalDataToDatabase,
+  getDatabaseCollectionCounts,
+  isPortalDatabaseSeeded,
+  CollectionStat,
+  DatabaseSyncResult,
+} from "../services/databaseSyncService";
 
 const MODULE_STORAGE_KEY = "cbcc_admin_active_module_v1";
 const VALID_MODULES = new Set<AdminModuleId>([
@@ -190,6 +203,75 @@ function mergeApplicantLists(firestoreList: any[], serverList: any[]): any[] {
   });
 }
 
+function resolveGenericCreatedMs(item: any): number {
+  if (!item) return 0;
+  if (typeof item.createdAt?.toMillis === "function") return item.createdAt.toMillis();
+  if (typeof item.createdAt?.seconds === "number") return item.createdAt.seconds * 1000;
+  if (typeof item.createdAtIso === "string") {
+    const t = Date.parse(item.createdAtIso);
+    if (!Number.isNaN(t)) return t;
+  }
+  if (typeof item.createdAt === "string") {
+    const t = Date.parse(item.createdAt);
+    if (!Number.isNaN(t)) return t;
+  }
+  return 0;
+}
+
+function mergeInquiryLists(firestoreList: any[], serverList: any[]): any[] {
+  const byId = new Map<string, any>();
+  for (const s of serverList) {
+    const id = String(s?.id || "").trim();
+    if (!id) continue;
+    byId.set(id, { ...s, id, status: s.status || "unread", _createdAtMs: resolveGenericCreatedMs(s) });
+  }
+  for (const f of firestoreList) {
+    const id = String(f?.id || "").trim();
+    if (!id) continue;
+    const prev = byId.get(id);
+    const ms = resolveGenericCreatedMs(f) || prev?._createdAtMs || 0;
+    byId.set(id, {
+      ...(prev || {}),
+      ...f,
+      id,
+      status: f.status || prev?.status || "unread",
+      _createdAtMs: ms,
+    });
+  }
+  return Array.from(byId.values()).sort((a, b) => (b._createdAtMs || 0) - (a._createdAtMs || 0));
+}
+
+function mergePasswordResets(firestoreResets: any[], serverResets: any[]): any[] {
+  const byId = new Map<string, any>();
+  for (const s of serverResets) {
+    const id = String(s?.id || "").trim();
+    if (!id) continue;
+    byId.set(id, {
+      ...s,
+      id,
+      status: String(s.status || "pending").toLowerCase(),
+      _fromServer: true,
+      _fromFirestore: false,
+      _createdMs: resolveGenericCreatedMs(s),
+    });
+  }
+  for (const f of firestoreResets) {
+    const id = String(f?.id || "").trim();
+    if (!id) continue;
+    const prev = byId.get(id);
+    byId.set(id, {
+      ...(prev || {}),
+      ...f,
+      id,
+      status: String(f.status || prev?.status || "pending").toLowerCase(),
+      _fromServer: Boolean(prev?._fromServer),
+      _fromFirestore: true,
+      _createdMs: resolveGenericCreatedMs(f) || prev?._createdMs || 0,
+    });
+  }
+  return Array.from(byId.values()).sort((a, b) => (b._createdMs || 0) - (a._createdMs || 0));
+}
+
 function resolveInitialModule(urlParam: string | null): AdminModuleId {
   if (urlParam && VALID_MODULES.has(urlParam as AdminModuleId)) {
     return urlParam as AdminModuleId;
@@ -226,8 +308,11 @@ export function AdminDashboard() {
   const [logs, setLogs] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
+  const [serverPasswordResets, setServerPasswordResets] = useState<any[]>([]);
   const [adminSession, setAdminSession] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [serverAdminPwInput, setServerAdminPwInput] = useState("");
+  const [savingServerAdminPw, setSavingServerAdminPw] = useState(false);
 
   // Admin creation & permission states
   const [showAddAdmin, setShowAddAdmin] = useState(false);
@@ -272,15 +357,40 @@ export function AdminDashboard() {
   const [editingNotificationId, setEditingNotificationId] = useState<string | null>(null);
   const [confirmDeleteBroadcastId, setConfirmDeleteBroadcastId] = useState<string | null>(null);
 
-  // Inquiries
+  // Inquiries (merged real-time Firestore contact_messages + Express /api/contact)
   const [inquiries, setInquiries] = useState<any[]>([]);
+  const [firestoreInquiries, setFirestoreInquiries] = useState<any[]>([]);
+  const [serverInquiries, setServerInquiries] = useState<any[]>([]);
   const [loadingInquiries, setLoadingInquiries] = useState(false);
+  const [inquiryUpdatingId, setInquiryUpdatingId] = useState<string | null>(null);
+  const [confirmDeleteInquiryId, setConfirmDeleteInquiryId] = useState<string | null>(null);
+
+  // Firebase Auth UID-linked Users & Admissions
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [admissionsList, setAdmissionsList] = useState<any[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
+  const [updatingUserUid, setUpdatingUserUid] = useState<string | null>(null);
+
   const [savingWebsiteToggle, setSavingWebsiteToggle] = useState(false);
 
   const [toastMessage, setToastMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const [dbStats, setDbStats] = useState<CollectionStat[]>([]);
+  const [loadingDbStats, setLoadingDbStats] = useState(false);
+  const [dbSyncing, setDbSyncing] = useState(false);
+  const [dbSyncProgress, setDbSyncProgress] = useState<string>("");
+  const [dbSyncResult, setDbSyncResult] = useState<DatabaseSyncResult | null>(null);
+
+  // Server session re-verification state (e.g. if page reloaded after server restart or blocked cookie)
+  const [needsServerReauth, setNeedsServerReauth] = useState(false);
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState("");
+  const [reauthError, setReauthError] = useState("");
+  const [reauthing, setReauthing] = useState(false);
 
   const navigate = useNavigate();
   const {
@@ -289,7 +399,47 @@ export function AdminDashboard() {
     startImpersonation,
     logout,
   } = useAuth();
-  const { settings: cmsSettings, saveSettings } = useCMS();
+  const { settings: cmsSettings, saveSettings, refreshAll: refreshCmsAll } = useCMS();
+
+  const loadDatabaseStats = async () => {
+    if (!firebaseUser) return;
+    setLoadingDbStats(true);
+    try {
+      const counts = await getDatabaseCollectionCounts();
+      setDbStats(counts);
+    } finally {
+      setLoadingDbStats(false);
+    }
+  };
+
+  const handleFullDatabaseSync = async (overwrite: boolean = false) => {
+    if (!firebaseUser || dbSyncing) {
+      if (!firebaseUser) {
+        showToast("ডাটাবেস সিঙ্ক করতে Firebase ইমেইল ও পাসওয়ার্ড অ্যাডমিন লগইন প্রয়োজন।", "error");
+      }
+      return;
+    }
+    setDbSyncing(true);
+    setDbSyncProgress("Connecting to Cloud Firestore (cbcc-bncc-portal-db)...");
+    try {
+      const res = await syncAllPortalDataToDatabase({
+        overwrite,
+        actorId: firebaseUser.email || firebaseUser.uid,
+        onProgress: (step) => setDbSyncProgress(step),
+      });
+      setDbSyncResult(res);
+      await Promise.all([refreshCmsAll(), loadDatabaseStats()]);
+      showToast(
+        `সফলভাবে ${res.totalWritten}টি রেকর্ড Cloud Firestore-এ সংরক্ষণ করা হয়েছে!`,
+        "success"
+      );
+    } catch (err: any) {
+      showToast(err?.message || "Database sync failed.", "error");
+    } finally {
+      setDbSyncing(false);
+      setDbSyncProgress("");
+    }
+  };
 
   const handleSelectModule = (id: AdminModuleId) => {
     setActiveModule(id);
@@ -301,6 +451,10 @@ export function AdminDashboard() {
     setSearchParams({ module: id }, { replace: true });
     if (id === "notifications") {
       void loadContactInquiries();
+    } else if (id === "security") {
+      void loadServerPasswordResets();
+    } else if (id === "settings" && firebaseUser) {
+      void loadDatabaseStats();
     }
   };
 
@@ -321,10 +475,11 @@ export function AdminDashboard() {
   const loadContactInquiries = async () => {
     setLoadingInquiries(true);
     try {
-      const res = await fetch("/api/contact", { credentials: "include" });
+      const headers = await getServerAuthHeaders();
+      const res = await fetch("/api/contact", { credentials: "include", headers });
       if (res.ok) {
         const data = await res.json();
-        setInquiries(Array.isArray(data?.inquiries) ? data.inquiries : []);
+        setServerInquiries(Array.isArray(data?.inquiries) ? data.inquiries : []);
       }
     } catch (err) {
       console.error("Failed to load inquiries:", err);
@@ -333,28 +488,188 @@ export function AdminDashboard() {
     }
   };
 
-  const fetchServerApplicants = async (quiet = false) => {
+  const loadServerPasswordResets = async () => {
     try {
-      const headers: Record<string, string> = {};
-      if (firebaseUser) {
-        const token = await firebaseUser.getIdToken().catch(() => null);
-        if (token) headers.Authorization = `Bearer ${token}`;
-      }
-      const res = await fetch("/api/applications", {
+      const headers = await getServerAuthHeaders();
+      const res = await fetch("/api/auth/password-resets", {
         credentials: "include",
         headers,
       });
       if (res.ok) {
         const data = await res.json();
+        setServerPasswordResets(Array.isArray(data?.resets) ? data.resets : []);
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  };
+
+  const handleUpdateInquiryStatus = async (
+    id: string,
+    nextStatus: "unread" | "read" | "replied" | "resolved"
+  ) => {
+    setInquiryUpdatingId(id);
+    let updated = false;
+    if (firebaseUser) {
+      try {
+        await updateDoc(doc(db, "contact_messages", id), {
+          status: nextStatus,
+          handledBy: adminSession?.name || adminSession?.username || "admin",
+          updatedAt: Timestamp.now(),
+        });
+        updated = true;
+      } catch (err) {
+        reportFirestoreListenerError(err, OperationType.UPDATE, `contact_messages/${id}`);
+      }
+    }
+    setFirestoreInquiries((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, status: nextStatus } : i))
+    );
+    setServerInquiries((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, status: nextStatus } : i))
+    );
+    setInquiryUpdatingId(null);
+    if (updated) {
+      showToast(`বার্তা ${id} স্ট্যাটাস '${nextStatus}' করা হয়েছে।`);
+    } else if (!firebaseUser) {
+      showToast("শুধুমাত্র লোকাল ভিউতে স্ট্যাটাস পরিবর্তন হয়েছে (Firestore সংযোগ নেই)।", "error");
+    } else {
+      showToast("বার্তার স্ট্যাটাস আপডেট করা যায়নি।", "error");
+    }
+  };
+
+  const handleDeleteInquiry = async (id: string) => {
+    setInquiryUpdatingId(id);
+    try {
+      if (firebaseUser) {
+        await deleteDoc(doc(db, "contact_messages", id));
+      }
+      setFirestoreInquiries((prev) => prev.filter((i) => i.id !== id));
+      setServerInquiries((prev) => prev.filter((i) => i.id !== id));
+      setConfirmDeleteInquiryId(null);
+      showToast(`বার্তা ${id} মুছে ফেলা হয়েছে।`);
+    } catch (err: any) {
+      reportFirestoreListenerError(err, OperationType.DELETE, `contact_messages/${id}`);
+      showToast("বার্তা মুছতে শুধুমাত্র অ্যাডমিন অনুমতি প্রয়োজন।", "error");
+    } finally {
+      setInquiryUpdatingId(null);
+    }
+  };
+
+  const handleUpdateUserRole = async (targetUser: any, nextRole: UserRole) => {
+    const uid = targetUser.uid || targetUser.id;
+    if (!uid) return;
+    if (adminSession?.role !== "super_admin" && nextRole === "super_admin") {
+      showToast("শুধুমাত্র সুপার অ্যাডমিন super_admin রোল প্রদান করতে পারবেন।", "error");
+      return;
+    }
+    setUpdatingUserUid(uid);
+    try {
+      await updateDoc(doc(db, "users", uid), {
+        role: nextRole,
+        updatedAt: Timestamp.now(),
+      });
+      await addDoc(collection(db, "activity_logs"), {
+        type: "USER_ROLE_UPDATED",
+        targetId: uid,
+        actorId: adminSession?.id || adminSession?.username || "admin",
+        timestamp: Timestamp.now(),
+        details: `Updated UID ${uid} (${targetUser.email || targetUser.displayName || ""}) role to ${nextRole}`,
+      }).catch(() => {});
+      showToast(`ইউজার রোল '${nextRole}' আপডেট হয়েছে।`);
+    } catch (err: any) {
+      reportFirestoreListenerError(err, OperationType.UPDATE, `users/${uid}`);
+      showToast("রোল আপডেট করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে।", "error");
+    } finally {
+      setUpdatingUserUid(null);
+    }
+  };
+
+  const handleToggleUserAccountStatus = async (targetUser: any) => {
+    const uid = targetUser.uid || targetUser.id;
+    if (!uid) return;
+    const isCurrentlyActive = targetUser.accountStatus !== "Suspended" && targetUser.isActive !== false;
+    const nextStatus = isCurrentlyActive ? "Suspended" : "Active";
+    const nextActive = !isCurrentlyActive;
+    setUpdatingUserUid(uid);
+    try {
+      await updateDoc(doc(db, "users", uid), {
+        accountStatus: nextStatus,
+        isActive: nextActive,
+        updatedAt: Timestamp.now(),
+      });
+      await addDoc(collection(db, "activity_logs"), {
+        type: nextActive ? "USER_ACTIVATED" : "USER_SUSPENDED",
+        targetId: uid,
+        actorId: adminSession?.id || adminSession?.username || "admin",
+        timestamp: Timestamp.now(),
+        details: `Set user ${uid} accountStatus to ${nextStatus}`,
+      }).catch(() => {});
+      showToast(`ইউজার অ্যাকাউন্ট ${nextStatus} করা হয়েছে।`);
+    } catch (err: any) {
+      reportFirestoreListenerError(err, OperationType.UPDATE, `users/${uid}`);
+      showToast("ইউজার স্ট্যাটাস পরিবর্তন করা যায়নি।", "error");
+    } finally {
+      setUpdatingUserUid(null);
+    }
+  };
+
+  const fetchServerApplicants = async (quiet = false) => {
+    try {
+      let headers = await getServerAuthHeaders();
+      let res = await fetch("/api/applications", {
+        credentials: "include",
+        headers,
+      });
+
+      // Automatic one-shot session recovery if token/cookie wasn't attached yet
+      if (res.status === 401 || res.status === 403) {
+        if (firebaseUser) {
+          const idToken = await firebaseUser.getIdToken(true).catch(() => null);
+          const localSess = getSession();
+          if (idToken && localSess) {
+            await syncServerSession(localSess, idToken);
+            headers = await getServerAuthHeaders();
+            res = await fetch("/api/applications", {
+              credentials: "include",
+              headers,
+            });
+          }
+        } else {
+          const sessRes = await fetch("/api/auth/session", { credentials: "include" }).catch(() => null);
+          if (sessRes?.ok) {
+            const sessData = await sessRes.json().catch(() => null);
+            if (sessData?.authenticated && sessData?.token) {
+              setServerAuthToken(sessData.token);
+              headers = await getServerAuthHeaders();
+              res = await fetch("/api/applications", {
+                credentials: "include",
+                headers,
+              });
+            }
+          }
+        }
+      }
+
+      if (res.ok) {
+        const data = await res.json();
         const list = Array.isArray(data?.applications) ? data.applications : [];
         setServerApplicants(list);
-        if (!quiet) {
-          setApplicantsError((prev) =>
-            prev?.includes("Server registry") ? null : prev
-          );
+        setNeedsServerReauth(false);
+        setApplicantsError(null);
+      } else if (res.status === 401 || res.status === 403) {
+        if (!firebaseUser) {
+          setNeedsServerReauth(true);
+          if (!quiet) {
+            setApplicantsError(
+              "অ্যাডমিন সার্ভার সেশন যাচাই করা যায়নি বা মেয়াদ শেষ হয়েছে। অনুগ্রহ করে অ্যাডমিন পাসওয়ার্ড দিয়ে পুনরায় যাচাই করুন অথবা পুনরায় লগইন করুন।"
+            );
+          }
+        } else if (!quiet) {
+          setApplicantsError("অ্যাডমিন সেশন যাচাই বা সার্ভার থেকে আবেদন লোড করতে সমস্যা হয়েছে।");
         }
       } else if (!quiet && !firebaseUser) {
-        setApplicantsError("অ্যাডমিন সেশন যাচাই বা সার্ভার থেকে আবেদন লোড করতে সমস্যা হয়েছে।");
+        setApplicantsError("সার্ভার থেকে আবেদন লোড করতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।");
       }
     } catch {
       if (!quiet && !firebaseUser) {
@@ -367,9 +682,39 @@ export function AdminDashboard() {
     }
   };
 
+  const handleQuickReauth = async () => {
+    if (!reauthPassword.trim()) return;
+    setReauthing(true);
+    setReauthError("");
+    try {
+      const targetUser = adminSession?.username || adminSession?.email || "admin";
+      const res = await centralAuthenticate(targetUser, reauthPassword);
+      if (res.success && res.user && isAdminRole(res.user.role)) {
+        setSession(res.user);
+        setAdminSession(res.user);
+        setNeedsServerReauth(false);
+        setShowReauthModal(false);
+        setReauthPassword("");
+        setApplicantsError(null);
+        showToast("অ্যাডমিন সেশন সফলভাবে পুনঃযাচাই করা হয়েছে!");
+        await fetchServerApplicants(false);
+      } else {
+        setReauthError(res.error || "ভুল পাসওয়ার্ড। অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।");
+      }
+    } catch {
+      setReauthError("সার্ভারের সাথে সংযোগ করা যায়নি। পরে চেষ্টা করুন।");
+    } finally {
+      setReauthing(false);
+    }
+  };
+
   useEffect(() => {
     setApplicants(mergeApplicantLists(firestoreApplicants, serverApplicants));
   }, [firestoreApplicants, serverApplicants]);
+
+  useEffect(() => {
+    setInquiries(mergeInquiryLists(firestoreInquiries, serverInquiries));
+  }, [firestoreInquiries, serverInquiries]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -381,11 +726,13 @@ export function AdminDashboard() {
     }
     setAdminSession(session);
     void loadContactInquiries();
+    void loadServerPasswordResets();
     void fetchServerApplicants(false);
 
     // Poll server registry every 6 seconds so credential-only admins also get real-time updates
     const pollInterval = window.setInterval(() => {
       void fetchServerApplicants(true);
+      void loadServerPasswordResets();
     }, 6000);
 
     if (!firebaseUser) {
@@ -405,10 +752,13 @@ export function AdminDashboard() {
 
       const providerEmail = firebaseUser.providerData?.find((p) => p.email)?.email || "";
       const emailLower = (firebaseUser.email || providerEmail || "").toLowerCase();
+      let resolvedStaffRole: UserRole = normalizeRole(session.role);
+
       try {
-        let adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
+        let adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid)).catch(() => null);
         if (cancelled) return;
-        if (!adminDoc.exists() && emailLower === SUPER_ADMIN_EMAIL) {
+
+        if ((!adminDoc || !adminDoc.exists()) && emailLower === SUPER_ADMIN_EMAIL) {
           await setDoc(
             doc(db, "admins", firebaseUser.uid),
             {
@@ -432,11 +782,31 @@ export function AdminDashboard() {
             },
             { merge: true }
           ).catch(() => {});
-          adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
+          adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid)).catch(() => null);
           if (cancelled) return;
         }
-        if (!adminDoc.exists() && emailLower !== SUPER_ADMIN_EMAIL) {
-          setApplicantsError("Firestore অ্যাডমিন প্রোফাইল অনুপস্থিত (সার্ভার রেকর্ড প্রদর্শিত হচ্ছে)।");
+
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid)).catch(() => null);
+        if (cancelled) return;
+
+        const hasValidAdminDoc =
+          adminDoc?.exists() &&
+          adminDoc.data()?.isActive !== false &&
+          adminDoc.data()?.accountStatus !== "Suspended";
+        const hasValidUserStaffDoc =
+          userDoc?.exists() &&
+          userDoc.data()?.isActive !== false &&
+          userDoc.data()?.accountStatus !== "Suspended" &&
+          isAdminRole(userDoc.data()?.role);
+
+        if (emailLower === SUPER_ADMIN_EMAIL) {
+          resolvedStaffRole = "super_admin";
+        } else if (hasValidAdminDoc) {
+          resolvedStaffRole = normalizeRole(adminDoc!.data()?.role || "admin");
+        } else if (hasValidUserStaffDoc) {
+          resolvedStaffRole = normalizeRole(userDoc!.data()?.role);
+        } else {
+          setApplicantsError("Firestore স্টাফ/অ্যাডমিন প্রোফাইল অনুপস্থিত (সার্ভার রেকর্ড প্রদর্শিত হচ্ছে)।");
           setLoading(false);
           return;
         }
@@ -449,6 +819,10 @@ export function AdminDashboard() {
       }
 
       if (cancelled) return;
+
+      const isStaffSuperAdmin = resolvedStaffRole === "super_admin";
+      const isStaffModeratorOnly = resolvedStaffRole === "moderator" || resolvedStaffRole === "sub_admin";
+      const isStaffAdmin = isStaffSuperAdmin || !isStaffModeratorOnly;
 
       const handleListenerError = (path: string) => (err: any) => {
         reportFirestoreListenerError(err, OperationType.LIST, path);
@@ -495,15 +869,11 @@ export function AdminDashboard() {
                   createdAtIso: norm._createdAtIso || new Date().toISOString(),
                 };
               });
-              firebaseUser
-                .getIdToken()
-                .then((token) =>
+              getServerAuthHeaders({ "Content-Type": "application/json" })
+                .then((headers) =>
                   fetch("/api/applications/sync-batch", {
                     method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${token}`,
-                    },
+                    headers,
                     credentials: "include",
                     body: JSON.stringify({ applications: syncBatchPayload }),
                   })
@@ -517,19 +887,78 @@ export function AdminDashboard() {
 
       unsubscribers.push(
         onSnapshot(
+          collection(db, "admissions"),
+          (snapshot) => setAdmissionsList(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
+          (err) => reportFirestoreListenerError(err, OperationType.LIST, "admissions")
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, "contact_messages"),
+          (snapshot) => {
+            setFirestoreInquiries(snapshot.docs.map((d) => ({ ...d.data(), id: d.id })));
+          },
+          (err) => reportFirestoreListenerError(err, OperationType.LIST, "contact_messages")
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, "users"),
+          (snapshot) => {
+            const docs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+            docs.sort((a, b) => resolveGenericCreatedMs(b) - resolveGenericCreatedMs(a));
+            setUsersList(docs);
+          },
+          (err) => reportFirestoreListenerError(err, OperationType.LIST, "users")
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
           query(collection(db, "activity_logs"), orderBy("timestamp", "desc")),
           (snapshot) => setLogs(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
           (err) => reportFirestoreListenerError(err, OperationType.LIST, "activity_logs")
         )
       );
 
-      unsubscribers.push(
-        onSnapshot(
-          query(collection(db, "password_resets"), orderBy("createdAt", "desc")),
-          (snapshot) => setPasswordResets(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
-          (err) => reportFirestoreListenerError(err, OperationType.LIST, "password_resets")
-        )
-      );
+      if (isStaffAdmin) {
+        unsubscribers.push(
+          onSnapshot(
+            query(collection(db, "password_resets"), orderBy("createdAt", "desc")),
+            (snapshot) => setPasswordResets(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
+            (err) => reportFirestoreListenerError(err, OperationType.LIST, "password_resets")
+          )
+        );
+
+        // Auto-seed all missing website CMS, defaults, media catalog, guides, exam config & server records once
+        const bootstrapFlagKey = `cbcc_db_auto_seeded_${firebaseUser.uid}`;
+        if (!sessionStorage.getItem(bootstrapFlagKey)) {
+          sessionStorage.setItem(bootstrapFlagKey, "1");
+          void (async () => {
+            try {
+              const seeded = await isPortalDatabaseSeeded();
+              if (!seeded && !cancelled) {
+                await syncAllPortalDataToDatabase({
+                  overwrite: false,
+                  actorId: emailLower || firebaseUser.uid,
+                });
+                if (!cancelled) {
+                  void refreshCmsAll();
+                  void loadDatabaseStats();
+                }
+              } else if (!cancelled && activeModule === "settings") {
+                void loadDatabaseStats();
+              }
+            } catch {
+              // Non-blocking background auto-seed
+            }
+          })();
+        } else if (activeModule === "settings") {
+          void loadDatabaseStats();
+        }
+      }
 
       unsubscribers.push(
         onSnapshot(
@@ -539,11 +968,26 @@ export function AdminDashboard() {
         )
       );
 
-      if (session.role === "super_admin") {
+      if (isStaffSuperAdmin) {
         unsubscribers.push(
           onSnapshot(
             collection(db, "admins"),
-            (snapshot) => setAdmins(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
+            (snapshot) => {
+              const adminDocs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+              setAdmins(adminDocs);
+              if (adminDocs.length > 0) {
+                void getServerAuthHeaders({ "Content-Type": "application/json" })
+                  .then((headers) =>
+                    fetch("/api/auth/staff/sync-batch", {
+                      method: "POST",
+                      headers,
+                      credentials: "include",
+                      body: JSON.stringify({ staff: adminDocs }),
+                    })
+                  )
+                  .catch(() => {});
+              }
+            },
             (err) => reportFirestoreListenerError(err, OperationType.LIST, "admins")
           )
         );
@@ -564,28 +1008,45 @@ export function AdminDashboard() {
     if (!adminName || !adminUsername || !adminPassword) return;
     setCreatingAdmin(true);
     try {
+      const cleanUser = adminUsername.trim().toLowerCase();
       const snap = await getDocs(
-        query(collection(db, "admins"), where("username", "==", adminUsername.toLowerCase()))
+        query(collection(db, "admins"), where("username", "==", cleanUser))
       );
       if (!snap.empty) {
         showToast("This username is already taken.", "error");
         return;
       }
       const hashedPassword = await hashPassword(adminPassword);
-      await addDoc(collection(db, "admins"), {
+      const createdRef = await addDoc(collection(db, "admins"), {
         name: adminName,
-        username: adminUsername.toLowerCase(),
+        username: cleanUser,
         password: hashedPassword,
         role: "admin",
         permissions: adminPermissions,
+        isActive: true,
         createdAt: Timestamp.now(),
       });
+      const staffHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
+      await fetch("/api/auth/staff", {
+        method: "POST",
+        headers: staffHeaders,
+        credentials: "include",
+        body: JSON.stringify({
+          id: createdRef.id,
+          username: cleanUser,
+          name: adminName,
+          role: "admin",
+          passwordHash: hashedPassword,
+          permissions: adminPermissions,
+          isActive: true,
+        }),
+      }).catch(() => {});
       await addDoc(collection(db, "activity_logs"), {
         type: "ADMIN_CREATED",
-        targetId: adminUsername,
+        targetId: cleanUser,
         actorId: adminSession?.id || "super_admin",
         timestamp: Timestamp.now(),
-        details: `Super Admin created new admin: ${adminUsername}`,
+        details: `Super Admin created new admin: ${cleanUser}`,
       });
       setShowAddAdmin(false);
       setAdminName("");
@@ -611,23 +1072,40 @@ export function AdminDashboard() {
     setCreatingAdmin(true);
     try {
       const hashedPassword = await hashPassword(genPassword);
-      await addDoc(collection(db, "admins"), {
+      const qrPerms = {
+        canAdd: false,
+        canEdit: true,
+        canDelete: false,
+        canViewLogs: false,
+        canResetPW: false,
+        canApprove: false,
+        canExport: false,
+        canChat: false,
+      };
+      const createdRef = await addDoc(collection(db, "admins"), {
         name: `QR Admin ${randomSuffix}`,
         username: genUsername,
         password: hashedPassword,
         role: "qr_admin",
-        permissions: {
-          canAdd: false,
-          canEdit: true,
-          canDelete: false,
-          canViewLogs: false,
-          canResetPW: false,
-          canApprove: false,
-          canExport: false,
-          canChat: false,
-        },
+        permissions: qrPerms,
+        isActive: true,
         createdAt: Timestamp.now(),
       });
+      const staffHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
+      await fetch("/api/auth/staff", {
+        method: "POST",
+        headers: staffHeaders,
+        credentials: "include",
+        body: JSON.stringify({
+          id: createdRef.id,
+          username: genUsername,
+          name: `QR Admin ${randomSuffix}`,
+          role: "qr_admin",
+          passwordHash: hashedPassword,
+          permissions: qrPerms,
+          isActive: true,
+        }),
+      }).catch(() => {});
       await addDoc(collection(db, "activity_logs"), {
         type: "ADMIN_CREATED",
         targetId: genUsername,
@@ -645,7 +1123,14 @@ export function AdminDashboard() {
 
   const deleteAdmin = async (id: string) => {
     try {
+      const targetAdmin = admins.find((a) => a.id === id);
       await deleteDoc(doc(db, "admins", id));
+      const delHeaders = await getServerAuthHeaders();
+      await fetch(`/api/auth/staff/${encodeURIComponent(targetAdmin?.username || id)}`, {
+        method: "DELETE",
+        headers: delHeaders,
+        credentials: "include",
+      }).catch(() => {});
       setConfirmDeleteAdminId(null);
       showToast("Admin removed.");
     } catch {
@@ -658,6 +1143,22 @@ export function AdminDashboard() {
     setUpdatingPermissions(true);
     try {
       await updateDoc(doc(db, "admins", editingAdminId), { permissions: editPermissions });
+      const targetAdmin = admins.find((a) => a.id === editingAdminId);
+      if (targetAdmin?.username) {
+        const staffHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
+        await fetch("/api/auth/staff", {
+          method: "POST",
+          headers: staffHeaders,
+          credentials: "include",
+          body: JSON.stringify({
+            id: editingAdminId,
+            username: targetAdmin.username,
+            name: targetAdmin.name,
+            role: targetAdmin.role || "admin",
+            permissions: editPermissions,
+          }),
+        }).catch(() => {});
+      }
       await addDoc(collection(db, "activity_logs"), {
         type: "ADMIN_PERMISSIONS_UPDATED",
         targetId: editingAdminId,
@@ -706,9 +1207,10 @@ export function AdminDashboard() {
           details: `Admin reset password for user ${showPasswordReset}`,
         }).catch(() => {});
       }
+      const patchHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
       const res = await fetch(`/api/applications/${encodeURIComponent(showPasswordReset)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: patchHeaders,
         credentials: "include",
         body: JSON.stringify({ passwordHash: hashedPassword }),
       }).catch(() => null);
@@ -741,39 +1243,84 @@ export function AdminDashboard() {
       showToast("আপনার আবেদন অনুমোদন করার অনুমতি নেই।", "error");
       return;
     }
+    const targetApp = applicants.find((a) => a.id === id);
+    const targetOwnerUid = targetApp?.ownerUid || "public_applicant";
+    const isApprovedDecision = status === "Approved" || status === "Joined";
+    const admissionStatus = isApprovedDecision
+      ? "Approved"
+      : status === "Rejected"
+      ? "Rejected"
+      : "Pending";
+    const derivedAccountRole: UserRole = isApprovedDecision ? "cadet" : "user";
+
     let updated = false;
     if (firebaseUser) {
       try {
-        await updateDoc(doc(db, "applicants", id), { status });
+        await updateDoc(doc(db, "applicants", id), {
+          status,
+          role: derivedAccountRole,
+          updatedAt: Timestamp.now(),
+        });
         updated = true;
         await setDoc(
           doc(db, "public_qr_cards", id),
           {
             status,
-            isValidCadet: status === "Approved" || status === "Joined",
+            isValidCadet: isApprovedDecision,
             updatedAt: Timestamp.now(),
           },
           { merge: true }
         ).catch(() => {});
+        await setDoc(
+          doc(db, "admissions", id),
+          {
+            id,
+            applicantId: id,
+            ownerUid: targetOwnerUid,
+            admissionStatus,
+            decisionBy: adminSession?.id || adminSession?.username || "admin",
+            updatedAt: Timestamp.now(),
+          },
+          { merge: true }
+        ).catch(() => {});
+
+        // Sync linked /users/{uid} role between Applicant ("user") and Inducted Cadet ("cadet")
+        if (targetOwnerUid && targetOwnerUid !== "public_applicant") {
+          const uSnap = await getDoc(doc(db, "users", targetOwnerUid)).catch(() => null);
+          if (uSnap?.exists() && !isAdminRole(uSnap.data()?.role)) {
+            await updateDoc(doc(db, "users", targetOwnerUid), {
+              role: derivedAccountRole,
+              applicantId: id,
+              updatedAt: Timestamp.now(),
+            }).catch(() => {});
+          }
+        }
       } catch (err) {
         reportFirestoreListenerError(err, OperationType.UPDATE, `applicants/${id}`);
       }
     }
     try {
+      const patchHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
       const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: patchHeaders,
         credentials: "include",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, role: derivedAccountRole }),
       });
       if (res.ok) updated = true;
     } catch {
       // ignore network error if Firestore succeeded
     }
     if (updated) {
-      setServerApplicants((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-      setFirestoreApplicants((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-      showToast(`আবেদন স্ট্যাটাস '${status}' করা হয়েছে।`);
+      setServerApplicants((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, status, role: derivedAccountRole } : a))
+      );
+      setFirestoreApplicants((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, status, role: derivedAccountRole } : a))
+      );
+      showToast(
+        `আবেদন স্ট্যাটাস '${status}' এবং অ্যাকাউন্ট রোল '${derivedAccountRole}' করা হয়েছে।`
+      );
     } else {
       showToast("আবেদন স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে।", "error");
     }
@@ -806,9 +1353,10 @@ export function AdminDashboard() {
       }
     }
     try {
+      const patchHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
       const res = await fetch(`/api/applications/${encodeURIComponent(app.id)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: patchHeaders,
         credentials: "include",
         body: JSON.stringify({ isActive: nextActive, accountStatus: nextAccountStatus }),
       });
@@ -845,8 +1393,10 @@ export function AdminDashboard() {
       }
     }
     try {
+      const delHeaders = await getServerAuthHeaders();
       const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
         method: "DELETE",
+        headers: delHeaders,
         credentials: "include",
       });
       if (res.ok) deleted = true;
@@ -871,12 +1421,17 @@ export function AdminDashboard() {
         ids.forEach((id) => {
           const ref = doc(db, "applicants", id);
           const qrRef = doc(db, "public_qr_cards", id);
+          const admRef = doc(db, "admissions", id);
+          const appObj = applicants.find((a) => a.id === id);
+          const appOwnerUid = appObj?.ownerUid || "public_applicant";
           if (action === "Delete") {
             batch.delete(ref);
             batch.delete(qrRef);
+            batch.delete(admRef);
           } else {
             const nextStatus = action === "Approve" ? "Approved" : "Rejected";
-            batch.update(ref, { status: nextStatus });
+            const nextRole: UserRole = action === "Approve" ? "cadet" : "user";
+            batch.update(ref, { status: nextStatus, role: nextRole, updatedAt: Timestamp.now() });
             batch.set(
               qrRef,
               {
@@ -886,10 +1441,39 @@ export function AdminDashboard() {
               },
               { merge: true }
             );
+            batch.set(
+              admRef,
+              {
+                id,
+                applicantId: id,
+                ownerUid: appOwnerUid,
+                admissionStatus: nextStatus,
+                decisionBy: adminSession?.id || adminSession?.username || "admin",
+                updatedAt: Timestamp.now(),
+              },
+              { merge: true }
+            );
           }
         });
         await batch.commit();
         ok = true;
+        if (action !== "Delete") {
+          const nextRole: UserRole = action === "Approve" ? "cadet" : "user";
+          for (const id of ids) {
+            const appObj = applicants.find((a) => a.id === id);
+            const appOwnerUid = appObj?.ownerUid;
+            if (appOwnerUid && appOwnerUid !== "public_applicant") {
+              const uSnap = await getDoc(doc(db, "users", appOwnerUid)).catch(() => null);
+              if (uSnap?.exists() && !isAdminRole(uSnap.data()?.role)) {
+                await updateDoc(doc(db, "users", appOwnerUid), {
+                  role: nextRole,
+                  applicantId: id,
+                  updatedAt: Timestamp.now(),
+                }).catch(() => {});
+              }
+            }
+          }
+        }
         await addDoc(collection(db, "activity_logs"), {
           type: `BULK_${action.toUpperCase()}`,
           targetId: "MULTIPLE",
@@ -902,9 +1486,10 @@ export function AdminDashboard() {
       }
     }
     try {
+      const bulkHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
       const res = await fetch("/api/applications/bulk", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: bulkHeaders,
         credentials: "include",
         body: JSON.stringify({ ids, action }),
       });
@@ -919,8 +1504,13 @@ export function AdminDashboard() {
         setFirestoreApplicants((prev) => prev.filter((a) => !idSet.has(a.id)));
       } else {
         const nextStatus = action === "Approve" ? "Approved" : "Rejected";
-        setServerApplicants((prev) => prev.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus } : a)));
-        setFirestoreApplicants((prev) => prev.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus } : a)));
+        const nextRole = action === "Approve" ? "cadet" : "user";
+        setServerApplicants((prev) =>
+          prev.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus, role: nextRole } : a))
+        );
+        setFirestoreApplicants((prev) =>
+          prev.map((a) => (idSet.has(a.id) ? { ...a, status: nextStatus, role: nextRole } : a))
+        );
       }
       showToast(`Bulk ${action} completed successfully.`);
     } else {
@@ -1099,7 +1689,11 @@ export function AdminDashboard() {
     rejected: applicants.filter((a) => a.status === "Rejected").length,
   };
 
-  const pendingResetsCount = passwordResets.filter((r) => r.status === "pending").length;
+  const mergedPasswordResets = mergePasswordResets(passwordResets, serverPasswordResets);
+  const pendingResetsCount = mergedPasswordResets.filter(
+    (r) => String(r.status || "").toLowerCase() === "pending"
+  ).length;
+  const unreadInquiriesCount = inquiries.filter((i) => !i.status || i.status === "unread").length;
   const activeMeta = ADMIN_MODULE_LABELS[activeModule];
 
   if (loading && !adminSession) {
@@ -1145,6 +1739,7 @@ export function AdminDashboard() {
         adminRole={adminSession?.role || "super_admin"}
         pendingApplicantsCount={stats.pending}
         pendingResetsCount={pendingResetsCount}
+        unreadInquiriesCount={unreadInquiriesCount}
         canViewLogs={Boolean(adminSession?.permissions?.canViewLogs || adminSession?.role === "super_admin")}
         isSuperAdmin={adminSession?.role === "super_admin"}
         onLogout={handleLogout}
@@ -1196,6 +1791,39 @@ export function AdminDashboard() {
 
         {/* Workspace Viewport */}
         <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
+          {needsServerReauth && (
+            <div className="bg-amber-950/60 border border-amber-500/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-amber-200 flex items-center gap-2">
+                  <Shield size={16} className="text-amber-400 shrink-0" />
+                  সার্ভার অ্যাডমিন সেশন পুনঃযাচাই প্রয়োজন
+                </p>
+                <p className="text-xs text-amber-100/80">
+                  পৃষ্ঠা রিলোড বা সার্ভার রিস্টার্টের পর নিরাপদ ডেটা লোড করতে অনুগ্রহ করে আপনার অ্যাডমিন পাসওয়ার্ড দিয়ে যাচাই করুন অথবা পুনরায় লগইন করুন।
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReauthError("");
+                    setShowReauthModal(true);
+                  }}
+                  className="px-4 py-2 bg-[#C5A059] hover:bg-[#d4b068] text-[#002147] rounded-xl text-xs font-black cursor-pointer"
+                >
+                  পাসওয়ার্ড দিয়ে যাচাই করুন
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  পুনরায় লগইন করুন
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* MODULE 1: OVERVIEW */}
           {activeModule === "overview" && (
             <div className="space-y-6">
@@ -1291,7 +1919,14 @@ export function AdminDashboard() {
 
                   <div className="bg-[#020B18] border border-white/10 rounded-xl p-5 flex flex-col justify-between space-y-4">
                     <div className="space-y-1.5">
-                      <p className="text-xs font-mono text-emerald-400">02. ADMISSION PORTAL</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-mono text-emerald-400">02. ADMISSION PORTAL</p>
+                        {admissionsList.length > 0 && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                            {admissionsList.length} admissions
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-base font-bold text-white">Admission Management</h3>
                       <p className="text-xs text-slate-400 leading-relaxed">
                         Online & offline applicants, open/close admission forms, physical BMI verification, circulars, guides & merit list.
@@ -1650,6 +2285,158 @@ export function AdminDashboard() {
                 </div>
               </div>
 
+              {/* UID-Linked Portal Users (Firebase Auth /users/{uid}) */}
+              <div className="bg-[#061830] border border-white/10 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Users size={16} className="text-[#C5A059]" />
+                      Registered Portal Users (Firebase Auth UID)
+                      <span className="text-[11px] font-mono text-[#C5A059] bg-[#C5A059]/10 px-2 py-0.5 rounded-lg">
+                        {usersList.length}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Live directory of users linked by Firebase Authentication UID with role-based access control
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="Search name, email, UID..."
+                      className="bg-[#020B18] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-[#C5A059]"
+                    />
+                    <select
+                      value={userRoleFilter}
+                      onChange={(e) => setUserRoleFilter(e.target.value)}
+                      className="bg-[#020B18] border border-white/15 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#C5A059]"
+                    >
+                      <option value="all">All Roles</option>
+                      <option value="super_admin">super_admin</option>
+                      <option value="admin">admin</option>
+                      <option value="moderator">moderator</option>
+                      <option value="cadet">cadet</option>
+                      <option value="user">user</option>
+                    </select>
+                  </div>
+                </div>
+
+                {usersList.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-slate-400">
+                    {firebaseUser
+                      ? "No UID-linked user profiles created yet. Users will appear here automatically upon Firebase Sign-In."
+                      : "Sign in with Firebase Super Admin / Admin account to view live UID-linked users."}
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto border border-white/10 rounded-xl">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-[#020B18] text-slate-400 border-b border-white/10">
+                          <th className="py-3 px-4 font-bold uppercase">User / UID</th>
+                          <th className="py-3 px-4 font-bold uppercase">Email</th>
+                          <th className="py-3 px-4 font-bold uppercase">Cadet / App ID</th>
+                          <th className="py-3 px-4 font-bold uppercase">Role</th>
+                          <th className="py-3 px-4 font-bold uppercase">Status</th>
+                          <th className="py-3 px-4 font-bold uppercase text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10">
+                        {usersList
+                          .filter((u) => {
+                            if (userRoleFilter !== "all" && u.role !== userRoleFilter) return false;
+                            if (!userSearch.trim()) return true;
+                            const q = userSearch.trim().toLowerCase();
+                            return (
+                              String(u.displayName || "").toLowerCase().includes(q) ||
+                              String(u.email || "").toLowerCase().includes(q) ||
+                              String(u.uid || u.id || "").toLowerCase().includes(q) ||
+                              String(u.applicantId || u.registrationNumber || "").toLowerCase().includes(q)
+                            );
+                          })
+                          .map((u) => {
+                            const uid = u.uid || u.id;
+                            const isTargetSuper = u.role === "super_admin";
+                            const canModifyUser =
+                              adminSession?.role === "super_admin" ||
+                              (adminSession?.role === "admin" && !isTargetSuper);
+                            const isActiveAccount = u.accountStatus !== "Suspended" && u.isActive !== false;
+                            return (
+                              <tr key={uid} className="hover:bg-white/[0.03]">
+                                <td className="py-3 px-4">
+                                  <p className="font-bold text-white">{u.displayName || "BNCC User"}</p>
+                                  <p className="text-[10px] font-mono text-slate-400 truncate max-w-[180px]" title={uid}>
+                                    {uid}
+                                  </p>
+                                </td>
+                                <td className="py-3 px-4 font-mono text-slate-300">{u.email || "—"}</td>
+                                <td className="py-3 px-4 font-mono text-[#C5A059]">
+                                  {u.registrationNumber || u.applicantId || "—"}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {canModifyUser && !isTargetSuper ? (
+                                    <select
+                                      value={u.role || "user"}
+                                      disabled={updatingUserUid === uid}
+                                      onChange={(e) =>
+                                        void handleUpdateUserRole(u, normalizeRole(e.target.value))
+                                      }
+                                      className="bg-[#020B18] border border-white/15 rounded-lg px-2.5 py-1 text-xs font-bold text-white outline-none focus:border-[#C5A059] disabled:opacity-50"
+                                    >
+                                      <option value="user">user</option>
+                                      <option value="cadet">cadet</option>
+                                      <option value="moderator">moderator</option>
+                                      <option value="admin">admin</option>
+                                    </select>
+                                  ) : (
+                                    <span className="font-bold uppercase text-[#C5A059]">
+                                      {u.role || "user"}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      isActiveAccount
+                                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                        : "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                                    }`}
+                                  >
+                                    {isActiveAccount ? "Active" : "Suspended"}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  {canModifyUser && !isTargetSuper ? (
+                                    <button
+                                      type="button"
+                                      disabled={updatingUserUid === uid}
+                                      onClick={() => void handleToggleUserAccountStatus(u)}
+                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer disabled:opacity-50 ${
+                                        isActiveAccount
+                                          ? "bg-rose-500/15 hover:bg-rose-600 text-rose-200 hover:text-white"
+                                          : "bg-emerald-500/15 hover:bg-emerald-600 text-emerald-200 hover:text-white"
+                                      }`}
+                                    >
+                                      {updatingUserUid === uid
+                                        ? "Saving..."
+                                        : isActiveAccount
+                                        ? "Suspend"
+                                        : "Activate"}
+                                    </button>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-500">Protected</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-white">Cadet Profile Change Approvals</h3>
                 <PendingProfileApprovals adminSession={adminSession} />
@@ -1840,11 +2627,18 @@ export function AdminDashboard() {
 
               {/* Public Contact Inquiries */}
               <div className="lg:col-span-6 bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
                     <Mail size={18} className="text-[#C5A059]" />
-                    Public Contact Inquiries (/contact)
-                  </h2>
+                    <h2 className="text-base font-bold text-white">
+                      Public Contact Inquiries (/contact)
+                    </h2>
+                    {unreadInquiriesCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {unreadInquiriesCount} Unread
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => void loadContactInquiries()}
@@ -1857,28 +2651,103 @@ export function AdminDashboard() {
 
                 {inquiries.length === 0 ? (
                   <p className="py-12 text-center text-xs text-slate-400">
-                    No contact form submissions recorded in the current server session yet.
+                    No contact form submissions received yet. New messages from /contact stream here in real time.
                   </p>
                 ) : (
-                  <div className="space-y-3 max-h-[560px] overflow-y-auto">
-                    {inquiries.map((inq) => (
-                      <div
-                        key={inq.id}
-                        className="p-4 bg-[#020B18] border border-white/10 rounded-xl space-y-1.5 text-xs"
-                      >
-                        <div className="flex items-center justify-between text-[11px] text-[#C5A059] font-mono">
-                          <span>{inq.id}</span>
-                          <span className="text-slate-400">
-                            {new Date(inq.createdAt).toLocaleString()}
-                          </span>
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                    {inquiries.map((inq) => {
+                      const status = inq.status || "unread";
+                      const createdMs = inq._createdAtMs || resolveGenericCreatedMs(inq);
+                      return (
+                        <div
+                          key={inq.id}
+                          className={`p-4 bg-[#020B18] border rounded-xl space-y-2 text-xs ${
+                            status === "unread" ? "border-[#C5A059]/45" : "border-white/10"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                            <div className="flex items-center gap-2 font-mono text-[#C5A059]">
+                              <span>{inq.id}</span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full font-sans text-[10px] font-bold uppercase ${
+                                  status === "unread"
+                                    ? "bg-amber-500/20 text-amber-300"
+                                    : status === "replied"
+                                    ? "bg-cyan-500/20 text-cyan-300"
+                                    : status === "resolved"
+                                    ? "bg-emerald-500/20 text-emerald-300"
+                                    : "bg-slate-700 text-slate-200"
+                                }`}
+                              >
+                                {status}
+                              </span>
+                            </div>
+                            <span className="text-slate-400">
+                              {createdMs > 0 ? new Date(createdMs).toLocaleString() : "Just now"}
+                            </span>
+                          </div>
+                          <p className="font-bold text-white">{inq.subject}</p>
+                          <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{inq.message}</p>
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
+                            <p className="text-[11px] text-slate-400">
+                              {inq.name} · {inq.phone} {inq.email ? `· ${inq.email}` : ""}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {status === "unread" && (
+                                <button
+                                  type="button"
+                                  disabled={inquiryUpdatingId === inq.id}
+                                  onClick={() => void handleUpdateInquiryStatus(inq.id, "read")}
+                                  className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] font-bold cursor-pointer"
+                                >
+                                  Mark Read
+                                </button>
+                              )}
+                              {status !== "replied" && status !== "resolved" && (
+                                <button
+                                  type="button"
+                                  disabled={inquiryUpdatingId === inq.id}
+                                  onClick={() => void handleUpdateInquiryStatus(inq.id, "replied")}
+                                  className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-600 text-cyan-200 hover:text-white text-[10px] font-bold cursor-pointer"
+                                >
+                                  Replied
+                                </button>
+                              )}
+                              {status !== "resolved" && (
+                                <button
+                                  type="button"
+                                  disabled={inquiryUpdatingId === inq.id}
+                                  onClick={() => void handleUpdateInquiryStatus(inq.id, "resolved")}
+                                  className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-600 text-emerald-200 hover:text-white text-[10px] font-bold cursor-pointer"
+                                >
+                                  Resolve
+                                </button>
+                              )}
+                              {(adminSession?.role === "super_admin" || adminSession?.role === "admin") &&
+                                (confirmDeleteInquiryId === inq.id ? (
+                                  <button
+                                    type="button"
+                                    disabled={inquiryUpdatingId === inq.id}
+                                    onClick={() => void handleDeleteInquiry(inq.id)}
+                                    className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Confirm
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteInquiryId(inq.id)}
+                                    className="p-1 text-rose-400 hover:text-rose-300 cursor-pointer"
+                                    title="Delete inquiry"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
                         </div>
-                        <p className="font-bold text-white">{inq.subject}</p>
-                        <p className="text-slate-300">{inq.message}</p>
-                        <p className="text-[11px] text-slate-400 pt-1 border-t border-white/10">
-                          {inq.name} · {inq.phone} {inq.email ? `· ${inq.email}` : ""}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1908,41 +2777,141 @@ export function AdminDashboard() {
 
           {/* MODULE 11: SETTINGS & BACKUPS */}
           {activeModule === "settings" && (
-            <div className="bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-5">
-              <div>
-                <h2 className="text-base font-bold text-white">Portal Settings & Full Data Backups</h2>
-                <p className="text-xs text-slate-400">
-                  Institutional configuration and full JSON/Excel export tools
-                </p>
+            <div className="space-y-6">
+              <div className="bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-5">
+                <div>
+                  <h2 className="text-base font-bold text-white">Portal Settings & Full Data Backups</h2>
+                  <p className="text-xs text-slate-400">
+                    Institutional configuration and full JSON/Excel export tools
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <button
+                    type="button"
+                    onClick={exportToExcel}
+                    className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
+                  >
+                    <FileSpreadsheet size={18} className="text-[#C5A059]" />
+                    <p className="text-sm font-bold text-white">Export Applicants (.xlsx)</p>
+                    <p className="text-xs text-slate-400">Download full spreadsheet ledger</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportJsonBackup}
+                    className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
+                  >
+                    <Download size={18} className="text-[#C5A059]" />
+                    <p className="text-sm font-bold text-white">Full JSON Snapshot</p>
+                    <p className="text-xs text-slate-400">Applicants & broadcast notifications</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void downloadPhotosZip()}
+                    className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
+                  >
+                    <Archive size={18} className="text-[#C5A059]" />
+                    <p className="text-sm font-bold text-white">Candidate Photos ZIP</p>
+                    <p className="text-xs text-slate-400">Bundle all applicant portraits</p>
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <button
-                  type="button"
-                  onClick={exportToExcel}
-                  className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
-                >
-                  <FileSpreadsheet size={18} className="text-[#C5A059]" />
-                  <p className="text-sm font-bold text-white">Export Applicants (.xlsx)</p>
-                  <p className="text-xs text-slate-400">Download full spreadsheet ledger</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={exportJsonBackup}
-                  className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
-                >
-                  <Download size={18} className="text-[#C5A059]" />
-                  <p className="text-sm font-bold text-white">Full JSON Snapshot</p>
-                  <p className="text-xs text-slate-400">Applicants & broadcast notifications</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void downloadPhotosZip()}
-                  className="p-4 bg-[#020B18] hover:bg-white/5 border border-white/10 rounded-xl text-left space-y-1 cursor-pointer"
-                >
-                  <Archive size={18} className="text-[#C5A059]" />
-                  <p className="text-sm font-bold text-white">Candidate Photos ZIP</p>
-                  <p className="text-xs text-slate-400">Bundle all applicant portraits</p>
-                </button>
+
+              {/* Cloud Firestore Full Sync & Live Collection Monitor */}
+              <div className="bg-[#061830] border border-white/10 rounded-2xl p-6 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Database size={18} className="text-[#C5A059]" />
+                      <span>Cloud Firestore Database Sync (cbcc-bncc-portal-db)</span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      ওয়েবসাইটের সকল CMS কন্টেন্ট, ক্যাডেট তথ্য, নোটিশ, মিডিয়া ক্যাটালগ, নির্দেশিকা, এক্সাম ও সার্ভার রেকর্ড সরাসরি ক্লাউড ডাটাবেসে সংরক্ষণ ও যাচাই করুন
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadDatabaseStats()}
+                      disabled={loadingDbStats || !firebaseUser}
+                      className="px-3.5 py-2 bg-[#020B18] hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-slate-200 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      <RefreshCw size={14} className={loadingDbStats ? "animate-spin" : ""} />
+                      <span>Refresh Counts</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleFullDatabaseSync(false)}
+                      disabled={dbSyncing || !firebaseUser}
+                      className="px-4 py-2 bg-[#C5A059] hover:bg-[#d4b06a] text-[#00152e] rounded-xl text-xs font-black flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    >
+                      {dbSyncing ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+                      <span>{dbSyncing ? "Syncing All Data..." : "Sync All Missing Data to Database"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {!firebaseUser && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-200">
+                    Cloud Firestore-এ ডাটা পুশ করতে অনুগ্রহ করে Firebase ইমেইল ও পাসওয়ার্ড অ্যাডমিন অ্যাকাউন্ট দিয়ে লগইন করুন।
+                  </div>
+                )}
+
+                {dbSyncProgress && (
+                  <div className="p-3 bg-sky-500/10 border border-sky-500/30 rounded-xl text-xs text-sky-200 flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin shrink-0" />
+                    <span>{dbSyncProgress}</span>
+                  </div>
+                )}
+
+                {dbSyncResult && (
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-200 space-y-1">
+                    <div className="font-bold">
+                      Last Sync: {new Date(dbSyncResult.syncedAt).toLocaleString()} — Written/Verified {dbSyncResult.totalWritten} records
+                    </div>
+                    {dbSyncResult.warnings.length > 0 && (
+                      <div className="text-amber-300 text-[11px]">
+                        Warnings: {dbSyncResult.warnings.join(" | ")}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {dbStats.length === 0 ? (
+                    <div className="col-span-full py-6 text-center text-xs text-slate-400">
+                      {loadingDbStats
+                        ? "ডাটাবেস কালেকশন সংখ্যা লোড হচ্ছে..."
+                        : "সংখ্যা দেখতে 'Refresh Counts' বা 'Sync All Missing Data' ক্লিক করুন।"}
+                    </div>
+                  ) : (
+                    dbStats.map((stat) => (
+                      <div
+                        key={stat.collection}
+                        className="p-3 bg-[#020B18] border border-white/10 rounded-xl space-y-1"
+                      >
+                        <div className="text-[11px] font-bold text-slate-300 truncate" title={stat.label}>
+                          {stat.label}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-slate-500 truncate">
+                            {stat.collection}
+                          </span>
+                          <span
+                            className={`text-sm font-black ${
+                              stat.count > 0
+                                ? "text-emerald-400"
+                                : stat.count === 0
+                                ? "text-slate-500"
+                                : "text-rose-400"
+                            }`}
+                          >
+                            {stat.count >= 0 ? stat.count : "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1952,107 +2921,213 @@ export function AdminDashboard() {
             <div className="space-y-6">
               <div className="bg-[#061830] border border-white/10 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <h2 className="text-sm font-bold text-white">Admin Session & Security Status</h2>
+                  <h2 className="text-sm font-bold text-white">Admin Session &amp; Security Status</h2>
                   <p className="text-xs text-slate-400">
-                    Session: {adminSession?.username} ({adminSession?.role})
+                    Session: {adminSession?.username || adminSession?.id} ({adminSession?.role})
                     {firebaseUser?.email ? ` · ${firebaseUser.email}` : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void loadServerPasswordResets()}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw size={13} /> Refresh Security Alerts
+                  </button>
                   <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5">
                     <CheckCircle size={14} /> Active Session
                   </span>
                 </div>
               </div>
 
+              {adminSession?.role === "super_admin" && (
+                <div className="bg-[#061830] border border-[#C5A059]/30 rounded-2xl p-5 space-y-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Key size={15} className="text-[#C5A059]" />
+                      Set Server Credential Password (username: admin)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      সার্ভার ভল্টে <code className="text-[#C5A059]">admin</code> ইউজারনেমের জন্য bcrypt-হ্যাশড পাসওয়ার্ড নির্ধারণ করুন (পরিবেশ ভ্যারিয়েবল না থাকলে এটি ব্যবহৃত হবে)।
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="password"
+                      value={serverAdminPwInput}
+                      onChange={(e) => setServerAdminPwInput(e.target.value)}
+                      placeholder="New strong password (min 8 chars)"
+                      className="flex-1 bg-[#020B18] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-[#C5A059]"
+                    />
+                    <button
+                      type="button"
+                      disabled={savingServerAdminPw || serverAdminPwInput.trim().length < 8}
+                      onClick={async () => {
+                        setSavingServerAdminPw(true);
+                        try {
+                          const headers = await getServerAuthHeaders({
+                            "Content-Type": "application/json",
+                          });
+                          const res = await fetch("/api/auth/staff", {
+                            method: "POST",
+                            headers,
+                            credentials: "include",
+                            body: JSON.stringify({
+                              id: "admin",
+                              username: "admin",
+                              name: "Platoon Commander",
+                              role: "super_admin",
+                              plainPassword: serverAdminPwInput.trim(),
+                              isActive: true,
+                            }),
+                          });
+                          if (res.ok) {
+                            setServerAdminPwInput("");
+                            showToast("সার্ভার admin ক্রেডেনশিয়াল পাসওয়ার্ড সফলভাবে সংরক্ষিত হয়েছে।");
+                          } else {
+                            const d = await res.json().catch(() => null);
+                            showToast(d?.error || "পাসওয়ার্ড সেট করা যায়নি।", "error");
+                          }
+                        } finally {
+                          setSavingServerAdminPw(false);
+                        }
+                      }}
+                      className="px-4 py-2.5 bg-[#C5A059] hover:bg-[#d4b06a] text-[#002147] rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
+                    >
+                      {savingServerAdminPw ? "Saving..." : "Save Admin Password"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-4">
-                <h3 className="text-sm font-bold text-white">Password Reset Security Alerts</h3>
-                {passwordResets.length === 0 ? (
+                <h3 className="text-sm font-bold text-white">
+                  Password Reset &amp; Officer-Assisted Recovery Requests ({mergedPasswordResets.length})
+                </h3>
+                {mergedPasswordResets.length === 0 ? (
                   <div className="bg-[#061830] border border-white/10 rounded-2xl p-12 text-center text-xs text-slate-400">
                     No active password reset verification requests.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {passwordResets.map((reset: any) => (
-                      <div
-                        key={reset.id}
-                        className="bg-[#061830] border border-white/10 rounded-2xl p-5 space-y-3 text-xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-white">{reset.name}</span>
-                          <span
-                            className={`font-bold ${
-                              reset.status === "pending" ? "text-rose-400" : "text-emerald-400"
-                            }`}
-                          >
-                            {reset.status === "pending" ? "Pending" : "Resolved"}
-                          </span>
-                        </div>
-                        <p className="font-mono text-slate-400">
-                          ID: {reset.applicantId} · {reset.mobile}
-                        </p>
-                        {reset.photo && (
-                          <img
-                            src={reset.photo}
-                            alt="Security snapshot"
-                            referrerPolicy="no-referrer"
-                            className="w-full h-36 object-cover rounded-xl bg-black"
-                          />
-                        )}
-                        <p className="text-[11px] text-slate-400 font-mono">
-                          IP: {reset.ipAddress || "N/A"}
-                          {reset.latitude && reset.longitude && (
-                            <>
-                              {" · "}
-                              <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${reset.latitude},${reset.longitude}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[#C5A059] underline"
-                              >
-                                Map Location
-                              </a>
-                            </>
+                    {mergedPasswordResets.map((reset: any) => {
+                      const isPending = String(reset.status || "").toLowerCase() === "pending";
+                      return (
+                        <div
+                          key={reset.id}
+                          className="bg-[#061830] border border-white/10 rounded-2xl p-5 space-y-3 text-xs"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-white truncate">{reset.name || reset.identifier}</span>
+                            <span
+                              className={`font-bold shrink-0 ${
+                                isPending ? "text-rose-400" : "text-emerald-400"
+                              }`}
+                            >
+                              {isPending ? "Pending" : "Resolved"}
+                            </span>
+                          </div>
+                          <p className="font-mono text-slate-400">
+                            ID: {reset.applicantId || reset.identifier} · {reset.mobile}
+                          </p>
+                          {reset.note && (
+                            <p className="text-slate-300 bg-[#020B18] border border-white/10 rounded-xl p-2.5 leading-relaxed">
+                              {reset.note}
+                            </p>
                           )}
-                        </p>
-                        {reset.status === "pending" && (
-                          <div className="flex gap-2 pt-2 border-t border-white/10">
-                            {confirmDismissResetId === reset.id ? (
+                          {reset.photo && (
+                            <img
+                              src={reset.photo}
+                              alt="Security snapshot"
+                              referrerPolicy="no-referrer"
+                              className="w-full h-36 object-cover rounded-xl bg-black"
+                            />
+                          )}
+                          <p className="text-[11px] text-slate-400 font-mono">
+                            IP: {reset.ipAddress || "N/A"}
+                            {reset.latitude && reset.longitude && (
+                              <>
+                                {" · "}
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${reset.latitude},${reset.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[#C5A059] underline"
+                                >
+                                  Map Location
+                                </a>
+                              </>
+                            )}
+                          </p>
+                          {isPending && (
+                            <div className="flex gap-2 pt-2 border-t border-white/10">
+                              {confirmDismissResetId === reset.id ? (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (firebaseUser && reset._fromFirestore) {
+                                      await deleteDoc(doc(db, "password_resets", reset.id)).catch(() => {});
+                                    }
+                                    if (reset._fromServer) {
+                                      const delHeaders = await getServerAuthHeaders();
+                                      await fetch(`/api/auth/password-resets/${encodeURIComponent(reset.id)}`, {
+                                        method: "DELETE",
+                                        headers: delHeaders,
+                                        credentials: "include",
+                                      }).catch(() => {});
+                                      setServerPasswordResets((prev) => prev.filter((r) => r.id !== reset.id));
+                                    }
+                                    setConfirmDismissResetId(null);
+                                    showToast("রিসেট অনুরোধ বাতিল করা হয়েছে।");
+                                  }}
+                                  className="flex-1 py-2 bg-rose-600 text-white rounded-xl font-bold cursor-pointer"
+                                >
+                                  Confirm Dismiss
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDismissResetId(reset.id)}
+                                  className="flex-1 py-2 bg-white/10 text-slate-200 rounded-xl font-bold cursor-pointer"
+                                >
+                                  Dismiss
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  await deleteDoc(doc(db, "password_resets", reset.id));
-                                  setConfirmDismissResetId(null);
+                                  if (firebaseUser && reset._fromFirestore) {
+                                    await updateDoc(doc(db, "password_resets", reset.id), {
+                                      status: "resolved",
+                                      resolvedAt: Timestamp.now(),
+                                    }).catch(() => {});
+                                  }
+                                  if (reset._fromServer) {
+                                    const patchHeaders = await getServerAuthHeaders({
+                                      "Content-Type": "application/json",
+                                    });
+                                    await fetch(`/api/auth/password-resets/${encodeURIComponent(reset.id)}`, {
+                                      method: "PATCH",
+                                      headers: patchHeaders,
+                                      credentials: "include",
+                                      body: JSON.stringify({ status: "resolved" }),
+                                    }).catch(() => {});
+                                    setServerPasswordResets((prev) =>
+                                      prev.map((r) => (r.id === reset.id ? { ...r, status: "resolved" } : r))
+                                    );
+                                  }
+                                  showToast("রিসেট অনুরোধ Resolved হিসেবে চিহ্নিত হয়েছে।");
                                 }}
-                                className="flex-1 py-2 bg-rose-600 text-white rounded-xl font-bold cursor-pointer"
+                                className="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-bold cursor-pointer"
                               >
-                                Confirm Dismiss
+                                Mark Resolved
                               </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDismissResetId(reset.id)}
-                                className="flex-1 py-2 bg-white/10 text-slate-200 rounded-xl font-bold cursor-pointer"
-                              >
-                                Dismiss
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await updateDoc(doc(db, "password_resets", reset.id), {
-                                  status: "resolved",
-                                  resolvedAt: Timestamp.now(),
-                                });
-                              }}
-                              className="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-bold cursor-pointer"
-                            >
-                              Mark Resolved
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2232,6 +3307,63 @@ export function AdminDashboard() {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+      {/* Quick Server Session Re-Verification Modal */}
+      {showReauthModal && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-[#061830] border border-[#C5A059]/40 p-6 rounded-2xl space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Shield size={18} className="text-[#C5A059]" />
+                অ্যাডমিন সেশন যাচাই করুন
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowReauthModal(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              অ্যাকাউন্ট: <span className="font-mono text-[#C5A059] font-bold">{adminSession?.username || adminSession?.email || "admin"}</span> — সার্ভার থেকে সকল আবেদন ও তথ্য লোড করতে পাসওয়ার্ড দিন।
+            </p>
+            {reauthError && (
+              <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-xs text-rose-200 font-semibold">
+                {reauthError}
+              </div>
+            )}
+            <input
+              type="password"
+              value={reauthPassword}
+              onChange={(e) => setReauthPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleQuickReauth();
+              }}
+              placeholder="অ্যাডমিন পাসওয়ার্ড লিখুন"
+              className="w-full bg-[#020B18] border border-white/15 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#C5A059]"
+              autoFocus
+            />
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowReauthModal(false)}
+                className="flex-1 py-2.5 bg-white/10 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                বাতিল
+              </button>
+              <button
+                type="button"
+                disabled={reauthing || !reauthPassword.trim()}
+                onClick={() => void handleQuickReauth()}
+                className="flex-1 py-2.5 bg-[#C5A059] hover:bg-[#d4b068] text-[#002147] rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
+              >
+                {reauthing ? "যাচাই হচ্ছে..." : "যাচাই ও লোড করুন"}
+              </button>
+            </div>
           </div>
         </div>
       )}

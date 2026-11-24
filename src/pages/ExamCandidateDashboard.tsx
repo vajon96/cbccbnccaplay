@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { getSession } from "../lib/auth";
+import { getSession, getServerAuthHeaders } from "../lib/auth";
 import { fetchExams, getUserAttempts, getResultByAttemptId } from "../services/examService";
 import { ExamModel, ExamAttempt, ExamResult } from "../types";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
@@ -32,21 +32,31 @@ export function ExamCandidateDashboard() {
     const loadCandidateData = async () => {
       setLoading(true);
       try {
-        // Load candidate doc safely (prefer ownerUid match so rules always succeed)
+        // Load candidate doc safely (Firebase ownerUid query or server session fallback)
         try {
           if (auth.currentUser?.uid) {
             const appSnap = await getDocs(
               query(collection(db, "applicants"), where("ownerUid", "==", auth.currentUser.uid))
             );
+            const targetApplicantId =
+              session.applicantId ||
+              (session.id && session.id !== auth.currentUser.uid ? session.id : "");
             if (!appSnap.empty) {
               setCandidateProfile(appSnap.docs[0].data());
-            } else {
-              const snap = await getDoc(doc(db, "applicants", session.id));
+            } else if (targetApplicantId) {
+              const snap = await getDoc(doc(db, "applicants", targetApplicantId));
               if (snap.exists()) setCandidateProfile(snap.data());
             }
           } else {
-            const snap = await getDoc(doc(db, "applicants", session.id));
-            if (snap.exists()) setCandidateProfile(snap.data());
+            const headers = await getServerAuthHeaders();
+            const res = await fetch(`/api/applications/${encodeURIComponent(session.id)}`, {
+              headers,
+              credentials: "include",
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.application) setCandidateProfile(data.application);
+            }
           }
         } catch {
           // Non-blocking profile fetch

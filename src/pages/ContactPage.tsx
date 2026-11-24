@@ -5,6 +5,15 @@ import {
 } from "lucide-react";
 import { useCMS } from "../context/CMSContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import {
+  auth,
+  db,
+  doc,
+  setDoc,
+  serverTimestamp,
+  reportFirestoreListenerError,
+  OperationType,
+} from "../firebase";
 
 export function ContactPage() {
   useDocumentMeta({
@@ -26,31 +35,106 @@ export function ContactPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.phone.trim() || !formData.message.trim()) {
+    const cleanName = formData.name.trim();
+    const cleanPhone = formData.phone.trim();
+    const cleanEmail = formData.email.trim();
+    const cleanSubject = formData.subject.trim() || "সাধারণ অনুসন্ধান";
+    const cleanMessage = formData.message.trim();
+
+    if (!cleanName || !cleanPhone || !cleanMessage) {
       setSubmitError("অনুগ্রহ করে নাম, মোবাইল নম্বর এবং বিস্তারিত বার্তা পূরণ করুন।");
+      return;
+    }
+    if (cleanName.length > 160) {
+      setSubmitError("নাম ১৬০ অক্ষরের মধ্যে হতে হবে।");
+      return;
+    }
+    if (!/^[0-9+\-\s()]{6,25}$/.test(cleanPhone) || cleanPhone.length < 6 || cleanPhone.length > 32) {
+      setSubmitError("অনুগ্রহ করে সঠিক মোবাইল নম্বর (৬–২৫ অক্ষর) প্রদান করুন।");
+      return;
+    }
+    if (cleanEmail && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || cleanEmail.length > 160)) {
+      setSubmitError("অনুগ্রহ করে সঠিক ইমেইল ঠিকানা দিন (সর্বোচ্চ ১৬০ অক্ষর)।");
+      return;
+    }
+    if (cleanSubject.length > 200) {
+      setSubmitError("বিষয় ২০০ অক্ষরের মধ্যে লিখুন।");
+      return;
+    }
+    if (cleanMessage.length > 5000) {
+      setSubmitError("বার্তা ৫০০০ অক্ষরের মধ্যে হতে হবে।");
       return;
     }
 
     setSubmitting(true);
     setSubmitError("");
 
+    const generatedTicketId = `CBCC-INQ-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    const hasFirebaseUser = Boolean(auth.currentUser && !auth.currentUser.isAnonymous);
+    const ownerUid = hasFirebaseUser && auth.currentUser ? auth.currentUser.uid : "public_visitor";
+    const createdAtIso = new Date().toISOString();
+
+    let firestoreSaved = false;
+    let firestoreErrMsg = "";
+
+    try {
+      await setDoc(doc(db, "contact_messages", generatedTicketId), {
+        id: generatedTicketId,
+        referenceId: generatedTicketId,
+        ownerUid,
+        name: cleanName,
+        phone: cleanPhone,
+        email: cleanEmail,
+        subject: cleanSubject,
+        message: cleanMessage,
+        status: "unread",
+        createdAtIso,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      firestoreSaved = true;
+    } catch (err: any) {
+      reportFirestoreListenerError(err, OperationType.CREATE, `contact_messages/${generatedTicketId}`);
+      firestoreErrMsg = err?.message || "Firestore write failed";
+    }
+
+    let serverSaved = false;
+    let serverErrMsg = "";
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ticketId: generatedTicketId,
+          name: cleanName,
+          email: cleanEmail,
+          phone: cleanPhone,
+          subject: cleanSubject,
+          message: cleanMessage,
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(data.error || "বার্তা পাঠাতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।");
-        return;
+      if (res.ok) {
+        serverSaved = true;
+      } else {
+        serverErrMsg = data.error || `Server error (${res.status})`;
       }
-      setTicketId(data.ticketId || "CBCC-INQ-CONFIRMED");
     } catch {
-      setSubmitError("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন। অনুগ্রহ করে পরে আবার চেষ্টা করুন।");
+      serverErrMsg = "Server connection failed";
     } finally {
       setSubmitting(false);
     }
+
+    if (!firestoreSaved && !serverSaved) {
+      setSubmitError(
+        serverErrMsg && serverErrMsg !== "Server connection failed"
+          ? serverErrMsg
+          : `বার্তা পাঠাতে সমস্যা হয়েছে (${firestoreErrMsg || "নেটওয়ার্ক সংযোগ পরীক্ষা করুন"})।`
+      );
+      return;
+    }
+
+    setTicketId(generatedTicketId);
   };
 
   return (

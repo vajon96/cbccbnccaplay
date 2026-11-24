@@ -32,19 +32,50 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    function hasAdminDoc() {
+      return isAuthenticatedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function adminDocData() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
+    function hasUserDoc() {
+      return isAuthenticatedUser() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userDocData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function isSuperAdmin() {
-      return isVerifiedEmail() && request.auth.token.email == 'sajondey102@gmail.com';
+      return (isVerifiedEmail() && request.auth.token.email == 'sajondey102@gmail.com')
+        || (hasAdminDoc() && ('role' in adminDocData()) && adminDocData().role == 'super_admin');
     }
 
     function isAdmin() {
-      return isSuperAdmin() || (
-        isAuthenticatedUser() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      return isSuperAdmin()
+        || (hasAdminDoc() && (!('role' in adminDocData()) || adminDocData().role in ['super_admin', 'admin', 'exam_admin', 'qr_admin', 'attendance_officer']))
+        || (hasUserDoc() && userDocData().role in ['super_admin', 'admin']);
+    }
+
+    function isModerator() {
+      return isAdmin()
+        || (hasAdminDoc() && adminDocData().role in ['moderator', 'sub_admin'])
+        || (hasUserDoc() && userDocData().role in ['moderator', 'sub_admin']);
     }
 
     function isOwner(data) {
       return isAuthenticatedUser() && ('ownerUid' in data) && data.ownerUid == request.auth.uid;
+    }
+
+    function isValidUserCreate(data) {
+      return data.keys().hasAll(['uid', 'role', 'accountStatus'])
+        && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && data.role in ['super_admin', 'admin', 'moderator', 'sub_admin', 'exam_admin', 'qr_admin', 'attendance_officer', 'cadet', 'user']
+        && data.accountStatus in ['Active', 'Suspended']
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 160));
     }
 
     function isValidApplicantCreate(data) {
@@ -62,6 +93,24 @@ service cloud.firestore {
         && data.studentPhone is string && data.studentPhone.size() >= 6 && data.studentPhone.size() <= 32
         && (!('status' in data) || data.status in ['Pending', 'Approved', 'Rejected'])
         && (!('photo' in data) || (data.photo is string && data.photo.size() <= 500000));
+    }
+
+    function isValidAdmission(data) {
+      return data.keys().hasAll(['applicantId', 'ownerUid', 'admissionStatus'])
+        && data.applicantId is string && data.applicantId.size() > 0 && data.applicantId.size() <= 64
+        && data.ownerUid is string && data.ownerUid.size() > 0 && data.ownerUid.size() <= 128
+        && data.admissionStatus in ['Pending', 'Under Review', 'Approved', 'Admitted', 'Rejected'];
+    }
+
+    function isValidContactMessage(data) {
+      return data.keys().hasAll(['name', 'phone', 'message', 'status', 'ownerUid'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 160
+        && data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 32
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 5000
+        && data.ownerUid is string && data.ownerUid.size() > 0 && data.ownerUid.size() <= 128
+        && data.status in ['unread', 'read', 'replied', 'resolved']
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('subject' in data) || (data.subject is string && data.subject.size() <= 200));
     }
 
     function isValidOfflineApp(data) {
@@ -92,7 +141,45 @@ service cloud.firestore {
         && data.examId is string && data.examId.size() > 0 && data.examId.size() <= 128;
     }
 
-    // 1. Public Institutional Website & CMS Collections (Public Read, Verified Admin Write)
+    // 0. Firebase Auth UID-Linked User Profiles & RBAC Directory
+    match /users/{uid} {
+      allow get: if isValidId(uid) && (isModerator() || (isAuthenticatedUser() && uid == request.auth.uid));
+      allow list: if isModerator();
+      allow create: if isValidId(uid) && isValidUserCreate(incoming()) && (
+        isSuperAdmin() ||
+        (isAuthenticatedUser()
+          && uid == request.auth.uid
+          && incoming().uid == request.auth.uid
+          && incoming().role == 'user'
+          && incoming().accountStatus == 'Active')
+      );
+      allow update: if isValidId(uid) && (
+        isSuperAdmin() ||
+        (isAdmin()
+          && (!('role' in incoming()) || incoming().role != 'super_admin')
+          && (!('role' in existing()) || existing().role != 'super_admin')) ||
+        (isAuthenticatedUser()
+          && uid == request.auth.uid
+          && incoming().uid == existing().uid
+          && incoming().role == existing().role
+          && incoming().accountStatus == existing().accountStatus
+          && (!('isActive' in existing()) || incoming().isActive == existing().isActive)
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'photoURL', 'phone', 'email', 'provider',
+            'applicantId', 'registrationNumber', 'lastLoginAt', 'updatedAt'
+          ]))
+      );
+      allow delete: if isValidId(uid) && isSuperAdmin();
+    }
+
+    // 1. Public Institutional Website, System Settings & CMS Collections
+    match /system_settings/{id} {
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update: if isValidId(id) && isAdmin() && incoming().size() <= 50;
+      allow delete: if isValidId(id) && isSuperAdmin();
+    }
+
     match /cms_content/{id} {
       allow get: if isValidId(id);
       allow list: if true;
@@ -206,12 +293,12 @@ service cloud.firestore {
         && !('presentAddress' in incoming())
         && !('permanentAddress' in incoming())
         && (
-          isAdmin() ||
+          isModerator() ||
           (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid) ||
           (incoming().ownerUid == 'public_applicant' && incoming().status == 'Pending' && incoming().isValidCadet == false)
         );
       allow update: if isValidId(id)
-        && (isAdmin() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid))
+        && (isModerator() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid))
         && !('password' in incoming())
         && !('passwordHash' in incoming())
         && !('nidBirthReg' in incoming())
@@ -228,10 +315,10 @@ service cloud.firestore {
       allow create, update, delete: if isValidId(id) && isAdmin();
     }
 
-    // 3. PII-Isolated Applicants & Profile Changes
+    // 3. PII-Isolated Applicants, Applications, Admissions & Profile Changes
     match /applicants/{id} {
-      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
-      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
+      allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
       allow create: if isValidId(id)
         && isValidApplicantCreate(incoming())
         && (
@@ -246,10 +333,15 @@ service cloud.firestore {
           )
         );
       allow update: if isValidId(id)
-        && isValidApplicantUpdate(incoming())
         && (
           isAdmin() ||
+          (isModerator()
+            && incoming().ownerUid == existing().ownerUid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'isActive', 'accountStatus', 'attendanceStatus', 'attendanceTime', 'updatedAt'
+            ])) ||
           (
+            isValidApplicantUpdate(incoming()) &&
             isAuthenticatedUser() &&
             isOwner(existing()) &&
             incoming().ownerUid == existing().ownerUid &&
@@ -263,16 +355,73 @@ service cloud.firestore {
       allow delete: if isValidId(id) && isAdmin();
     }
 
-    match /pending_profile_changes/{id} {
-      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
-      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
-      allow create: if isValidId(id) && isAuthenticatedUser() && incoming().ownerUid == request.auth.uid;
-      allow update, delete: if isValidId(id) && isAdmin();
+    match /applications/{id} {
+      allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
+      allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id)
+        && isValidApplicantCreate(incoming())
+        && (
+          isAdmin() ||
+          (
+            incoming().status == 'Pending' &&
+            (!('role' in incoming()) || incoming().role == 'user') &&
+            (
+              (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid) ||
+              incoming().ownerUid == 'public_applicant'
+            )
+          )
+        );
+      allow update: if isValidId(id) && isModerator();
+      allow delete: if isValidId(id) && isAdmin();
     }
 
-    // 4. Admins, Tokens & Operational Config (Admin-Only)
+    match /admissions/{id} {
+      allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
+      allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && isValidAdmission(incoming()) && (
+        isAdmin() ||
+        (
+          incoming().admissionStatus == 'Pending' &&
+          (
+            (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid) ||
+            incoming().ownerUid == 'public_applicant'
+          )
+        )
+      );
+      allow update: if isValidId(id) && isModerator() && incoming().admissionStatus in ['Pending', 'Under Review', 'Approved', 'Admitted', 'Rejected'];
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    match /pending_profile_changes/{id} {
+      allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
+      allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && isAuthenticatedUser() && incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(id) && isModerator();
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    // 4. Contact Messages (Public write-only or owner-read, real-time staff triage)
+    match /contact_messages/{id} {
+      allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
+      allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id)
+        && isValidContactMessage(incoming())
+        && incoming().status == 'unread'
+        && (
+          isAdmin() ||
+          (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid) ||
+          incoming().ownerUid == 'public_visitor'
+        );
+      allow update: if isValidId(id)
+        && isModerator()
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'handledBy', 'updatedAt'])
+        && incoming().status in ['unread', 'read', 'replied', 'resolved'];
+      allow delete: if isValidId(id) && isAdmin();
+    }
+
+    // 5. Admins, Tokens & Operational Config
     match /admins/{id} {
-      allow get: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && id == request.auth.uid));
+      allow get: if isValidId(id) && (isModerator() || (isAuthenticatedUser() && id == request.auth.uid));
       allow list: if isAdmin();
       allow create, update, delete: if isValidId(id) && isSuperAdmin();
     }
@@ -289,7 +438,7 @@ service cloud.firestore {
       allow create, update, delete: if isValidId(id) && isAdmin();
     }
 
-    // 5. Counters (Monotonic +1 increment during applicant submission or Admin management)
+    // 6. Counters (Monotonic +1 increment during applicant submission or Admin management)
     match /counters/{id} {
       allow get: if isValidId(id) && (isAdmin() || id == 'applicant_id' || isAuthenticatedUser());
       allow list: if isAdmin();
@@ -304,11 +453,11 @@ service cloud.firestore {
       allow delete: if isValidId(id) && isSuperAdmin();
     }
 
-    // 6. Audit, Attendance & Password Reset Requests
+    // 7. Audit, Attendance & Password Reset Requests
     match /activity_logs/{id} {
-      allow get: if isValidId(id) && isAdmin();
-      allow list: if isAdmin();
-      allow create: if isValidId(id) && (isAdmin() || (isAuthenticatedUser() && incoming().size() <= 12));
+      allow get: if isValidId(id) && isModerator();
+      allow list: if isModerator();
+      allow create: if isValidId(id) && (isModerator() || (isAuthenticatedUser() && incoming().size() <= 12));
       allow update, delete: if isValidId(id) && isSuperAdmin();
     }
 
@@ -332,15 +481,15 @@ service cloud.firestore {
       allow update, delete: if isValidId(id) && isAdmin();
     }
 
-    // 7. Scoped Messenger & Notifications
+    // 8. Scoped Messenger & Notifications
     match /messages/{id} {
       allow get: if isValidId(id) && (
-        isAdmin() ||
+        isModerator() ||
         existing().recipientId == 'ALL' ||
         isOwner(existing()) ||
         (isAuthenticatedUser() && (existing().senderId == request.auth.uid || existing().recipientId == request.auth.uid))
       );
-      allow list: if isAdmin() || (
+      allow list: if isModerator() || (
         isAuthenticatedUser() && (
           resource.data.recipientId == 'ALL' ||
           resource.data.ownerUid == request.auth.uid ||
@@ -349,11 +498,11 @@ service cloud.firestore {
         )
       );
       allow create: if isValidId(id) && isValidMessage(incoming()) && (
-        isAdmin() ||
+        isModerator() ||
         (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid && incoming().role != 'admin')
       );
       allow update: if isValidId(id) && (
-        isAdmin() ||
+        isModerator() ||
         (isAuthenticatedUser() && (isOwner(existing()) || existing().recipientId == request.auth.uid)
           && incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'readAt']))
       );
@@ -362,22 +511,22 @@ service cloud.firestore {
 
     match /notifications/{id} {
       allow get: if isValidId(id) && (
-        isAdmin() ||
+        isModerator() ||
         existing().targetId == 'ALL' ||
         isOwner(existing())
       );
-      allow list: if isAdmin() || (
+      allow list: if isModerator() || (
         isAuthenticatedUser() && (resource.data.targetId == 'ALL' || resource.data.ownerUid == request.auth.uid)
       );
-      allow create: if isValidId(id) && isAdmin();
+      allow create: if isValidId(id) && isModerator();
       allow update: if isValidId(id) && (
-        isAdmin() ||
-        (isOwner(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['isRead']))
+        isModerator() ||
+        (isOwner(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'readAt']))
       );
       allow delete: if isValidId(id) && isAdmin();
     }
 
-    // 8. Examination Subsystem (Answer Keys Strictly Isolated to Admins)
+    // 9. Examination Subsystem (Answer Keys Strictly Isolated to Admins)
     match /question_bank/{id} {
       allow get, list, create, update, delete: if isAdmin();
     }
@@ -440,21 +589,21 @@ service cloud.firestore {
       allow create, update, delete: if isValidId(id) && isAdmin();
     }
 
-    // 9. Local-First Synced Offline Applications
+    // 10. Local-First Synced Offline Applications
     match /offline_applications/{id} {
-      allow get: if isValidId(id) && (isAdmin() || isOwner(existing()));
-      allow list: if isAdmin() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
+      allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
       allow create: if isValidId(id) && isValidOfflineApp(incoming()) && (
         isAdmin() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid)
       );
       allow update: if isValidId(id) && isValidOfflineApp(incoming()) && (
-        isAdmin() ||
+        isModerator() ||
         (isAuthenticatedUser() && isOwner(existing()) && incoming().ownerUid == existing().ownerUid)
       );
       allow delete: if isValidId(id) && isAdmin();
     }
 
-    // 10. Centralized Media Management Metadata (Public visibility vs Admin-only private isolation)
+    // 11. Centralized Media Management Metadata (Public visibility vs Admin-only private isolation)
     match /media_assets/{id} {
       allow get: if isValidId(id) && (isAdmin() || existing().visibility == 'public');
       allow list: if isAdmin() || resource.data.visibility == 'public';
@@ -465,7 +614,7 @@ service cloud.firestore {
       allow delete: if isValidId(id) && isAdmin();
     }
 
-    // 11. Health Check Document
+    // 12. Health Check Document
     match /test/{id} {
       allow get: if isValidId(id);
       allow list: if false;

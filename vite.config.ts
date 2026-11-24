@@ -94,6 +94,32 @@ export default defineConfig(() => {
     build: {
       chunkSizeWarningLimit: 900,
     },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-router-dom',
+        'lucide-react',
+        'framer-motion',
+        'firebase/app',
+        'firebase/auth',
+        'firebase/firestore',
+        'firebase/storage',
+        'recharts',
+        'xlsx',
+        'jszip',
+        'html5-qrcode',
+        'qrcode.react',
+        'jspdf',
+        'jspdf-autotable',
+        'html2canvas',
+        'html-to-image',
+        'emoji-picker-react',
+        '@google/genai',
+        'clsx',
+        'tailwind-merge',
+      ],
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.

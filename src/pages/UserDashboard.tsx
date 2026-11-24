@@ -1,17 +1,25 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Shield,
   LogOut,
   Loader2,
   MessageSquare,
   Megaphone,
+  UserPlus,
+  ArrowRight,
+  FileText,
+  Mail,
+  CheckCircle2,
+  AlertTriangle,
+  Award,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   auth,
   db,
   doc,
+  getDoc,
   onSnapshot,
   collection,
   query,
@@ -19,8 +27,8 @@ import {
   reportFirestoreListenerError,
   OperationType,
 } from "../firebase";
-import { getSession, logoutEverywhere } from "../lib/auth";
-import { isCadetRole } from "../lib/rbac";
+import { getSession, setSession, logoutEverywhere } from "../lib/auth";
+import { isCadetRole, normalizeRole } from "../lib/rbac";
 import { useAuth } from "../context/AuthContext";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { CadetProfileView } from "../components/cadet/CadetProfileView";
@@ -33,10 +41,29 @@ export function UserDashboard() {
     description: "Manage cadet profile, QR identification, admit card, and platoon notifications.",
   });
   const [user, setUser] = useState<CadetProfile | null>(null);
+  const [portalProfile, setPortalProfile] = useState<{
+    displayName?: string;
+    email?: string;
+    role?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const { user: authUser, firebaseUser, loading: authLoading, isImpersonating, logout } = useAuth();
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationFeedback, setVerificationFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const {
+    user: authUser,
+    firebaseUser,
+    loading: authLoading,
+    emailVerified,
+    isOfficialCadet,
+    isImpersonating,
+    resendVerificationEmail,
+    logout,
+  } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,34 +76,108 @@ export function UserDashboard() {
     }
 
     if (!firebaseUser) {
-      setDbError("ডেটাবেজ প্রোফাইল লোড করতে অনুগ্রহ করে আপনার নিবন্ধিত ইমেইল ও পাসওয়ার্ড দিয়ে সাইন-ইন করুন।");
+      setDbError(
+        "ডেটাবেজ প্রোফাইল লোড করতে অনুগ্রহ করে আপনার নিবন্ধিত ইমেইল ও পাসওয়ার্ড দিয়ে সাইন-ইন করুন।"
+      );
       setLoading(false);
       return;
     }
 
     setDbError(null);
 
-    // Real-time listener for Cadet User document
-    const docRef = doc(db, "applicants", session.id);
-    const unsubUser = onSnapshot(
-      docRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = { id: docSnap.id, ...docSnap.data() } as CadetProfile;
-          setUser(data);
-        } else {
-          logoutEverywhere().then(() => navigate("/login"));
-        }
-        setLoading(false);
-      },
-      (err) => {
-        reportFirestoreListenerError(err, OperationType.GET, `applicants/${session.id}`);
-        setDbError("ক্যাডেট প্রোফাইল লোড করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে।");
-        setLoading(false);
-      }
-    );
+    const uid = firebaseUser.uid || auth.currentUser?.uid || "";
+    const targetApplicantId = isImpersonating
+      ? session.id
+      : session.applicantId || (session.id && session.id !== uid ? session.id : "");
 
-    // Composite-index-free notification listeners aligned with firestore.rules
+    if (!isImpersonating && uid) {
+      void getDoc(doc(db, "users", uid))
+        .then((uSnap) => {
+          if (uSnap.exists()) {
+            setPortalProfile(uSnap.data() as any);
+          } else {
+            setPortalProfile({
+              displayName: session.name || firebaseUser.displayName || "BNCC Portal User",
+              email: session.email || firebaseUser.email || "",
+              role: session.role || "user",
+            });
+          }
+        })
+        .catch(() => {
+          setPortalProfile({
+            displayName: session.name || firebaseUser.displayName || "BNCC Portal User",
+            email: session.email || firebaseUser.email || "",
+            role: session.role || "user",
+          });
+        });
+    }
+
+    let unsubUser = () => {};
+
+    if (targetApplicantId && targetApplicantId !== uid) {
+      const docRef = doc(db, "applicants", targetApplicantId);
+      unsubUser = onSnapshot(
+        docRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const data = { id: docSnap.id, ...docSnap.data() } as CadetProfile;
+            setUser(data);
+          } else if (isImpersonating) {
+            void logoutEverywhere().then(() => navigate("/login"));
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
+        },
+        (err) => {
+          reportFirestoreListenerError(err, OperationType.GET, `applicants/${targetApplicantId}`);
+          setDbError("ক্যাডেট প্রোফাইল লোড করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে।");
+          setLoading(false);
+        }
+      );
+    } else if (uid) {
+      const ownedQ = query(collection(db, "applicants"), where("ownerUid", "==", uid));
+      unsubUser = onSnapshot(
+        ownedQ,
+        (snap) => {
+          if (!snap.empty) {
+            const docSnap = snap.docs[0];
+            const data = { id: docSnap.id, ...docSnap.data() } as CadetProfile;
+            setUser(data);
+            const appSt = String(data.status || "").toLowerCase();
+            const derivedRole =
+              appSt === "approved" || appSt === "joined" || data.role === "cadet"
+                ? "cadet"
+                : "user";
+            if (
+              session.id !== docSnap.id ||
+              session.applicantId !== docSnap.id ||
+              session.role !== derivedRole
+            ) {
+              setSession({
+                ...session,
+                id: docSnap.id,
+                uid,
+                applicantId: docSnap.id,
+                registrationNumber: data.registrationNumber || docSnap.id,
+                role: normalizeRole(derivedRole),
+              });
+            }
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
+        },
+        (err) => {
+          reportFirestoreListenerError(err, OperationType.LIST, "applicants");
+          setDbError("ক্যাডেট প্রোফাইল লোড করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে।");
+          setLoading(false);
+        }
+      );
+    } else {
+      setLoading(false);
+    }
+
     let globalNotifs: any[] = [];
     let personalNotifs: any[] = [];
 
@@ -91,10 +192,7 @@ export function UserDashboard() {
       setNotifications(sorted);
     };
 
-    const globalQ = query(
-      collection(db, "notifications"),
-      where("targetId", "==", "ALL")
-    );
+    const globalQ = query(collection(db, "notifications"), where("targetId", "==", "ALL"));
     const unsubGlobal = onSnapshot(
       globalQ,
       (snap) => {
@@ -107,12 +205,8 @@ export function UserDashboard() {
     );
 
     let unsubPersonal = () => {};
-    const uid = firebaseUser.uid || auth.currentUser?.uid;
     if (uid) {
-      const personalQ = query(
-        collection(db, "notifications"),
-        where("ownerUid", "==", uid)
-      );
+      const personalQ = query(collection(db, "notifications"), where("ownerUid", "==", uid));
       unsubPersonal = onSnapshot(
         personalQ,
         (snap) => {
@@ -130,12 +224,35 @@ export function UserDashboard() {
       unsubGlobal();
       unsubPersonal();
     };
-  }, [authLoading, firebaseUser?.uid, authUser?.id, isImpersonating, navigate]);
+  }, [authLoading, firebaseUser?.uid, authUser?.id, authUser?.applicantId, isImpersonating, navigate]);
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
+
+  const handleResendVerification = async () => {
+    setResendingVerification(true);
+    setVerificationFeedback(null);
+    try {
+      const res = await resendVerificationEmail();
+      if (res.success) {
+        setVerificationFeedback({
+          type: "success",
+          text: "ভেরিফিকেশন ইমেইল পাঠানো হয়েছে। ইনবক্স বা স্প্যাম ফোল্ডার যাচাই করুন।",
+        });
+      } else {
+        setVerificationFeedback({
+          type: "error",
+          text: res.error || "ভেরিফিকেশন ইমেইল পাঠানো যায়নি।",
+        });
+      }
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
+  const showEmailVerifyBanner = Boolean(firebaseUser && !emailVerified && !isImpersonating);
 
   if (loading) {
     return (
@@ -158,14 +275,16 @@ export function UserDashboard() {
         <p className="text-sm text-slate-300 max-w-md">{dbError}</p>
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate("/login")}
-            className="px-6 py-2.5 bg-[#C5A059] text-[#002147] font-black rounded-xl hover:bg-[#b59048] transition-all cursor-pointer"
+            className="min-h-[44px] px-6 py-2.5 bg-[#C5A059] text-[#002147] font-black rounded-xl hover:bg-[#b59048] transition-all cursor-pointer"
           >
             লগইন পেজে যান
           </button>
           <button
+            type="button"
             onClick={handleLogout}
-            className="px-6 py-2.5 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-all border border-white/15 cursor-pointer"
+            className="min-h-[44px] px-6 py-2.5 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition-all border border-white/15 cursor-pointer"
           >
             লগআউট
           </button>
@@ -174,7 +293,160 @@ export function UserDashboard() {
     );
   }
 
-  if (!user) return null;
+  const EmailVerificationNotice = showEmailVerifyBanner ? (
+    <div className="max-w-7xl mx-auto px-4 pt-5">
+      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-300 shrink-0 mt-0.5" />
+          <div className="space-y-0.5 text-xs">
+            <p className="font-bold text-amber-200">
+              আপনার ইমেইল এখনো যাচাই (Verified) হয়নি ({firebaseUser?.email})
+            </p>
+            <p className="text-amber-100/80">
+              অ্যাকাউন্টের নিরাপত্তা নিশ্চিত করতে আপনার ইনবক্সের ভেরিফিকেশন লিংকে ক্লিক করুন।
+            </p>
+            {verificationFeedback && (
+              <p
+                className={`pt-1 font-bold ${
+                  verificationFeedback.type === "success" ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
+                {verificationFeedback.text}
+              </p>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleResendVerification()}
+          disabled={resendingVerification}
+          className="min-h-[40px] px-4 py-2 bg-[#C5A059] hover:bg-[#d6b36c] text-[#002147] font-black text-xs rounded-xl shrink-0 disabled:opacity-50 cursor-pointer"
+        >
+          {resendingVerification ? "পাঠানো হচ্ছে..." : "ভেরিফিকেশন ইমেইল পুনরায় পাঠান"}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  if (!user) {
+    const activeSession = authUser || getSession();
+    const displayName =
+      portalProfile?.displayName ||
+      activeSession?.name ||
+      firebaseUser?.displayName ||
+      "BNCC Portal Member";
+    const displayEmail =
+      portalProfile?.email || activeSession?.email || firebaseUser?.email || "";
+
+    return (
+      <div className="min-h-screen bg-[#020B18] text-slate-200">
+        <header className="bg-[#002147]/95 border-b border-[#C5A059]/30 sticky top-0 z-30 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 bg-[#C5A059]/20 border border-[#C5A059]/40 rounded-2xl flex items-center justify-center text-[#C5A059]">
+                <Shield size={22} />
+              </div>
+              <div>
+                <h1 className="text-lg font-black uppercase tracking-tight text-white">
+                  BNCC Applicant Portal
+                </h1>
+                <p className="text-[10px] text-[#C5A059] font-extrabold uppercase tracking-widest">
+                  Portal Member Account • Unlinked
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => navigate("/messenger")}
+                className="min-h-[44px] p-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-xs font-bold text-slate-100 hover:text-white transition-all flex items-center gap-2 cursor-pointer"
+                title="Open Messenger"
+              >
+                <MessageSquare size={18} className="text-[#C5A059]" />
+                <span className="hidden sm:inline">Messenger</span>
+              </button>
+
+              <NotificationCenter notifications={notifications} />
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 bg-red-500/15 text-red-300 hover:bg-red-600 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-red-500/30 group cursor-pointer"
+              >
+                <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {EmailVerificationNotice}
+
+        <main className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+          <div className="bg-[#061830] border border-white/10 rounded-3xl p-8 space-y-6 shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
+              <div className="space-y-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  Applicant Portal Account • Enrollment Pending
+                </span>
+                <h2 className="text-2xl font-black text-white pt-1">{displayName}</h2>
+                {displayEmail && (
+                  <p className="text-xs text-slate-300 flex items-center gap-1.5">
+                    <Mail size={13} className="text-[#C5A059]" />
+                    <span>{displayEmail}</span>
+                  </p>
+                )}
+              </div>
+              <Link
+                to="/enroll"
+                className="min-h-[44px] px-5 py-3 bg-[#C5A059] hover:bg-[#d6b36c] text-[#002147] font-black text-xs uppercase tracking-wider rounded-xl flex items-center gap-2 transition-all"
+              >
+                <UserPlus size={16} />
+                <span>নতুন ভর্তি আবেদন করুন</span>
+                <ArrowRight size={15} />
+              </Link>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#020B18] border border-white/10 space-y-2 text-sm text-slate-300">
+              <p className="font-bold text-white flex items-center gap-2">
+                <FileText size={16} className="text-[#C5A059]" />
+                আপনার পোর্টাল অ্যাকাউন্টের সাথে এখনো কোনো ক্যাডেট/ভর্তি আবেদন যুক্ত নেই
+              </p>
+              <p className="text-xs leading-relaxed text-slate-400">
+                নতুন ক্যাডেট হিসেবে আবেদন করতে উপরের{" "}
+                <strong className="text-white">&ldquo;নতুন ভর্তি আবেদন করুন&rdquo;</strong> বাটনে
+                ক্লিক করুন। ইতিমধ্যে আবেদন করে থাকলে আপনার লগইন পেজ থেকে Cadet / Applicant ID
+                লিঙ্ক করতে পারবেন।
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 pt-1">
+              <Link
+                to="/exam/dashboard"
+                className="min-h-[44px] inline-flex items-center px-4 py-2.5 bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl text-xs font-bold text-white transition-all"
+              >
+                Exam Portal
+              </Link>
+              <Link
+                to="/notices"
+                className="min-h-[44px] inline-flex items-center px-4 py-2.5 bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl text-xs font-bold text-white transition-all"
+              >
+                Notice Board
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const appStatusLower = String(user.status || "").toLowerCase();
+  const isApprovedCadet =
+    isOfficialCadet ||
+    appStatusLower === "approved" ||
+    appStatusLower === "joined" ||
+    user.role === "cadet";
 
   return (
     <div className="min-h-screen bg-[#020B18] text-slate-200">
@@ -187,18 +459,21 @@ export function UserDashboard() {
             </div>
             <div>
               <h1 className="text-lg font-black uppercase tracking-tight text-white">
-                BNCC Cadet Portal
+                {isApprovedCadet ? "BNCC Cadet Portal" : "BNCC Applicant Portal"}
               </h1>
               <p className="text-[10px] text-[#C5A059] font-extrabold uppercase tracking-widest">
-                Cadet Management &amp; Profile System
+                {isApprovedCadet
+                  ? "Official Inducted Cadet Profile"
+                  : "Admission Applicant Profile"}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => navigate("/messenger")}
-              className="p-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-xs font-bold text-slate-100 hover:text-white transition-all flex items-center gap-2 cursor-pointer"
+              className="min-h-[44px] p-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-xs font-bold text-slate-100 hover:text-white transition-all flex items-center gap-2 cursor-pointer"
               title="Open Messenger"
             >
               <MessageSquare size={18} className="text-[#C5A059]" />
@@ -208,8 +483,9 @@ export function UserDashboard() {
             <NotificationCenter notifications={notifications} />
 
             <button
+              type="button"
               onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2.5 bg-red-500/15 text-red-300 hover:bg-red-600 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-red-500/30 group cursor-pointer"
+              className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 bg-red-500/15 text-red-300 hover:bg-red-600 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-red-500/30 group cursor-pointer"
             >
               <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" />
               <span>Logout</span>
@@ -217,6 +493,54 @@ export function UserDashboard() {
           </div>
         </div>
       </header>
+
+      {EmailVerificationNotice}
+
+      {/* Account Classification Banner (Applicant vs Inducted Cadet) */}
+      <div className="max-w-7xl mx-auto px-4 pt-5">
+        <div
+          className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
+            isApprovedCadet
+              ? "bg-emerald-500/10 border-emerald-500/30"
+              : appStatusLower === "rejected"
+              ? "bg-rose-500/10 border-rose-500/30"
+              : "bg-sky-500/10 border-sky-500/30"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            {isApprovedCadet ? (
+              <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
+            ) : (
+              <Award size={20} className="text-[#C5A059] shrink-0" />
+            )}
+            <div className="text-xs">
+              <p className="font-bold text-white">
+                {isApprovedCadet
+                  ? "অনুমোদিত ক্যাডেট স্ট্যাটাস (Official BNCC Cadet)"
+                  : appStatusLower === "rejected"
+                  ? "আবেদন স্ট্যাটাস: বাতিলকৃত (Applicant Account)"
+                  : "আবেদনকারী স্ট্যাটাস: যাচাইয়ের অপেক্ষায় (Pending Applicant)"}
+              </p>
+              <p className="text-slate-300 mt-0.5">
+                {isApprovedCadet
+                  ? "আপনার ভর্তি আবেদন অনুমোদিত হয়েছে; পূর্ণাঙ্গ ক্যাডেট প্রোফাইল, QR আইডি ও মেসেঞ্জার সক্রিয় রয়েছে।"
+                  : "আপনার আবেদন এখনো অ্যাডমিন অনুমোদনের অপেক্ষায় রয়েছে। অনুমোদন সম্পন্ন হলে ক্যাডেট রোল ও পূর্ণাঙ্গ সুযোগ সক্রিয় হবে।"}
+              </p>
+            </div>
+          </div>
+          <span
+            className={`px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider ${
+              isApprovedCadet
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                : appStatusLower === "rejected"
+                ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+            }`}
+          >
+            {isApprovedCadet ? "CADET • APPROVED" : `APPLICANT • ${user.status || "Pending"}`}
+          </span>
+        </div>
+      </div>
 
       {/* Admin Broadcast Announcements Bar */}
       <AnimatePresence>
@@ -269,10 +593,7 @@ export function UserDashboard() {
 
       {/* Main Cadet Profile Dashboard View */}
       <div className="py-6">
-        <CadetProfileView
-          user={user}
-          onProfileUpdated={(updated) => setUser(updated)}
-        />
+        <CadetProfileView user={user} onProfileUpdated={(updated) => setUser(updated)} />
       </div>
     </div>
   );

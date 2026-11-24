@@ -4,8 +4,7 @@ import {
   db,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
+  sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile,
   signOut,
@@ -29,7 +28,9 @@ import {
 export interface AuthUser {
   id: string;
   uid?: string;
+  applicantId?: string;
   email?: string | null;
+  emailVerified?: boolean;
   name: string;
   role: UserRole;
   username?: string;
@@ -133,11 +134,7 @@ export const setSession = (user: AuthUser) => {
     expiry: Date.now() + 1000 * 60 * 60 * 12,
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-  if (isAdminRole(sessionData.role)) {
-    localStorage.setItem("admin2PasswordVerified", "true");
-  } else {
-    localStorage.removeItem("admin2PasswordVerified");
-  }
+  localStorage.removeItem("admin2PasswordVerified");
   notifySessionChange();
 };
 
@@ -159,7 +156,34 @@ export const getSession = (): AuthUser | null => {
   }
 };
 
+// In-memory-only server session bearer token (never stored in localStorage/sessionStorage)
+let inMemoryServerToken: string | null = null;
+
+export function setServerAuthToken(token: string | null | undefined) {
+  inMemoryServerToken = token && typeof token === "string" ? token : null;
+}
+
+export function getServerAuthToken(): string | null {
+  return inMemoryServerToken;
+}
+
+export async function getServerAuthHeaders(
+  extra?: Record<string, string>
+): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { ...(extra || {}) };
+  if (inMemoryServerToken) {
+    headers.Authorization = `Bearer ${inMemoryServerToken}`;
+  } else if (auth.currentUser) {
+    const fbToken = await auth.currentUser.getIdToken().catch(() => null);
+    if (fbToken) {
+      headers.Authorization = `Bearer ${fbToken}`;
+    }
+  }
+  return headers;
+}
+
 export const clearSession = () => {
+  inMemoryServerToken = null;
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem("admin2PasswordVerified");
   notifySessionChange();
@@ -189,6 +213,8 @@ export async function syncServerSession(
     } else if (auth.currentUser) {
       const token = await auth.currentUser.getIdToken();
       headers.Authorization = `Bearer ${token}`;
+    } else if (inMemoryServerToken) {
+      headers.Authorization = `Bearer ${inMemoryServerToken}`;
     }
 
     const res = await fetch("/api/auth/session-sync", {
@@ -197,7 +223,14 @@ export async function syncServerSession(
       credentials: "include",
       body: JSON.stringify({ user }),
     });
-    return res.ok;
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data?.token) {
+        setServerAuthToken(data.token);
+      }
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -230,20 +263,15 @@ function mapFirebaseAuthError(err: any): string {
     case "auth/user-not-found":
       return "ইমেইল বা পাসওয়ার্ড সঠিক নয়। অনুগ্রহ করে পুনরায় যাচাই করুন।";
     case "auth/email-already-in-use":
-      return "এই ইমেইল দিয়ে ইতিমধ্যেই একটি অ্যাকাউন্ট নিবন্ধিত রয়েছে। অনুগ্রহ করে সাইন-ইন করুন।";
+      return "এই ইমেইল দিয়ে ইতিমধ্যেই একটি অ্যাকাউন্ট নিবন্ধিত রয়েছে। অনুগ্রহ করে সাইন-ইন করুন অথবা পাসওয়ার্ড রিসেট করুন।";
     case "auth/weak-password":
-      return "পাসওয়ার্ডটি অত্যন্ত দুর্বল। কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন।";
+      return "পাসওয়ার্ডটি অত্যন্ত দুর্বল। কমপক্ষে ৬ অক্ষরের শক্তিশালী পাসওয়ার্ড দিন।";
     case "auth/invalid-email":
       return "অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা প্রদান করুন।";
     case "auth/too-many-requests":
       return "অতিরিক্ত চেষ্টার কারণে সাময়িকভাবে ব্লক করা হয়েছে। কিছুক্ষণ পর চেষ্টা করুন।";
     case "auth/operation-not-allowed":
-      return "Firebase Console-এ অনুমোদিত Sign-In (Google / Email) চালু করুন অথবা আপনার Cadet ID / Admin Username দিয়ে লগইন করুন।";
-    case "auth/popup-closed-by-user":
-    case "auth/cancelled-popup-request":
-      return "Google লগইন পপ-আপ বন্ধ করা হয়েছে। আবার চেষ্টা করুন।";
-    case "auth/popup-blocked":
-      return "ব্রাউজার পপ-আপ ব্লক করেছে। অনুগ্রহ করে পপ-আপ অনুমতি দিয়ে পুনরায় চেষ্টা করুন।";
+      return "Firebase Console-এ Email/Password Sign-In চালু করুন অথবা আপনার Cadet ID / Officer Username দিয়ে লগইন করুন।";
     case "auth/unauthorized-domain":
       return "এই ডোমেইনটি Firebase Authentication Authorized Domains-এ যুক্ত করা নেই।";
     default:
@@ -251,25 +279,111 @@ function mapFirebaseAuthError(err: any): string {
   }
 }
 
+function resolveApplicantAccountRole(data: Record<string, any> | undefined): UserRole {
+  if (!data) return "user";
+  const status = String(data.status || "").trim().toLowerCase();
+  if (status === "approved" || status === "joined" || data.role === "cadet") {
+    return "cadet";
+  }
+  return "user";
+}
+
 /**
- * Resolves Firebase authenticated user claims & role from Firestore /admins or /applicants.
+ * Ensures every Firebase authenticated user is linked to their Firestore /users/{uid} document.
+ * Preserves server/admin-assigned roles and avoids touching protected fields for regular users.
+ */
+async function syncFirebaseUserProfileDoc(
+  fbUser: NonNullable<typeof auth.currentUser>,
+  options: {
+    emailLower: string;
+    displayName: string;
+    initialRole: UserRole;
+    applicantId?: string;
+    registrationNumber?: string;
+    isSuperBootstrap?: boolean;
+  }
+): Promise<{ role: UserRole; isSuspended: boolean; data?: Record<string, any> }> {
+  const userDocRef = doc(db, "users", fbUser.uid);
+  const nowIso = new Date().toISOString();
+
+  try {
+    const existingSnap = await getDoc(userDocRef);
+    if (existingSnap.exists()) {
+      const existingData = existingSnap.data();
+      if (existingData.isActive === false || existingData.accountStatus === "Suspended") {
+        return { role: normalizeRole(existingData.role), isSuspended: true, data: existingData };
+      }
+
+      const updateFields: Record<string, any> = {
+        displayName: options.displayName || existingData.displayName || "",
+        email: options.emailLower || existingData.email || "",
+        emailVerified: Boolean(fbUser.emailVerified),
+        provider: "password",
+        lastLoginAt: nowIso,
+        updatedAt: Timestamp.now(),
+      };
+      if (options.applicantId) updateFields.applicantId = options.applicantId;
+      if (options.registrationNumber) updateFields.registrationNumber = options.registrationNumber;
+      if (options.isSuperBootstrap) {
+        updateFields.role = "super_admin";
+        updateFields.accountStatus = "Active";
+        updateFields.isActive = true;
+      }
+
+      await updateDoc(userDocRef, updateFields).catch(() => {});
+      return {
+        role: options.isSuperBootstrap ? "super_admin" : normalizeRole(existingData.role || options.initialRole),
+        isSuspended: false,
+        data: existingData,
+      };
+    }
+
+    const createRole: UserRole = options.isSuperBootstrap ? "super_admin" : "user";
+    await setDoc(userDocRef, {
+      uid: fbUser.uid,
+      email: options.emailLower,
+      emailVerified: Boolean(fbUser.emailVerified),
+      displayName: options.displayName,
+      role: createRole,
+      ...(options.applicantId ? { applicantId: options.applicantId } : {}),
+      ...(options.registrationNumber ? { registrationNumber: options.registrationNumber } : {}),
+      provider: "password",
+      accountStatus: "Active",
+      isActive: true,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      lastLoginAt: nowIso,
+    }).catch(() => {});
+
+    return { role: options.isSuperBootstrap ? "super_admin" : options.initialRole, isSuspended: false };
+  } catch {
+    return { role: options.initialRole, isSuspended: false };
+  }
+}
+
+/**
+ * Resolves Firebase authenticated user claims & role from Firestore /admins, /users/{uid}, or /applicants.
  */
 async function resolveFirebaseSessionUser(
   fbUser: NonNullable<typeof auth.currentUser>,
   fallbackName?: string,
   requireAdmin = false
 ) {
-  const providerEmail = fbUser.providerData?.find((p) => p.email)?.email || "";
-  const emailLower = (fbUser.email || providerEmail || "").toLowerCase();
+  const emailLower = (fbUser.email || "").toLowerCase();
+  const displayName = fbUser.displayName || fallbackName || emailLower || "BNCC Member";
   const idToken = await fbUser.getIdToken(true);
 
   if (!requireAdmin) {
-    await fetch("/api/auth/firebase", {
+    const fbRes = await fetch("/api/auth/firebase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ idToken }),
-    }).catch(() => {});
+    }).catch(() => null);
+    if (fbRes?.ok) {
+      const fbData = await fbRes.json().catch(() => null);
+      if (fbData?.token) setServerAuthToken(fbData.token);
+    }
   }
 
   // 1. Bootstrapped Super Admin
@@ -302,10 +416,18 @@ async function resolveFirebaseSessionUser(
       // Rules authorize SUPER_ADMIN_EMAIL directly
     }
 
+    await syncFirebaseUserProfileDoc(fbUser, {
+      emailLower,
+      displayName: fbUser.displayName || fallbackName || "Platoon Commander",
+      initialRole: "super_admin",
+      isSuperBootstrap: true,
+    });
+
     const superAdmin: AuthUser = {
       id: fbUser.uid,
       uid: fbUser.uid,
       email: emailLower,
+      emailVerified: Boolean(fbUser.emailVerified),
       username: "admin",
       name: fbUser.displayName || fallbackName || "Platoon Commander",
       role: "super_admin",
@@ -334,13 +456,24 @@ async function resolveFirebaseSessionUser(
         await logoutEverywhere();
         throw new Error("আপনার অ্যাডমিন অ্যাকাউন্টটি সাময়িকভাবে স্থগিত করা হয়েছে।");
       }
+      const adminRole = normalizeRole(data.role || "admin");
+      const userSync = await syncFirebaseUserProfileDoc(fbUser, {
+        emailLower,
+        displayName: data.name || displayName,
+        initialRole: adminRole,
+      });
+      if (userSync.isSuspended) {
+        await logoutEverywhere();
+        throw new Error("আপনার অ্যাকাউন্টটি সাময়িকভাবে স্থগিত করা হয়েছে।");
+      }
       const adminUser: AuthUser = {
         id: adminDocSnap.id,
         uid: fbUser.uid,
         email: emailLower,
+        emailVerified: Boolean(fbUser.emailVerified),
         username: data.username || emailLower,
         name: data.name || fbUser.displayName || fallbackName || "BNCC Officer",
-        role: normalizeRole(data.role || "admin"),
+        role: adminRole,
         authSource: "firebase",
         permissions: data.permissions || {},
       };
@@ -351,12 +484,42 @@ async function resolveFirebaseSessionUser(
     if (err?.message?.includes("স্থগিত")) throw err;
   }
 
+  // 2b. Sync and check /users/{uid} for admin or moderator role assignment
+  const userProfileSync = await syncFirebaseUserProfileDoc(fbUser, {
+    emailLower,
+    displayName,
+    initialRole: "user",
+  });
+  if (userProfileSync.isSuspended) {
+    await logoutEverywhere();
+    throw new Error("আপনার অ্যাকাউন্টটি সাময়িকভাবে নিষ্ক্রিয় করা হয়েছে। প্লাটুন অফিসারের সাথে যোগাযোগ করুন।");
+  }
+  if (isAdminRole(userProfileSync.role)) {
+    const staffUser: AuthUser = {
+      id: fbUser.uid,
+      uid: fbUser.uid,
+      email: emailLower,
+      emailVerified: Boolean(fbUser.emailVerified),
+      username: emailLower,
+      name: userProfileSync.data?.displayName || displayName,
+      role: userProfileSync.role,
+      authSource: "firebase",
+      permissions:
+        userProfileSync.role === "moderator"
+          ? { canEdit: true, canApprove: true, canViewLogs: true, canChat: true }
+          : { canAdd: true, canEdit: true, canApprove: true, canViewLogs: true, canExport: true, canChat: true },
+    };
+    await syncServerSession(staffUser, idToken);
+    return { user: staffUser, needsCadetLink: false };
+  }
+
   if (requireAdmin) {
     const nonAdminUser: AuthUser = {
       id: fbUser.uid,
       uid: fbUser.uid,
       email: emailLower,
-      name: fbUser.displayName || fallbackName || emailLower,
+      emailVerified: Boolean(fbUser.emailVerified),
+      name: displayName,
       role: "user",
       authSource: "firebase",
     };
@@ -377,17 +540,28 @@ async function resolveFirebaseSessionUser(
         await logoutEverywhere();
         throw new Error("আপনার অ্যাকাউন্টটি সাময়িকভাবে নিষ্ক্রিয় করা হয়েছে। প্লাটুন অফিসারের সাথে যোগাযোগ করুন।");
       }
-      const cadetUser: AuthUser = {
+      const regNum = data.registrationNumber || docSnap.id;
+      const derivedRole = resolveApplicantAccountRole(data);
+      await syncFirebaseUserProfileDoc(fbUser, {
+        emailLower,
+        displayName: data.fullNameEnglish || data.fullNameBangla || displayName,
+        initialRole: derivedRole,
+        applicantId: docSnap.id,
+        registrationNumber: regNum,
+      });
+      const cadetOrApplicant: AuthUser = {
         id: docSnap.id,
         uid: fbUser.uid,
+        applicantId: docSnap.id,
         email: emailLower,
-        name: data.fullNameEnglish || data.fullNameBangla || fbUser.displayName || "BNCC Cadet",
-        role: normalizeRole(data.role || "cadet"),
-        registrationNumber: data.registrationNumber || docSnap.id,
+        emailVerified: Boolean(fbUser.emailVerified),
+        name: data.fullNameEnglish || data.fullNameBangla || fbUser.displayName || "BNCC Member",
+        role: derivedRole,
+        registrationNumber: regNum,
         authSource: "firebase",
       };
-      await syncServerSession(cadetUser, idToken);
-      return { user: cadetUser, needsCadetLink: false };
+      await syncServerSession(cadetOrApplicant, idToken);
+      return { user: cadetOrApplicant, needsCadetLink: false };
     }
   } catch (err: any) {
     if (err?.message?.includes("নিষ্ক্রিয়")) throw err;
@@ -397,7 +571,8 @@ async function resolveFirebaseSessionUser(
     id: fbUser.uid,
     uid: fbUser.uid,
     email: emailLower,
-    name: fbUser.displayName || fallbackName || emailLower,
+    emailVerified: Boolean(fbUser.emailVerified),
+    name: displayName,
     role: "user",
     authSource: "firebase",
   };
@@ -461,49 +636,7 @@ export async function authenticateWithEmailPassword(
 }
 
 /**
- * Google Sign-In via Firebase Auth Popup (recommended for AI Studio iframe).
- */
-export async function authenticateWithGoogle(
-  options?: { requireAdmin?: boolean }
-): Promise<{
-  success: boolean;
-  user?: AuthUser;
-  needsCadetLink?: boolean;
-  error?: string;
-}> {
-  try {
-    const provider = new GoogleAuthProvider();
-    provider.addScope("email");
-    provider.addScope("profile");
-    provider.setCustomParameters({ prompt: "select_account" });
-    const cred = await signInWithPopup(auth, provider);
-    const requireAdmin = Boolean(options?.requireAdmin);
-    const resolved = await resolveFirebaseSessionUser(cred.user, undefined, requireAdmin);
-    resetLoginAttempts();
-
-    if (requireAdmin && !isAdminRole(resolved.user.role)) {
-      await signOut(auth).catch(() => {});
-      return {
-        success: false,
-        error: "এই Google অ্যাকাউন্টটি অনুমোদিত সুপার অ্যাডমিন বা অ্যাডমিন হিসেবে নিবন্ধিত নয়।",
-      };
-    }
-
-    return {
-      success: true,
-      user: resolved.user,
-      needsCadetLink: resolved.needsCadetLink,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: mapFirebaseAuthError(err),
-    };
-  }
-}
-
-/**
- * Creates a brand-new Email & Password account via Firebase Auth.
+ * Creates a brand-new Email & Password account via Firebase Auth and sends verification email.
  */
 export async function registerWithEmailPassword(
   email: string,
@@ -512,16 +645,24 @@ export async function registerWithEmailPassword(
 ): Promise<{
   success: boolean;
   user?: AuthUser;
+  verificationEmailSent?: boolean;
   error?: string;
 }> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanPassword = plainPassword.trim();
   const cleanName = (displayName || "").trim();
 
-  if (!cleanEmail || cleanPassword.length < 6) {
+  if (!cleanEmail || !cleanEmail.includes("@")) {
     return {
       success: false,
-      error: "সঠিক ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড প্রদান করুন।",
+      error: "অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা প্রদান করুন।",
+    };
+  }
+
+  if (cleanPassword.length < 6) {
+    return {
+      success: false,
+      error: "কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড প্রদান করুন।",
     };
   }
 
@@ -530,9 +671,32 @@ export async function registerWithEmailPassword(
     if (cleanName) {
       await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
     }
+    let verificationEmailSent = false;
+    try {
+      await sendEmailVerification(cred.user);
+      verificationEmailSent = true;
+    } catch {
+      verificationEmailSent = false;
+    }
     const resolved = await resolveFirebaseSessionUser(cred.user, cleanName);
     resetLoginAttempts();
-    return { success: true, user: resolved.user };
+    return { success: true, user: resolved.user, verificationEmailSent };
+  } catch (err: any) {
+    return { success: false, error: mapFirebaseAuthError(err) };
+  }
+}
+
+export async function sendVerificationEmailToCurrentUser(): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const fbUser = auth.currentUser;
+  if (!fbUser) {
+    return { success: false, error: "প্রথমে ইমেইল দিয়ে সাইন-ইন করুন।" };
+  }
+  try {
+    await sendEmailVerification(fbUser);
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: mapFirebaseAuthError(err) };
   }
@@ -549,7 +713,54 @@ export async function requestEmailPasswordReset(
     await sendPasswordResetEmail(auth, cleanEmail);
     return { success: true };
   } catch (err: any) {
+    // Prevent account enumeration while surfacing domain/config errors
+    if (err?.code === "auth/user-not-found") {
+      return { success: true };
+    }
     return { success: false, error: mapFirebaseAuthError(err) };
+  }
+}
+
+/**
+ * Unauthenticated or authenticated Officer-Assisted Password Reset submission via backend API.
+ */
+export async function submitOfficerPasswordResetRequest(payload: {
+  identifier: string;
+  mobile: string;
+  note?: string;
+}): Promise<{ success: boolean; requestId?: string; error?: string }> {
+  const cleanId = payload.identifier.trim();
+  const cleanMobile = payload.mobile.trim();
+  if (!cleanId || !cleanMobile) {
+    return {
+      success: false,
+      error: "ক্যাডেট / আবেদন আইডি এবং নিবন্ধিত মোবাইল নম্বর উভয়ই দিন।",
+    };
+  }
+  try {
+    const res = await fetch("/api/auth/password-reset-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        identifier: cleanId,
+        mobile: cleanMobile,
+        note: (payload.note || "").trim(),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data?.error || "রিকভারি অনুরোধ জমা দেওয়া যায়নি।",
+      };
+    }
+    return { success: true, requestId: data?.id };
+  } catch {
+    return {
+      success: false,
+      error: "সার্ভারের সাথে সংযোগ করা যায়নি। পরে চেষ্টা করুন।",
+    };
   }
 }
 
@@ -571,26 +782,46 @@ export async function linkEmailSessionToApplicant(
   }
 
   try {
+    const idToken = await fbUser.getIdToken();
     const res = await fetch("/api/auth/link-applicant", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${await fbUser.getIdToken()}`,
+        Authorization: `Bearer ${idToken}`,
       },
       credentials: "include",
       body: JSON.stringify({ applicantId: cleanId, password: cleanPw }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.user) {
-        setSession(data.user);
-        return { success: true, user: data.user };
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.user) {
+      if (data.token) {
+        setServerAuthToken(data.token);
       }
+      // Best-effort sync of Firestore ownerUid and user profile link
+      try {
+        const targetId = data.user.applicantId || data.user.id || cleanId;
+        await updateDoc(doc(db, "applicants", targetId), {
+          ownerUid: fbUser.uid,
+          updatedAt: Timestamp.now(),
+        }).catch(() => {});
+        await setDoc(
+          doc(db, "users", fbUser.uid),
+          {
+            applicantId: targetId,
+            registrationNumber: data.user.registrationNumber || targetId,
+            updatedAt: Timestamp.now(),
+          },
+          { merge: true }
+        ).catch(() => {});
+      } catch {
+        // Non-blocking Firestore sync
+      }
+      setSession(data.user);
+      return { success: true, user: data.user };
     }
-    const errBody = await res.json().catch(() => ({}));
     return {
       success: false,
-      error: errBody.error || "অ্যাকাউন্ট লিংক করা যায়নি। ক্যাডেট আইডি ও পাসওয়ার্ড যাচাই করুন।",
+      error: data?.error || "অ্যাকাউন্ট লিংক করা যায়নি। ক্যাডেট আইডি ও পাসওয়ার্ড যাচাই করুন।",
     };
   } catch {
     return {
@@ -601,12 +832,60 @@ export async function linkEmailSessionToApplicant(
 }
 
 /**
- * Central Authentication Engine (Email+Password, Admin Credentials, Officer Username, Cadet ID/Reg).
+ * Verifies an Admin/Officer QR Login token against the server token vault.
+ */
+export async function authenticateWithQrToken(
+  qrToken: string
+): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
+  const cleanToken = qrToken.trim();
+  if (!cleanToken || !cleanToken.startsWith("adm_qr_")) {
+    return {
+      success: false,
+      error: "অবৈধ অ্যাডমিন QR কোড। এটি ক্যাডেট কিউআর কোড হতে পারে।",
+    };
+  }
+  try {
+    const res = await fetch("/api/auth/qr-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ qrToken: cleanToken }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.user) {
+      if (data.token) {
+        setServerAuthToken(data.token);
+      }
+      const userObj: AuthUser = {
+        ...data.user,
+        role: normalizeRole(data.user.role),
+        authSource: "qr_token",
+      };
+      setSession(userObj);
+      resetLoginAttempts();
+      return { success: true, user: userObj };
+    }
+    recordFailedLoginAttempt();
+    return {
+      success: false,
+      error: data?.error || "অবৈধ বা মেয়াদোত্তীর্ণ অ্যাডমিন QR কোড।",
+    };
+  } catch {
+    return {
+      success: false,
+      error: "সার্ভারের সাথে সংযোগ করা যায়নি। পরে আবার চেষ্টা করুন।",
+    };
+  }
+}
+
+/**
+ * Central Authentication Engine (Email+Password, Admin Credentials, Officer Username, Cadet/Applicant ID/Reg).
  * Zero Google OAuth dependencies or hardcoded secrets in client bundle.
  */
 export async function centralAuthenticate(
   userIdOrUsername: string,
-  plainPassword: string
+  plainPassword: string,
+  options?: { requireAdmin?: boolean }
 ): Promise<{ success: boolean; user?: AuthUser; needsCadetLink?: boolean; error?: string }> {
   const rate = checkLoginRateLimit();
   if (rate.blocked) {
@@ -625,7 +904,7 @@ export async function centralAuthenticate(
 
   // 0. If email provided, verify directly via Firebase Email/Password Auth
   if (cleanId.includes("@")) {
-    return await authenticateWithEmailPassword(cleanId, cleanPassword);
+    return await authenticateWithEmailPassword(cleanId, cleanPassword, options);
   }
 
   // 1. Server-side credential verification endpoint (never exposes secrets in client bundle)
@@ -642,15 +921,27 @@ export async function centralAuthenticate(
     });
     if (serverRes.ok) {
       const data = await serverRes.json();
+      if (data?.token) {
+        setServerAuthToken(data.token);
+      }
       if (data?.user) {
+        if (options?.requireAdmin && !isAdminRole(data.user.role)) {
+          return {
+            success: false,
+            error: "এই অ্যাকাউন্টটি অফিসার বা অ্যাডমিন হিসেবে অনুমোদিত নয়।",
+          };
+        }
         resetLoginAttempts();
         return { success: true, user: data.user };
       }
-    } else if (serverRes.status === 401 && cleanId.toLowerCase() === "admin") {
+    } else if (serverRes.status === 401 || serverRes.status === 403) {
+      const errBody = await serverRes.json().catch(() => ({}));
       recordFailedLoginAttempt();
       return {
         success: false,
-        error: "ভুল অ্যাডমিন পাসওয়ার্ড! সঠিক পাসওয়ার্ড দিয়ে আবার চেষ্টা করুন।",
+        error:
+          errBody?.error ||
+          "ভুল ইউজারনেম বা পাসওয়ার্ড! সঠিক তথ্য দিয়ে আবার চেষ্টা করুন।",
       };
     }
   } catch {
@@ -660,11 +951,12 @@ export async function centralAuthenticate(
   if (cleanId.toLowerCase() === "admin") {
     return {
       success: false,
-      error: "অ্যাডমিন সার্ভার যাচাই করা যায়নি। অনুগ্রহ করে সুপার অ্যাডমিন ইমেইল ও পাসওয়ার্ড ব্যবহার করুন।",
+      error:
+        "অ্যাডমিন সার্ভার যাচাই করা যায়নি। অনুগ্রহ করে সুপার অ্যাডমিন ইমেইল ও পাসওয়ার্ড ব্যবহার করুন।",
     };
   }
 
-  // 2. Dynamic Admin / Officer Check
+  // 2. Dynamic Admin / Officer Check (when Firebase Auth is active or readable)
   try {
     const adminsRef = collection(db, "admins");
     const adminQuery = query(adminsRef, where("username", "==", cleanId.toLowerCase()));
@@ -706,6 +998,14 @@ export async function centralAuthenticate(
     // Permission denied if unauthenticated in Firestore rules
   }
 
+  if (options?.requireAdmin) {
+    recordFailedLoginAttempt();
+    return {
+      success: false,
+      error: "ভুল অফিসার ইউজারনেম / ইমেইল অথবা পাসওয়ার্ড।",
+    };
+  }
+
   // 3. Cadet / Applicant Check (Firestore first, then server fallback registry)
   try {
     const docRef = doc(db, "applicants", cleanId);
@@ -739,7 +1039,7 @@ export async function centralAuthenticate(
       if (userData.isActive === false || userData.accountStatus === "Suspended") {
         return {
           success: false,
-          error: "আপনার ক্যাডেট অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে।",
+          error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে।",
         };
       }
       const isMatch = await comparePassword(
@@ -755,9 +1055,10 @@ export async function centralAuthenticate(
         const cadetUser: AuthUser = {
           id: userIdFound,
           uid: userData.ownerUid || auth.currentUser?.uid,
+          applicantId: userIdFound,
           email: userData.studentEmail || auth.currentUser?.email,
-          name: userData.fullNameEnglish || userData.fullNameBangla || "BNCC Cadet",
-          role: normalizeRole(userData.role || "cadet"),
+          name: userData.fullNameEnglish || userData.fullNameBangla || "BNCC Member",
+          role: resolveApplicantAccountRole(userData),
           registrationNumber: userData.registrationNumber || userIdFound,
           authSource: "credential",
         };
@@ -769,7 +1070,7 @@ export async function centralAuthenticate(
       return { success: false, error: "ভুল পাসওয়ার্ড। আবার চেষ্টা করুন।" };
     }
   } catch {
-    // Fall through to server-verified cadet login when Firestore requires Firebase Auth
+    // Fall through to server-verified cadet/applicant login
   }
 
   try {
@@ -781,6 +1082,9 @@ export async function centralAuthenticate(
     });
     if (cadetRes.ok) {
       const data = await cadetRes.json();
+      if (data?.token) {
+        setServerAuthToken(data.token);
+      }
       if (data?.user) {
         resetLoginAttempts();
         return { success: true, user: data.user };
@@ -803,4 +1107,3 @@ export async function centralAuthenticate(
     error: "ইউজার আইডি / ইমেইল বা পাসওয়ার্ড সঠিক নয়।",
   };
 }
-

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, Info, AlertTriangle, MessageSquare, X, Check } from "lucide-react";
+import { Bell, Info, AlertTriangle, MessageSquare } from "lucide-react";
+import { auth, db, doc, updateDoc } from "../../firebase";
 
 interface Notification {
   id: string;
@@ -8,6 +9,7 @@ interface Notification {
   message: string;
   type: "Alert" | "Announcement" | "Message";
   isRead: boolean;
+  ownerUid?: string;
   timestamp: any;
 }
 
@@ -22,10 +24,26 @@ export function NotificationCenter({ notifications: initialNotifications }: { no
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const markAsRead = (id: string) => {
+    const target = notifications.find((n) => n.id === id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    if (target && !target.isRead && auth.currentUser && (target.ownerUid === auth.currentUser.uid)) {
+      void updateDoc(doc(db, "notifications", id), {
+        isRead: true,
+        readAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
   };
 
   const markAllAsRead = () => {
+    const uid = auth.currentUser?.uid;
+    notifications.forEach((n) => {
+      if (!n.isRead && uid && n.ownerUid === uid) {
+        void updateDoc(doc(db, "notifications", n.id), {
+          isRead: true,
+          readAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
+    });
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 

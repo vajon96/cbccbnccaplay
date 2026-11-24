@@ -55,7 +55,7 @@ export function MarksheetViewer({
 
         const [examData, questionsList] = await Promise.all([
           getExamById(attData.examId),
-          fetchQuestions()
+          isCandidateView ? Promise.resolve([]) : fetchQuestions().catch(() => [])
         ]);
 
         const qMap = new Map<string, QuestionBankItem>();

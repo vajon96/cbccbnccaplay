@@ -5,33 +5,50 @@ import {
   Shield,
   Lock,
   ArrowRight,
-  Eye,
-  EyeOff,
   QrCode,
   Keyboard,
   Camera,
-  Loader2,
   User as UserIcon,
+  HelpCircle,
+  RefreshCw,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { db, collection, query, where, getDocs } from "../firebase";
+import { setSession } from "../lib/auth";
+import { getDefaultLandingRoute, isAdminRole } from "../lib/rbac";
+import { useAuth } from "../context/AuthContext";
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 import {
-  setSession,
-  centralAuthenticate,
-  authenticateWithGoogle,
-  syncServerSession,
-} from "../lib/auth";
-import { isAdminRole } from "../lib/rbac";
-import { GoogleSignInButton } from "../components/GoogleSignInButton";
+  AuthLayout,
+  AuthCard,
+  AuthHeader,
+  AuthFooter,
+  AuthInput,
+  PasswordInput,
+  AuthLoadingButton,
+  AuthErrorMessage,
+  SecurityNotice,
+  LoginMethodSelector,
+  SessionResumeCard,
+  ForgotPasswordModal,
+} from "../components/auth";
 
 export function Admin2Login() {
+  useDocumentMeta({
+    title: "Officer & QR Attendance Login | Cox's Bazar City College BNCC Platoon",
+    description:
+      "Authorized login for attendance officers and QR command staff using officer credentials or issued QR login tokens.",
+  });
+
+  const [authTab, setAuthTab] = useState<"credentials" | "qr">("credentials");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [manualQrToken, setManualQrToken] = useState("");
   const [error, setError] = useState("");
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scannerRetryKey, setScannerRetryKey] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [isQrMode, setIsQrMode] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  const { user: activeSession, loginWithCredentials, loginWithQrToken, logout } = useAuth();
   const navigate = useNavigate();
 
   const handlePasswordLogin = async (e: FormEvent) => {
@@ -40,124 +57,100 @@ export function Admin2Login() {
     setError("");
 
     try {
-      const res = await centralAuthenticate(username || "officer", password);
+      const res = await loginWithCredentials(username, password, { requireAdmin: true });
       if (res.success && res.user && isAdminRole(res.user.role)) {
         setSession(res.user);
         navigate("/admin2/dashboard");
       } else {
-        setError(res.error || "ভুল ইউজারনেম / ইমেইল বা পাসওয়ার্ড।");
+        setError(res.error || "ভুল অফিসার ইউজারনেম / ইমেইল অথবা পাসওয়ার্ড।");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    setError("");
-    try {
-      const res = await authenticateWithGoogle({ requireAdmin: true });
-      if (res.success && res.user && isAdminRole(res.user.role)) {
-        setSession(res.user);
-        navigate("/admin2/dashboard");
-      } else {
-        setError(res.error || "এই Google অ্যাকাউন্টে অফিসার বা অ্যাডমিন অনুমোদন নেই।");
-      }
-    } catch (err: any) {
-      setError("Google সাইন-ইন করতে সমস্যা হয়েছে: " + (err?.message || ""));
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleQrScan = async (decodedText: string) => {
+  const handleQrTokenVerification = async (rawText: string) => {
     let token = "";
     try {
-      const data = JSON.parse(decodedText);
-      token = data.qrToken || data.token || decodedText;
+      const parsed = JSON.parse(rawText);
+      token = parsed.qrToken || parsed.token || rawText;
     } catch {
-      token = decodedText;
-    }
-
-    if (!token || !token.startsWith("adm_qr_")) {
-      setError("অবৈধ অ্যাডমিন QR কোড। এটি ক্যাডেট কিউআর কোড হতে পারে।");
-      return;
+      token = rawText;
     }
 
     setLoading(true);
     setError("");
-
     try {
-      const q = query(collection(db, "adminTokens"), where("qrToken", "==", token));
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
-        const docData = snap.docs[0].data();
-        if (docData.expiresAt && Date.now() > docData.expiresAt.toMillis()) {
-          setError("এই QR কোডের মেয়াদ শেষ হয়ে গেছে।");
-          setLoading(false);
-          return;
-        }
-
-        const roleName = docData.role || "attendance_officer";
-        const qrUser = {
-          id: snap.docs[0].id,
-          role: roleName,
-          name: docData.name || "Attendance Officer",
-          username: docData.username,
-          authSource: "qr_token" as const,
-          permissions: docData.permissions || {},
-        };
-        await syncServerSession(qrUser);
-        setSession(qrUser);
+      const res = await loginWithQrToken(token);
+      if (res.success && res.user) {
+        setSession(res.user);
         navigate("/admin/qr-dashboard");
       } else {
-        setError("অবৈধ অ্যাডমিন QR কোড।");
+        setError(res.error || "অবৈধ বা মেয়াদোত্তীর্ণ অ্যাডমিন QR কোড।");
       }
-    } catch {
-      setError("অফিসার QR যাচাই করতে অ্যাডমিন ইমেইল সাইন-ইন প্রয়োজন বা সার্ভার ত্রুটি ঘটেছে।");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleManualQrSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!manualQrToken.trim()) {
+      setError("অ্যাডমিন QR টোকেন কোড প্রদান করুন।");
+      return;
+    }
+    await handleQrTokenVerification(manualQrToken.trim());
   };
 
   useEffect(() => {
     let isActive = true;
     let scanner: Html5QrcodeScanner | null = null;
+    setCameraError(null);
 
-    if (isQrMode) {
+    if (authTab === "qr") {
       const initScanner = () => {
         if (!isActive) return;
         const targetElement = document.getElementById("reader-admin-login-2");
         if (!targetElement) {
-          setTimeout(initScanner, 50);
+          setTimeout(initScanner, 60);
           return;
         }
 
         try {
           scanner = new Html5QrcodeScanner(
             "reader-admin-login-2",
-            { fps: 15, qrbox: { width: 250, height: 250 } },
+            { fps: 12, qrbox: { width: 230, height: 230 } },
             false
           );
 
           scanner.render(
             async (decodedText) => {
               if (!isActive) return;
-              await handleQrScan(decodedText);
+              await handleQrTokenVerification(decodedText);
               if (scanner) {
                 scanner.clear().catch(() => {});
               }
-              setIsQrMode(false);
             },
-            () => {}
+            (errMsg) => {
+              if (
+                typeof errMsg === "string" &&
+                (errMsg.toLowerCase().includes("permission") ||
+                  errMsg.toLowerCase().includes("notallowed"))
+              ) {
+                setCameraError(
+                  "ক্যামেরা অনুমতি পাওয়া যায়নি। ব্রাউজার থেকে ক্যামেরা পারমিশন দিন অথবা নিচে ম্যানুয়াল টোকেন লিখুন।"
+                );
+              }
+            }
           );
-        } catch (err) {
-          console.error("Scanner initialization failed in Admin2Login:", err);
+        } catch {
+          setCameraError(
+            "ক্যামেরা স্ক্যানার চালু করা যায়নি। নিচের ম্যানুয়াল QR টোকেন ইনপুট ব্যবহার করুন।"
+          );
         }
       };
 
-      const timer = setTimeout(initScanner, 100);
+      const timer = setTimeout(initScanner, 120);
       return () => {
         isActive = false;
         clearTimeout(timer);
@@ -166,135 +159,161 @@ export function Admin2Login() {
         }
       };
     }
-  }, [isQrMode]);
+  }, [authTab, scannerRetryKey]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-[#f8fafc] relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1.5 bg-[#002147]" />
+    <AuthLayout
+      asideHeading="Attendance & QR Command Portal"
+      asideDescription="Dedicated portal for Battalion Attendance Officers and QR Inspectors managing parade check-ins and cadet verification."
+    >
+      <AuthCard>
+        <AuthHeader
+          badgeText="Officer & Attendance Command"
+          title="অ্যাডমিন ২ / উপস্থিতি পোর্টাল"
+          subtitle="Officer Credential Sign-In or Issued Admin QR Token Verification"
+        />
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-md w-full bg-white p-8 md:p-10 rounded-3xl space-y-6 border border-slate-200 shadow-2xl z-10"
-      >
-        <div className="text-center space-y-2.5">
-          <div className="w-16 h-16 bg-[#002147] rounded-2xl flex items-center justify-center mx-auto shadow-md">
-            <Shield className="w-8 h-8 text-[#C5A059]" />
-          </div>
-          <h1 className="text-2xl font-black text-[#002147] font-display">অ্যাডমিন ২ / উপস্থিতি পোর্টাল</h1>
-          <p className="text-slate-600 text-sm">
-            {isQrMode ? "অ্যাডমিন QR কোড স্ক্যান করুন" : "অফিসার ইমেইল বা ইউজারনেম দিয়ে লগইন করুন"}
-          </p>
-        </div>
+        {activeSession && isAdminRole(activeSession.role) && (
+          <SessionResumeCard
+            session={activeSession}
+            continueLabel="Open Attendance Dashboard"
+            onContinue={() =>
+              navigate(
+                activeSession.role === "qr_admin" || activeSession.role === "attendance_officer"
+                  ? "/admin2/dashboard"
+                  : getDefaultLandingRoute(activeSession.role)
+              )
+            }
+            onLogout={() => void logout()}
+          />
+        )}
 
-        {error && (
-          <div role="alert" className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold text-center">
-            {error}
+        <LoginMethodSelector
+          ariaLabel="Officer login method"
+          activeId={authTab}
+          onChange={(tab) => {
+            setAuthTab(tab);
+            setError("");
+          }}
+          options={[
+            {
+              id: "credentials",
+              label: "অফিসার পাসওয়ার্ড",
+              icon: <Keyboard size={14} />,
+            },
+            {
+              id: "qr",
+              label: "অ্যাডমিন QR কোড",
+              icon: <QrCode size={14} />,
+            },
+          ]}
+        />
+
+        <AuthErrorMessage message={error} />
+
+        {authTab === "credentials" ? (
+          <form onSubmit={handlePasswordLogin} className="space-y-4">
+            <AuthInput
+              id="admin2-username"
+              type="text"
+              label="অফিসার ইউজারনেম বা ইমেইল *"
+              icon={<UserIcon size={16} />}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="qr_admin_1234 or officer@domain.com"
+              autoComplete="username"
+              required
+            />
+
+            <PasswordInput
+              id="admin2-password"
+              label="পাসওয়ার্ড *"
+              icon={<Lock size={16} />}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
+            />
+
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-[#64748B]">Server-verified officer session</span>
+              <button
+                type="button"
+                onClick={() => setShowResetModal(true)}
+                className="text-xs font-bold text-[#002147] hover:text-[#C5A059] transition-colors inline-flex items-center gap-1 cursor-pointer min-h-[32px]"
+              >
+                <HelpCircle size={13} />
+                <span>পাসওয়ার্ড রিকভারি</span>
+              </button>
+            </div>
+
+            <AuthLoadingButton
+              type="submit"
+              loading={loading}
+              loadingText="যাচাই করা হচ্ছে..."
+              icon={<ArrowRight size={16} />}
+            >
+              অফিসার ড্যাশবোর্ডে প্রবেশ করুন
+            </AuthLoadingButton>
+          </form>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-[#F5F7FA] p-4 rounded-2xl border border-slate-200 space-y-3">
+              <div
+                id="reader-admin-login-2"
+                className="overflow-hidden rounded-xl bg-slate-950 border border-slate-300 min-h-[200px]"
+              />
+              <div className="flex items-center justify-between gap-2 text-[#002147] font-bold text-xs bg-white px-3 py-2.5 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-[#C5A059] shrink-0" />
+                  <span>সুপার অ্যাডমিন প্রদত্ত QR কোড ক্যামেরার সামনে ধরুন</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScannerRetryKey((k) => k + 1)}
+                  className="text-[11px] font-bold text-[#002147] hover:text-[#C5A059] inline-flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <RefreshCw size={12} />
+                  <span>পুনরায় চালু</span>
+                </button>
+              </div>
+              {cameraError && (
+                <SecurityNotice title="Camera Notice">{cameraError}</SecurityNotice>
+              )}
+            </div>
+
+            <form onSubmit={handleManualQrSubmit} className="space-y-3 pt-1">
+              <AuthInput
+                id="admin2-manual-qr"
+                type="text"
+                label="অথবা অ্যাডমিন QR টোকেন কোড লিখুন"
+                icon={<Shield size={16} />}
+                value={manualQrToken}
+                onChange={(e) => setManualQrToken(e.target.value)}
+                placeholder="adm_qr_..."
+              />
+              <AuthLoadingButton
+                type="submit"
+                variant="gold"
+                loading={loading}
+                loadingText="টোকেন যাচাই হচ্ছে..."
+                icon={<ArrowRight size={16} />}
+              >
+                QR টোকেন দিয়ে লগইন করুন
+              </AuthLoadingButton>
+            </form>
           </div>
         )}
 
-        <AnimatePresence mode="wait">
-          {!isQrMode ? (
-            <motion.div
-              key="auth2-keyboard"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              className="space-y-4"
-            >
-              <form onSubmit={handlePasswordLogin} className="space-y-3">
-                <div className="relative">
-                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl pl-11 pr-4 py-3 text-slate-900 focus:border-[#002147] outline-none text-sm"
-                    placeholder="Officer Username or Email"
-                    required
-                  />
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl pl-11 pr-11 py-3 text-slate-900 focus:border-[#002147] outline-none text-sm"
-                    placeholder="Password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label="Toggle password visibility"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+        <AuthFooter portalType="officer" />
+      </AuthCard>
 
-                <button
-                  type="submit"
-                  disabled={loading || googleLoading}
-                  className="w-full py-3.5 bg-[#002147] hover:bg-[#0B2545] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer text-sm shadow-md"
-                >
-                  {loading ? <Loader2 className="animate-spin" size={18} /> : "অফিসার লগইন"}
-                  {!loading && <ArrowRight className="w-4 h-4" />}
-                </button>
-              </form>
-
-              <div className="relative flex items-center justify-center">
-                <div className="border-t border-slate-200 w-full" />
-                <span className="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-white shrink-0">
-                  অথবা
-                </span>
-                <div className="border-t border-slate-200 w-full" />
-              </div>
-
-              <GoogleSignInButton
-                variant="light"
-                onClick={() => void handleGoogleLogin()}
-                loading={googleLoading}
-                disabled={loading}
-                label="Google দিয়ে অফিসার লগইন"
-              />
-
-              <button
-                type="button"
-                onClick={() => setIsQrMode(true)}
-                className="w-full py-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <QrCode size={15} /> QR কোড অ্যাডমিন লগইন
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="auth2-camera"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className="space-y-5"
-            >
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <div id="reader-admin-login-2" className="overflow-hidden rounded-xl bg-black border border-slate-300" />
-                <div className="flex items-center justify-center gap-2 text-[#002147] font-bold text-xs bg-slate-200/70 py-2.5 rounded-xl">
-                  <Camera className="w-4 h-4" />
-                  <span>ক্যামেরার সামনে অ্যাডমিন QR কোড ধরুন</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsQrMode(false)}
-                className="w-full py-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Keyboard size={15} /> কীবোর্ড লগইনে ফিরে যান
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </div>
+      <ForgotPasswordModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onSuccess={(uid) => setUsername(uid)}
+      />
+    </AuthLayout>
   );
 }

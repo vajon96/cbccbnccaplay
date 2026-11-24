@@ -1,11 +1,33 @@
 {
   "entities": {
-    "applicant": {
-      "title": "Applicant",
-      "description": "Represents a BNCC enrollment applicant bound to an authenticated ownerUid.",
+    "user_profile": {
+      "title": "User Profile",
+      "description": "Authenticated user account profile linked directly to Firebase Authentication UID.",
       "type": "object",
       "properties": {
-        "ownerUid": { "type": "string", "description": "Firebase Auth UID of the applicant owner" },
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 160 },
+        "displayName": { "type": "string", "maxLength": 160 },
+        "photoURL": { "type": "string", "maxLength": 1500 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "moderator", "sub_admin", "exam_admin", "qr_admin", "attendance_officer", "cadet", "user"] },
+        "applicantId": { "type": "string", "maxLength": 64 },
+        "registrationNumber": { "type": "string", "maxLength": 64 },
+        "provider": { "type": "string", "maxLength": 40 },
+        "accountStatus": { "type": "string", "enum": ["Active", "Suspended"] },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastLoginAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role", "accountStatus"]
+    },
+    "applicant": {
+      "title": "Applicant",
+      "description": "Represents a BNCC enrollment applicant bound to an authenticated ownerUid or public submission.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "maxLength": 128, "description": "Firebase Auth UID of the applicant owner" },
         "fullNameBangla": { "type": "string", "maxLength": 160 },
         "fullNameEnglish": { "type": "string", "maxLength": 160 },
         "fatherNameBangla": { "type": "string", "maxLength": 160 },
@@ -14,7 +36,7 @@
         "motherNameEnglish": { "type": "string", "maxLength": 160 },
         "dob": { "type": "string", "maxLength": 32 },
         "nidBirthReg": { "type": "string", "maxLength": 64 },
-        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other", "Others"] },
         "religion": { "type": "string", "maxLength": 64 },
         "presentAddress": { "type": "string", "maxLength": 500 },
         "permanentAddress": { "type": "string", "maxLength": 500 },
@@ -39,7 +61,7 @@
         "session": { "type": "string", "maxLength": 40 },
         "emisId": { "type": "string", "maxLength": 64 },
         "collegeName": { "type": "string", "maxLength": 180 },
-        "photo": { "type": "string", "maxLength": 350000 },
+        "photo": { "type": "string", "maxLength": 500000 },
         "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
         "attendanceStatus": { "type": "string", "enum": ["Present", "Absent"] },
         "attendanceTime": { "type": "string", "format": "date-time" },
@@ -48,18 +70,74 @@
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["fullNameBangla", "fullNameEnglish", "studentPhone", "status"]
+      "required": ["fullNameEnglish", "studentPhone", "status", "ownerUid"]
+    },
+    "admission": {
+      "title": "Admission Record",
+      "description": "Structured admission lifecycle record linked to an application and optional ownerUid.",
+      "type": "object",
+      "properties": {
+        "applicantId": { "type": "string", "maxLength": 64 },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "fullNameEnglish": { "type": "string", "maxLength": 160 },
+        "fullNameBangla": { "type": "string", "maxLength": 160 },
+        "session": { "type": "string", "maxLength": 40 },
+        "studyStatus": { "type": "string", "maxLength": 100 },
+        "admissionStatus": { "type": "string", "enum": ["Pending", "Under Review", "Approved", "Admitted", "Rejected"] },
+        "decisionBy": { "type": "string", "maxLength": 128 },
+        "remarks": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["applicantId", "ownerUid", "admissionStatus"]
+    },
+    "contact_message": {
+      "title": "Contact Message",
+      "description": "Public inquiry or support message delivered in real time to admin and moderator dashboards.",
+      "type": "object",
+      "properties": {
+        "referenceId": { "type": "string", "maxLength": 64 },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 160 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 5000 },
+        "status": { "type": "string", "enum": ["unread", "read", "replied", "resolved"] },
+        "adminNote": { "type": "string", "maxLength": 2000 },
+        "handledBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "message", "status", "ownerUid"]
+    },
+    "system_setting": {
+      "title": "System Setting",
+      "description": "Portal-wide operational toggles and non-sensitive configuration.",
+      "type": "object",
+      "properties": {
+        "siteTitle": { "type": "string", "maxLength": 200 },
+        "enrollmentOpen": { "type": "boolean" },
+        "examPortalOpen": { "type": "boolean" },
+        "offlineFormOpen": { "type": "boolean" },
+        "noticeTickerEnabled": { "type": "boolean" },
+        "maintenanceMode": { "type": "boolean" },
+        "contactEmail": { "type": "string", "maxLength": 160 },
+        "address": { "type": "string", "maxLength": 500 },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
     },
     "admin": {
       "title": "Admin",
-      "description": "Administrative user document keyed by Firebase Auth UID or officer record.",
+      "description": "Administrative or moderator user document keyed by Firebase Auth UID or officer record.",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "name": { "type": "string", "maxLength": 120 },
         "username": { "type": "string", "maxLength": 80 },
         "email": { "type": "string", "maxLength": 160 },
-        "role": { "type": "string", "enum": ["super_admin", "admin", "exam_admin", "qr_admin", "sub_admin", "attendance_officer"] },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "moderator", "sub_admin", "exam_admin", "qr_admin", "attendance_officer"] },
         "permissions": { "type": "object" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -216,12 +294,17 @@
     }
   },
   "firestore": {
+    "/users/{uid}": { "schema": "user_profile", "description": "Firebase Auth UID-linked user profiles and RBAC roles" },
     "/circulars/{circularId}": { "schema": "generic_admin_record", "description": "Recruitment circulars" },
     "/circulars/{circularId}/chunks/{chunkId}": { "schema": "generic_admin_record", "description": "Circular PDF chunks" },
     "/circular_settings/{settingId}": { "schema": "generic_admin_record", "description": "Circular settings" },
     "/guides/{guideId}": { "schema": "generic_admin_record", "description": "Admission guides" },
     "/guide_settings/{settingId}": { "schema": "generic_admin_record", "description": "Guide settings" },
     "/applicants/{applicantId}": { "schema": "applicant", "description": "BNCC applicants & cadets (PII isolated)" },
+    "/applications/{applicationId}": { "schema": "applicant", "description": "Normalized online applications dossier" },
+    "/admissions/{admissionId}": { "schema": "admission", "description": "Admission review and enrollment decisions" },
+    "/contact_messages/{messageId}": { "schema": "contact_message", "description": "Public inquiry messages delivered to admins/moderators" },
+    "/system_settings/{settingId}": { "schema": "system_setting", "description": "Global portal operational toggles and settings" },
     "/pending_profile_changes/{changeId}": { "schema": "generic_admin_record", "description": "Cadet profile change requests" },
     "/counters/{counterId}": { "schema": "generic_admin_record", "description": "Sequential registration ID counter" },
     "/attendance_logs/{logId}": { "schema": "generic_admin_record", "description": "Attendance audit events" },
@@ -231,7 +314,7 @@
     "/security_logs/{logId}": { "schema": "generic_admin_record", "description": "Security audit logs" },
     "/password_resets/{resetId}": { "schema": "generic_admin_record", "description": "Authorized password reset requests" },
     "/messages/{messageId}": { "schema": "message", "description": "Scoped messenger threads & announcements" },
-    "/admins/{adminId}": { "schema": "admin", "description": "Verified platform admins" },
+    "/admins/{adminId}": { "schema": "admin", "description": "Verified platform admins and moderators" },
     "/adminTokens/{tokenId}": { "schema": "generic_admin_record", "description": "QR officer login tokens" },
     "/public_qr_cards/{cardId}": { "schema": "qr_record", "description": "Non-PII single-document public QR verification cards" },
     "/qr_records/{qrRecordId}": { "schema": "generic_admin_record", "description": "Admin-only QR inspection logs" },

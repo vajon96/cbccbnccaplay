@@ -14,6 +14,7 @@ import {
   Sparkles, Sliders, ChevronRight, Layers, FileText
 } from "lucide-react";
 import { useCMS } from "../../context/CMSContext";
+import { syncAllPortalDataToDatabase } from "../../services/databaseSyncService";
 import { 
   CMSContentItem, 
   CMSCadetProfile, 
@@ -41,7 +42,21 @@ export function CMSControlCenter() {
   const cms = useCMS();
   const [activeTab, setActiveTab] = useState<CMSTab>("overview");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSyncingDb, setIsSyncingDb] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const handlePushAllToDatabase = async () => {
+    setIsSyncingDb(true);
+    try {
+      const res = await syncAllPortalDataToDatabase({ overwrite: false });
+      await cms.refreshAll();
+      showNotification(`Cloud Firestore ডাটাবেসে ${res.totalWritten}টি রেকর্ড সংরক্ষণ করা হয়েছে!`, "success");
+    } catch (err: any) {
+      showNotification(err?.message || "ডাটাবেস সিঙ্ক করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setIsSyncingDb(false);
+    }
+  };
 
   const showNotification = (message: string, type: "success" | "error" | "info" = "success") => {
     setNotification({ message, type });
@@ -110,11 +125,21 @@ export function CMSControlCenter() {
           {/* Quick Header Actions */}
           <div className="flex items-center flex-wrap gap-2.5">
             <button
+              onClick={() => void handlePushAllToDatabase()}
+              disabled={isSyncingDb}
+              className="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-bold rounded-xl border border-emerald-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+              title="Seed & sync all missing CMS and website records into Cloud Firestore"
+            >
+              <Database size={14} className={isSyncingDb ? "animate-pulse" : ""} />
+              <span>{isSyncingDb ? "সিঙ্ক হচ্ছে..." : "ডাটাবেসে সব সংরক্ষণ করুন"}</span>
+            </button>
+
+            <button
               onClick={() => {
                 cms.refreshAll();
                 showNotification("ক্লাউড ডাটাবেজ থেকে সর্বশেষ তথ্য লোড করা হয়েছে", "info");
               }}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
               title="Sync with cloud database"
             >
               <RefreshCw size={14} className={cms.loading ? "animate-spin text-amber-400" : ""} />
@@ -2524,6 +2549,33 @@ function CMSBackupTab({ showNotification }: { showNotification: (msg: string, ty
             <span>ফ্যাক্টরি রিসেট করুন</span>
           </button>
         </div>
+      </div>
+
+      <div className="p-5 rounded-3xl bg-slate-950 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Database size={16} className="text-emerald-400" />
+            <span>Cloud Firestore সম্পূর্ণ ডাটাবেস সিঙ্ক (Sync All CMS & Website Data)</span>
+          </h3>
+          <p className="text-xs text-slate-400">
+            সমস্ত পেজের টেক্সট, ক্যাডেট প্রোফাইল, ইন-চার্জ, নোটিশ, গ্যালারি ও ব্র্যান্ডিং ডিফল্টসমূহ ক্লাউড ডাটাবেসে সংরক্ষণ করুন।
+          </p>
+        </div>
+        <button
+          onClick={async () => {
+            try {
+              const res = await syncAllPortalDataToDatabase({ overwrite: false });
+              await cms.refreshAll();
+              showNotification(`Cloud Firestore-এ ${res.totalWritten}টি রেকর্ড সফলভাবে সিঙ্ক হয়েছে!`);
+            } catch (e: any) {
+              showNotification(e?.message || "ডাটাবেস সিঙ্ক ব্যর্থ হয়েছে", "error");
+            }
+          }}
+          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+        >
+          <Database size={15} />
+          <span>ডাটাবেসে সব পুশ করুন</span>
+        </button>
       </div>
     </div>
   );

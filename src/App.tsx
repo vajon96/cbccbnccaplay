@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ComponentType } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { AuthProvider } from "./context/AuthContext";
@@ -16,95 +16,144 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
+import { ExamPortalGate } from "./components/exam/ExamPortalGate";
 
-const Home = lazy(() => import("./pages/Home").then((m) => ({ default: m.Home })));
-const EnrollmentForm = lazy(() =>
+const LAZY_RELOAD_KEY = "cbcc_lazy_reload_ts";
+
+function isDynamicImportError(err: unknown): boolean {
+  const msg = String((err as any)?.message || err || "").toLowerCase();
+  return (
+    msg.includes("dynamically imported module") ||
+    msg.includes("importing a module script failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("chunkloaderror") ||
+    msg.includes("loading chunk")
+  );
+}
+
+function lazyWithRetry<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    try {
+      return await factory();
+    } catch (firstError) {
+      if (!isDynamicImportError(firstError)) {
+        throw firstError;
+      }
+
+      // Brief pause + retry once in case of a transient fetch or dev server restart
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      try {
+        return await factory();
+      } catch (secondError) {
+        if (typeof window !== "undefined" && isDynamicImportError(secondError)) {
+          try {
+            const lastReload = Number(sessionStorage.getItem(LAZY_RELOAD_KEY) || "0");
+            const now = Date.now();
+            if (!lastReload || now - lastReload > 15000) {
+              sessionStorage.setItem(LAZY_RELOAD_KEY, String(now));
+              window.location.reload();
+              // Keep Suspense pending while browser reloads
+              return await new Promise<{ default: T }>(() => {});
+            }
+          } catch {
+            // Fall through to ErrorBoundary if sessionStorage is unavailable
+          }
+        }
+        throw secondError;
+      }
+    }
+  });
+}
+
+const Home = lazyWithRetry(() => import("./pages/Home").then((m) => ({ default: m.Home })));
+const EnrollmentForm = lazyWithRetry(() =>
   import("./pages/EnrollmentForm").then((m) => ({ default: m.EnrollmentForm }))
 );
-const AdmitCard = lazy(() =>
+const AdmitCard = lazyWithRetry(() =>
   import("./pages/AdmitCard").then((m) => ({ default: m.AdmitCard }))
 );
-const AdminDashboard = lazy(() =>
+const AdminDashboard = lazyWithRetry(() =>
   import("./pages/AdminDashboard").then((m) => ({ default: m.AdminDashboard }))
 );
-const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
-const UserDashboard = lazy(() =>
+const Login = lazyWithRetry(() => import("./pages/Login").then((m) => ({ default: m.Login })));
+const UserDashboard = lazyWithRetry(() =>
   import("./pages/UserDashboard").then((m) => ({ default: m.UserDashboard }))
 );
-const Messenger = lazy(() =>
+const Messenger = lazyWithRetry(() =>
   import("./pages/Messenger").then((m) => ({ default: m.Messenger }))
 );
-const Gallery = lazy(() =>
+const Gallery = lazyWithRetry(() =>
   import("./pages/Gallery").then((m) => ({ default: m.Gallery }))
 );
-const CadetsPage = lazy(() =>
+const CadetsPage = lazyWithRetry(() =>
   import("./pages/CadetsPage").then((m) => ({ default: m.CadetsPage }))
 );
-const HallOfInchargesPage = lazy(() =>
+const HallOfInchargesPage = lazyWithRetry(() =>
   import("./pages/HallOfInchargesPage").then((m) => ({ default: m.HallOfInchargesPage }))
 );
-const HowToBecomeCadetPage = lazy(() =>
+const HowToBecomeCadetPage = lazyWithRetry(() =>
   import("./pages/HowToBecomeCadetPage").then((m) => ({ default: m.HowToBecomeCadetPage }))
 );
-const AboutPage = lazy(() =>
+const AboutPage = lazyWithRetry(() =>
   import("./pages/AboutPage").then((m) => ({ default: m.AboutPage }))
 );
-const ActivitiesPage = lazy(() =>
+const ActivitiesPage = lazyWithRetry(() =>
   import("./pages/ActivitiesPage").then((m) => ({ default: m.ActivitiesPage }))
 );
-const ContactPage = lazy(() =>
+const ContactPage = lazyWithRetry(() =>
   import("./pages/ContactPage").then((m) => ({ default: m.ContactPage }))
 );
-const NoticeBoardPage = lazy(() =>
+const NoticeBoardPage = lazyWithRetry(() =>
   import("./pages/NoticeBoardPage").then((m) => ({ default: m.NoticeBoardPage }))
 );
-const Admin2Login = lazy(() =>
+const Admin2Login = lazyWithRetry(() =>
   import("./pages/Admin2Login").then((m) => ({ default: m.Admin2Login }))
 );
-const Admin2Dashboard = lazy(() =>
+const Admin2Dashboard = lazyWithRetry(() =>
   import("./pages/Admin2Dashboard").then((m) => ({ default: m.Admin2Dashboard }))
 );
-const AdminQrDashboard = lazy(() =>
+const AdminQrDashboard = lazyWithRetry(() =>
   import("./pages/AdminQrDashboard").then((m) => ({ default: m.AdminQrDashboard }))
 );
-const PublicQrScan = lazy(() =>
+const PublicQrScan = lazyWithRetry(() =>
   import("./pages/PublicQrScan").then((m) => ({ default: m.PublicQrScan }))
 );
-const OfflineApplicationPublicPage = lazy(() =>
+const OfflineApplicationPublicPage = lazyWithRetry(() =>
   import("./pages/OfflineApplicationPublicPage").then((m) => ({
     default: m.OfflineApplicationPublicPage,
   }))
 );
-const CMSPage = lazy(() =>
+const CMSPage = lazyWithRetry(() =>
   import("./pages/CMSPage").then((m) => ({ default: m.CMSPage }))
 );
-const ExamPortal = lazy(() =>
+const ExamPortal = lazyWithRetry(() =>
   import("./pages/ExamPortal").then((m) => ({ default: m.ExamPortal }))
 );
-const ExamCandidateLogin = lazy(() =>
+const ExamCandidateLogin = lazyWithRetry(() =>
   import("./pages/ExamCandidateLogin").then((m) => ({ default: m.ExamCandidateLogin }))
 );
-const ExamAdminLogin = lazy(() =>
+const ExamAdminLogin = lazyWithRetry(() =>
   import("./pages/ExamAdminLogin").then((m) => ({ default: m.ExamAdminLogin }))
 );
-const ExamCandidateDashboard = lazy(() =>
+const ExamCandidateDashboard = lazyWithRetry(() =>
   import("./pages/ExamCandidateDashboard").then((m) => ({
     default: m.ExamCandidateDashboard,
   }))
 );
-const ExamInstructions = lazy(() =>
+const ExamInstructions = lazyWithRetry(() =>
   import("./pages/ExamInstructions").then((m) => ({ default: m.ExamInstructions }))
 );
-const TakeExam = lazy(() =>
+const TakeExam = lazyWithRetry(() =>
   import("./pages/TakeExam").then((m) => ({ default: m.TakeExam }))
 );
-const ExamResultPage = lazy(() =>
+const ExamResultPage = lazyWithRetry(() =>
   import("./pages/ExamResultPage").then((m) => ({ default: m.ExamResultPage }))
 );
-const ExamAdminDashboard = lazy(() =>
+const ExamAdminDashboard = lazyWithRetry(() =>
   import("./pages/ExamAdminDashboard").then((m) => ({ default: m.ExamAdminDashboard }))
 );
-import { ExamPortalGate } from "./components/exam/ExamPortalGate";
 
 function RouteLoadingFallback() {
   return (

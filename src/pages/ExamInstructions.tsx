@@ -4,9 +4,9 @@ import {
   Award, Clock, CheckCircle2, ShieldAlert, 
   ArrowRight, ArrowLeft, RefreshCw, AlertCircle 
 } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
-import { getSession } from "../lib/auth";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db } from "../firebase";
+import { getSession, getServerAuthHeaders } from "../lib/auth";
 import { getExamById, startExamAttempt } from "../services/examService";
 import { ExamModel } from "../types";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
@@ -34,9 +34,42 @@ export function ExamInstructions() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [eData, profileSnap] = await Promise.all([
+        const fetchProfile = async () => {
+          try {
+            if (auth.currentUser) {
+              const appSnap = await getDocs(
+                query(collection(db, "applicants"), where("ownerUid", "==", auth.currentUser.uid))
+              );
+              if (!appSnap.empty) {
+                return appSnap.docs[0].data();
+              }
+              const targetApplicantId =
+                session.applicantId ||
+                (session.id && session.id !== auth.currentUser.uid ? session.id : "");
+              if (targetApplicantId) {
+                const snap = await getDoc(doc(db, "applicants", targetApplicantId));
+                return snap.exists() ? snap.data() : null;
+              }
+              return null;
+            }
+            const headers = await getServerAuthHeaders();
+            const res = await fetch(`/api/applications/${encodeURIComponent(session.id)}`, {
+              headers,
+              credentials: "include",
+            });
+            if (res.ok) {
+              const data = await res.json();
+              return data?.application || null;
+            }
+          } catch {
+            // Non-blocking profile fetch
+          }
+          return null;
+        };
+
+        const [eData, profileData] = await Promise.all([
           getExamById(examId),
-          getDoc(doc(db, "applicants", session.id))
+          fetchProfile()
         ]);
 
         if (!eData) {
@@ -45,8 +78,8 @@ export function ExamInstructions() {
           setExam(eData);
         }
 
-        if (profileSnap.exists()) {
-          setCandidateProfile(profileSnap.data());
+        if (profileData) {
+          setCandidateProfile(profileData);
         }
       } catch (err: any) {
         console.error("Error loading exam instructions:", err);

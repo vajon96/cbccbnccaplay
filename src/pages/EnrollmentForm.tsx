@@ -2,7 +2,7 @@ import { useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
 import { User, GraduationCap, Camera, CheckCircle, ArrowRight, ArrowLeft, Upload, Shield, Sparkles, BrainCircuit, BookOpen, AlertCircle, Lock, FileText, Trash2 } from "lucide-react";
-import { auth, db, collection, setDoc, doc, Timestamp, serverTimestamp, reportFirestoreListenerError, OperationType, addDoc, runTransaction } from "../firebase";
+import { auth, db, collection, setDoc, updateDoc, doc, Timestamp, serverTimestamp, reportFirestoreListenerError, OperationType, addDoc, runTransaction } from "../firebase";
 import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
 import { generatePassword, hashPassword, setSession, syncServerSession, getSession } from "../lib/auth";
 import { isAdminRole } from "../lib/rbac";
@@ -388,8 +388,10 @@ export function EnrollmentForm() {
         return;
       }
 
-      // Non-PII public QR card projection (no phone, email, NID, address, password)
+      // Non-PII public QR card projection, structured admission tracking record, and UID profile link
       if (firestoreSaved) {
+        const regNumber = formData.registrationNumber.trim() || id;
+
         await setDoc(doc(db, "public_qr_cards", id), {
           id,
           cadetId: id,
@@ -405,7 +407,28 @@ export function EnrollmentForm() {
           updatedAt: serverTimestamp(),
         }).catch(() => {});
 
+        await setDoc(doc(db, "admissions", id), {
+          id,
+          applicantId: id,
+          registrationNumber: regNumber,
+          ownerUid,
+          fullNameEnglish: formData.fullNameEnglish,
+          fullNameBangla: formData.fullNameBangla,
+          session: formData.session,
+          studyStatus: formData.studyStatus,
+          admissionStatus: "Pending",
+          createdAtIso,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
+
         if (hasFirebaseUser) {
+          await updateDoc(doc(db, "users", ownerUid), {
+            applicantId: id,
+            registrationNumber: regNumber,
+            updatedAt: serverTimestamp(),
+          }).catch(() => {});
+
           await addDoc(collection(db, "activity_logs"), {
             type: "ACCOUNT_CREATED",
             targetId: id,
@@ -421,6 +444,7 @@ export function EnrollmentForm() {
 
       const sessionUser = {
         id,
+        applicantId: id,
         ...(hasFirebaseUser ? { uid: ownerUid } : {}),
         email: applicantEmail || undefined,
         name: formData.fullNameEnglish || formData.fullNameBangla,
