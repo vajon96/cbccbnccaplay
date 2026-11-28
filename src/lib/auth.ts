@@ -24,6 +24,7 @@ import {
   isCadetRole,
   normalizeRole,
 } from "./rbac";
+import { apiFetch } from "./api";
 
 export interface AuthUser {
   id: string;
@@ -217,7 +218,7 @@ export async function syncServerSession(
       headers.Authorization = `Bearer ${inMemoryServerToken}`;
     }
 
-    const res = await fetch("/api/auth/session-sync", {
+    const res = await apiFetch("/api/auth/session-sync", {
       method: "POST",
       headers,
       credentials: "include",
@@ -239,7 +240,7 @@ export async function syncServerSession(
 export async function logoutEverywhere(): Promise<void> {
   clearSession();
   try {
-    await fetch("/api/auth/logout", {
+    await apiFetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",
     });
@@ -374,7 +375,7 @@ async function resolveFirebaseSessionUser(
   const idToken = await fbUser.getIdToken(true);
 
   if (!requireAdmin) {
-    const fbRes = await fetch("/api/auth/firebase", {
+    const fbRes = await apiFetch("/api/auth/firebase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -386,42 +387,58 @@ async function resolveFirebaseSessionUser(
     }
   }
 
-  // 1. Bootstrapped Super Admin
+  // 1. Bootstrapped Super Admin (requires verified email or pre-existing /admins/{uid} super_admin doc)
   if (emailLower === SUPER_ADMIN_EMAIL) {
-    try {
-      await setDoc(
-        doc(db, "admins", fbUser.uid),
-        {
-          uid: fbUser.uid,
-          name: fbUser.displayName || fallbackName || "Platoon Commander",
-          username: "admin",
-          email: emailLower,
-          role: "super_admin",
-          isActive: true,
-          permissions: {
-            canAdd: true,
-            canEdit: true,
-            canDelete: true,
-            canViewLogs: true,
-            canResetPW: true,
-            canApprove: true,
-            canExport: true,
-            canChat: true,
+    let hasAdminAccess = Boolean(fbUser.emailVerified);
+    if (!hasAdminAccess) {
+      const existingAdminSnap = await getDoc(doc(db, "admins", fbUser.uid)).catch(() => null);
+      hasAdminAccess = Boolean(existingAdminSnap?.exists() && existingAdminSnap.data()?.role === "super_admin");
+    }
+
+    if (fbUser.emailVerified) {
+      try {
+        await setDoc(
+          doc(db, "admins", fbUser.uid),
+          {
+            uid: fbUser.uid,
+            name: fbUser.displayName || fallbackName || "Platoon Commander",
+            username: "admin",
+            email: emailLower,
+            role: "super_admin",
+            isActive: true,
+            permissions: {
+              canAdd: true,
+              canEdit: true,
+              canDelete: true,
+              canViewLogs: true,
+              canResetPW: true,
+              canApprove: true,
+              canExport: true,
+              canChat: true,
+            },
+            updatedAt: Timestamp.now(),
           },
-          updatedAt: Timestamp.now(),
-        },
-        { merge: true }
-      );
-    } catch {
-      // Rules authorize SUPER_ADMIN_EMAIL directly
+          { merge: true }
+        );
+      } catch {
+        // Rules authorize verified SUPER_ADMIN_EMAIL directly
+      }
     }
 
     await syncFirebaseUserProfileDoc(fbUser, {
       emailLower,
       displayName: fbUser.displayName || fallbackName || "Platoon Commander",
-      initialRole: "super_admin",
-      isSuperBootstrap: true,
+      initialRole: hasAdminAccess ? "super_admin" : "user",
+      isSuperBootstrap: hasAdminAccess,
     });
+
+    if (!hasAdminAccess) {
+      await sendEmailVerification(fbUser).catch(() => {});
+      await logoutEverywhere();
+      throw new Error(
+        "সুপার অ্যাডমিন অ্যাক্সেসের জন্য আপনার ইমেইল ভেরিফাই করা আবশ্যক। ইনবক্সে পাঠানো ভেরিফিকেশন লিংকে ক্লিক করে আবার লগইন করুন।"
+      );
+    }
 
     const superAdmin: AuthUser = {
       id: fbUser.uid,
@@ -738,7 +755,7 @@ export async function submitOfficerPasswordResetRequest(payload: {
     };
   }
   try {
-    const res = await fetch("/api/auth/password-reset-request", {
+    const res = await apiFetch("/api/auth/password-reset-request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -783,7 +800,7 @@ export async function linkEmailSessionToApplicant(
 
   try {
     const idToken = await fbUser.getIdToken();
-    const res = await fetch("/api/auth/link-applicant", {
+    const res = await apiFetch("/api/auth/link-applicant", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -797,22 +814,26 @@ export async function linkEmailSessionToApplicant(
       if (data.token) {
         setServerAuthToken(data.token);
       }
-      // Best-effort sync of Firestore ownerUid and user profile link
+      // Best-effort sync of Firestore ownerUid across linked collections and /users/{uid}
       try {
         const targetId = data.user.applicantId || data.user.id || cleanId;
         await updateDoc(doc(db, "applicants", targetId), {
           ownerUid: fbUser.uid,
           updatedAt: Timestamp.now(),
         }).catch(() => {});
-        await setDoc(
-          doc(db, "users", fbUser.uid),
-          {
-            applicantId: targetId,
-            registrationNumber: data.user.registrationNumber || targetId,
-            updatedAt: Timestamp.now(),
-          },
-          { merge: true }
-        ).catch(() => {});
+        await updateDoc(doc(db, "admissions", targetId), {
+          ownerUid: fbUser.uid,
+          updatedAt: Timestamp.now(),
+        }).catch(() => {});
+        await updateDoc(doc(db, "public_qr_cards", targetId), {
+          ownerUid: fbUser.uid,
+          updatedAt: Timestamp.now(),
+        }).catch(() => {});
+        await updateDoc(doc(db, "users", fbUser.uid), {
+          applicantId: targetId,
+          registrationNumber: data.user.registrationNumber || targetId,
+          updatedAt: Timestamp.now(),
+        }).catch(() => {});
       } catch {
         // Non-blocking Firestore sync
       }
@@ -845,7 +866,7 @@ export async function authenticateWithQrToken(
     };
   }
   try {
-    const res = await fetch("/api/auth/qr-login", {
+    const res = await apiFetch("/api/auth/qr-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -910,7 +931,7 @@ export async function centralAuthenticate(
   // 1. Server-side credential verification endpoint (never exposes secrets in client bundle)
   try {
     const fbToken = auth.currentUser ? await auth.currentUser.getIdToken() : undefined;
-    const serverRes = await fetch("/api/auth/credential-login", {
+    const serverRes = await apiFetch("/api/auth/credential-login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1074,7 +1095,7 @@ export async function centralAuthenticate(
   }
 
   try {
-    const cadetRes = await fetch("/api/auth/cadet-login", {
+    const cadetRes = await apiFetch("/api/auth/cadet-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

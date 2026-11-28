@@ -23,6 +23,8 @@ import {
   OperationType,
 } from "../firebase";
 import { CMSBackupData } from "../types/cms";
+import { getServerAuthHeaders } from "../lib/auth";
+import { apiFetch, assetUrl } from "../lib/api";
 
 export type MediaVisibility = "public" | "private";
 export type MediaStorageLocation = "firebase_storage" | "server_vault" | "public_assets" | "external";
@@ -129,16 +131,7 @@ async function computeSha256(file: Blob): Promise<string> {
 }
 
 async function getMediaAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {};
-  if (auth.currentUser) {
-    try {
-      const token = await auth.currentUser.getIdToken();
-      if (token) headers.Authorization = `Bearer ${token}`;
-    } catch {
-      // ignore token lookup error
-    }
-  }
-  return headers;
+  return await getServerAuthHeaders();
 }
 
 export async function listMediaAssets(): Promise<MediaAsset[]> {
@@ -147,7 +140,7 @@ export async function listMediaAssets(): Promise<MediaAsset[]> {
 
   // 1. Load authenticated server vault + public_assets records
   try {
-    let res = await fetch("/api/media/list", {
+    let res = await apiFetch("/api/media/list", {
       credentials: "include",
       headers: authHeaders,
       cache: "no-store",
@@ -155,13 +148,13 @@ export async function listMediaAssets(): Promise<MediaAsset[]> {
     if (res.status === 401 && auth.currentUser) {
       const idToken = await auth.currentUser.getIdToken(true).catch(() => "");
       if (idToken) {
-        await fetch("/api/auth/firebase", {
+        await apiFetch("/api/auth/firebase", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ idToken }),
         }).catch(() => {});
-        res = await fetch("/api/media/list", {
+        res = await apiFetch("/api/media/list", {
           credentials: "include",
           headers: { Authorization: `Bearer ${idToken}` },
           cache: "no-store",
@@ -183,7 +176,7 @@ export async function listMediaAssets(): Promise<MediaAsset[]> {
   // 2. Always ensure all public/assets & root branding assets are indexed (even if vault auth cookie wasn't attached)
   let publicLoaded = false;
   try {
-    const pubRes = await fetch("/api/media/public-assets", {
+    const pubRes = await apiFetch("/api/media/public-assets", {
       credentials: "include",
       cache: "no-store",
     });
@@ -204,7 +197,7 @@ export async function listMediaAssets(): Promise<MediaAsset[]> {
 
   if (!publicLoaded) {
     try {
-      const manifestRes = await fetch("/assets-manifest.json", { cache: "no-store" });
+      const manifestRes = await fetch(assetUrl("/assets-manifest.json"), { cache: "no-store" });
       if (manifestRes.ok) {
         const manifestData = await manifestRes.json();
         if (Array.isArray(manifestData?.items)) {
@@ -245,6 +238,88 @@ export async function listMediaAssets(): Promise<MediaAsset[]> {
   return merged;
 }
 
+async function uploadToFirebaseStorageFallback(params: {
+  file: File;
+  title: string;
+  altText?: string;
+  description?: string;
+  category: string;
+  tags?: string[];
+  visibility: MediaVisibility;
+  isPrivateCandidateAsset?: boolean;
+  uploadedBy?: string;
+  replaceAsset?: MediaAsset | null;
+  sha256: string;
+  onProgress?: (percent: number) => void;
+}): Promise<MediaAsset> {
+  if (!auth.currentUser) {
+    throw new Error("FIREBASE_USER_REQUIRED");
+  }
+  const cleanName = params.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const assetId =
+    params.replaceAsset?.id || `med_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const safeCat = params.category.toLowerCase().replace(/[^a-z0-9]/g, "_");
+  const storagePath =
+    params.visibility === "private"
+      ? `private_media/${auth.currentUser.uid}/${safeCat}/${assetId}_${cleanName}`
+      : `public_media/${safeCat}/${assetId}_${cleanName}`;
+  const refObj = storageRef(storage, storagePath);
+
+  const downloadUrl = await new Promise<string>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error("FIREBASE_STORAGE_TIMEOUT")), 9000);
+    const task = uploadBytesResumable(refObj, params.file, {
+      contentType: params.file.type,
+    });
+    task.on(
+      "state_changed",
+      (snap) => {
+        if (snap.totalBytes > 0) {
+          params.onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 90));
+        }
+      },
+      (err) => {
+        window.clearTimeout(timeoutId);
+        reject(err);
+      },
+      async () => {
+        window.clearTimeout(timeoutId);
+        try {
+          const url = await getDownloadURL(task.snapshot.ref);
+          resolve(url);
+        } catch (e) {
+          reject(e);
+        }
+      }
+    );
+  });
+
+  const now = new Date().toISOString();
+  const asset: MediaAsset = {
+    id: assetId,
+    fileName: params.file.name,
+    title: params.title,
+    altText: params.altText || "",
+    description: params.description || "",
+    mimeType: params.file.type,
+    sizeBytes: params.file.size,
+    category: params.category,
+    tags: params.tags || [],
+    visibility: params.visibility,
+    storageLocation: "firebase_storage",
+    storagePath,
+    url: downloadUrl,
+    sha256: params.sha256,
+    isPrivateCandidateAsset: Boolean(params.isPrivateCandidateAsset),
+    uploadedBy: params.uploadedBy || auth.currentUser.email || "admin",
+    createdAt: params.replaceAsset?.createdAt || now,
+    updatedAt: now,
+  };
+
+  await setDoc(doc(db, "media_assets", assetId), asset);
+  params.onProgress?.(100);
+  return asset;
+}
+
 export async function uploadMediaAsset(params: {
   file: File;
   title?: string;
@@ -269,122 +344,109 @@ export async function uploadMediaAsset(params: {
   const title = (params.title || params.file.name).trim();
   const sha256 = await computeSha256(params.file);
 
-  // Attempt Firebase Storage direct upload first ONLY when public visibility & verified Firebase user
-  // (Private candidate docs stay strictly behind /api/media/private; public_assets replacements stay on disk)
+  // Attempt Firebase Storage direct upload first when public visibility & verified Firebase user
+  // (Public assets replacements stay on disk; private candidate docs prefer /api/media/private when available)
   if (
     visibility === "public" &&
     auth.currentUser &&
     params.replaceAsset?.storageLocation !== "public_assets"
   ) {
     try {
-      const cleanName = params.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const assetId = params.replaceAsset?.id || `med_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const storagePath = `public_media/${category.toLowerCase().replace(/[^a-z0-9]/g, "_")}/${assetId}_${cleanName}`;
-      const refObj = storageRef(storage, storagePath);
-
-      const downloadUrl = await new Promise<string>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => reject(new Error("FIREBASE_STORAGE_TIMEOUT")), 9000);
-        const task = uploadBytesResumable(refObj, params.file, {
-          contentType: params.file.type,
-        });
-        task.on(
-          "state_changed",
-          (snap) => {
-            if (snap.totalBytes > 0) {
-              params.onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 90));
-            }
-          },
-          (err) => {
-            window.clearTimeout(timeoutId);
-            reject(err);
-          },
-          async () => {
-            window.clearTimeout(timeoutId);
-            try {
-              const url = await getDownloadURL(task.snapshot.ref);
-              resolve(url);
-            } catch (e) {
-              reject(e);
-            }
-          }
-        );
-      });
-
-      const now = new Date().toISOString();
-      const asset: MediaAsset = {
-        id: assetId,
-        fileName: params.file.name,
+      const asset = await uploadToFirebaseStorageFallback({
+        file: params.file,
         title,
-        altText: params.altText || "",
-        description: params.description || "",
-        mimeType: params.file.type,
-        sizeBytes: params.file.size,
+        altText: params.altText,
+        description: params.description,
         category,
-        tags: params.tags || [],
+        tags: params.tags,
         visibility,
-        storageLocation: "firebase_storage",
-        storagePath,
-        url: downloadUrl,
-        sha256,
         isPrivateCandidateAsset: false,
-        uploadedBy: params.uploadedBy || auth.currentUser.email || "admin",
-        createdAt: params.replaceAsset?.createdAt || now,
-        updatedAt: now,
-      };
-
-      await setDoc(doc(db, "media_assets", assetId), asset);
-      params.onProgress?.(100);
+        uploadedBy: params.uploadedBy,
+        replaceAsset: params.replaceAsset,
+        sha256,
+        onProgress: params.onProgress,
+      });
       return { asset, duplicateDetected: false };
     } catch {
       // Seamless fallback to authenticated server vault
     }
   }
 
-  // Primary resilient path for Main Admin session / private assets / Firebase Storage unavailable fallback
+  // Authenticated server vault path with Firebase Storage fallback when MEDIA_DIR / server storage is unavailable
   params.onProgress?.(25);
   const dataBase64 = await fileToBase64(params.file);
   params.onProgress?.(55);
 
-  const authHeaders = await getMediaAuthHeaders();
-  const res = await fetch("/api/media/upload", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders },
-    credentials: "include",
-    body: JSON.stringify({
-      fileName: params.file.name,
-      mimeType: params.file.type,
-      dataBase64,
-      visibility,
-      category,
-      title,
-      altText: params.altText || "",
-      description: params.description || "",
-      tags: params.tags || [],
-      isPrivateCandidateAsset: Boolean(params.isPrivateCandidateAsset),
-      replaceId: params.replaceAsset?.id || "",
-    }),
-  });
+  try {
+    const authHeaders = await getMediaAuthHeaders();
+    const res = await apiFetch("/api/media/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      credentials: "include",
+      body: JSON.stringify({
+        fileName: params.file.name,
+        mimeType: params.file.type,
+        dataBase64,
+        visibility,
+        category,
+        title,
+        altText: params.altText || "",
+        description: params.description || "",
+        tags: params.tags || [],
+        isPrivateCandidateAsset: Boolean(params.isPrivateCandidateAsset),
+        replaceId: params.replaceAsset?.id || "",
+      }),
+    });
 
-  const data = await res.json();
-  if (!res.ok || !data?.item) {
-    throw new Error(data?.error || "মিডিয়া আপলোড ব্যর্থ হয়েছে।");
-  }
-  params.onProgress?.(90);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.item) {
+      params.onProgress?.(90);
+      const uploadedAsset = data.item as MediaAsset;
+      if (auth.currentUser) {
+        try {
+          await setDoc(doc(db, "media_assets", uploadedAsset.id), uploadedAsset);
+        } catch {
+          // Non-blocking Firestore mirror sync
+        }
+      }
+      params.onProgress?.(100);
+      return {
+        asset: uploadedAsset,
+        duplicateDetected: Boolean(data.duplicateDetected),
+      };
+    }
 
-  const uploadedAsset = data.item as MediaAsset;
-  if (auth.currentUser) {
-    try {
-      await setDoc(doc(db, "media_assets", uploadedAsset.id), uploadedAsset);
-    } catch {
-      // Non-blocking Firestore mirror sync
+    if (res.status < 500 || !auth.currentUser || params.replaceAsset?.storageLocation === "public_assets") {
+      throw new Error(data?.error || "মিডিয়া আপলোড ব্যর্থ হয়েছে।");
+    }
+  } catch (err: any) {
+    if (!auth.currentUser || params.replaceAsset?.storageLocation === "public_assets") {
+      throw err instanceof Error ? err : new Error("মিডিয়া আপলোড ব্যর্থ হয়েছে।");
+    }
+    // Fall through to Firebase Storage fallback if network / 5xx server storage error occurred
+    if (err?.message && !String(err.message).includes("Failed to fetch") && !String(err.message).includes("NetworkError")) {
+      // If it was an explicit 4xx validation/auth message thrown above, rethrow it
+      if (!String(err.message).includes("মিডিয়া আপলোড ব্যর্থ")) {
+        throw err;
+      }
     }
   }
 
-  params.onProgress?.(100);
-  return {
-    asset: uploadedAsset,
-    duplicateDetected: Boolean(data.duplicateDetected),
-  };
+  const fallbackAsset = await uploadToFirebaseStorageFallback({
+    file: params.file,
+    title,
+    altText: params.altText,
+    description: params.description,
+    category,
+    tags: params.tags,
+    visibility,
+    isPrivateCandidateAsset: params.isPrivateCandidateAsset,
+    uploadedBy: params.uploadedBy,
+    replaceAsset: params.replaceAsset,
+    sha256,
+    onProgress: params.onProgress,
+  });
+  return { asset: fallbackAsset, duplicateDetected: false };
 }
 
 export async function updateMediaAssetMetadata(
@@ -407,7 +469,7 @@ export async function updateMediaAssetMetadata(
     (asset.storageLocation === "external" && asset.id.startsWith("ext_"))
   ) {
     const authHeaders = await getMediaAuthHeaders();
-    const res = await fetch(`/api/media/${encodeURIComponent(asset.id)}`, {
+    const res = await apiFetch(`/api/media/${encodeURIComponent(asset.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders },
       credentials: "include",
@@ -454,7 +516,7 @@ export async function deleteMediaAsset(asset: MediaAsset): Promise<void> {
     (asset.storageLocation === "external" && asset.id.startsWith("ext_"))
   ) {
     const authHeaders = await getMediaAuthHeaders();
-    const res = await fetch(`/api/media/${encodeURIComponent(asset.id)}`, {
+    const res = await apiFetch(`/api/media/${encodeURIComponent(asset.id)}`, {
       method: "DELETE",
       headers: authHeaders,
       credentials: "include",

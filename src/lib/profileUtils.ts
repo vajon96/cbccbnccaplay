@@ -1,5 +1,7 @@
 import { CadetProfile } from "../types";
 import { db, collection, query, where, getDocs } from "../firebase";
+import { getSession, isAuthorizedAdmin } from "./auth";
+import { apiFetch } from "./api";
 
 // Fields that require Admin Approval when modified by a cadet
 export const SENSITIVE_FIELDS: (keyof CadetProfile)[] = [
@@ -183,7 +185,7 @@ export function validateNidOrBirthReg(val: string): boolean {
   return /^\d{10,17}$/.test(val.trim());
 }
 
-// Check Firestore for duplicate field values
+// Check for duplicate field values safely via backend (avoiding unauthorized collection list queries by cadets)
 export async function checkDuplicateField(
   fieldName: "studentPhone" | "studentEmail" | "registrationNumber" | "emisId",
   value: string,
@@ -191,11 +193,33 @@ export async function checkDuplicateField(
 ): Promise<boolean> {
   if (!value || !value.trim()) return false;
   try {
+    const res = await apiFetch("/api/applicants/check-duplicate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        field: fieldName,
+        value: value.trim(),
+        excludeId: excludeCadetId || "",
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return Boolean(data?.duplicate);
+    }
+  } catch {
+    // Fall back to Firestore only for authorized staff roles
+  }
+
+  const session = getSession();
+  if (!session || !isAuthorizedAdmin(session.role)) {
+    return false;
+  }
+
+  try {
     const q = query(collection(db, "applicants"), where(fieldName, "==", value.trim()));
     const snapshot = await getDocs(q);
-    
-    // Filter out current user's document
-    const duplicates = snapshot.docs.filter(d => d.id !== excludeCadetId);
+    const duplicates = snapshot.docs.filter((d) => d.id !== excludeCadetId);
     return duplicates.length > 0;
   } catch (err) {
     console.error(`Error checking duplicate for ${fieldName}:`, err);

@@ -131,7 +131,7 @@ service cloud.firestore {
         && data.ownerUid is string && data.ownerUid.size() > 0 && data.ownerUid.size() <= 128
         && data.examId is string && data.examId.size() > 0 && data.examId.size() <= 128
         && data.candidateId is string && data.candidateId.size() > 0 && data.candidateId.size() <= 128
-        && data.status in ['in_progress', 'submitted', 'graded'];
+        && data.status in ['in_progress', 'submitted', 'auto_submitted', 'expired', 'graded'];
     }
 
     function isValidExamResult(data) {
@@ -165,7 +165,7 @@ service cloud.firestore {
           && incoming().accountStatus == existing().accountStatus
           && (!('isActive' in existing()) || incoming().isActive == existing().isActive)
           && incoming().diff(existing()).affectedKeys().hasOnly([
-            'displayName', 'photoURL', 'phone', 'email', 'provider',
+            'displayName', 'photoURL', 'phone', 'email', 'emailVerified', 'provider',
             'applicantId', 'registrationNumber', 'lastLoginAt', 'updatedAt'
           ]))
       );
@@ -280,10 +280,10 @@ service cloud.firestore {
       allow create, update, delete: if isValidId(id) && isAdmin();
     }
 
-    // 2. Non-PII Public QR Projection (Zero phones/emails/NIDs/passwords, no list enumeration)
+    // 2. Non-PII Public QR Projection (Zero phones/emails/NIDs/passwords, no public list enumeration)
     match /public_qr_cards/{id} {
       allow get: if isValidId(id);
-      allow list: if false;
+      allow list: if isAdmin();
       allow create: if isValidId(id)
         && !('password' in incoming())
         && !('passwordHash' in incoming())
@@ -298,7 +298,18 @@ service cloud.firestore {
           (incoming().ownerUid == 'public_applicant' && incoming().status == 'Pending' && incoming().isValidCadet == false)
         );
       allow update: if isValidId(id)
-        && (isModerator() || (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid))
+        && (
+          isModerator() ||
+          (isAuthenticatedUser() && isOwner(existing()) && incoming().ownerUid == existing().ownerUid) ||
+          (isAuthenticatedUser()
+            && isVerifiedEmail()
+            && existing().ownerUid == 'public_applicant'
+            && exists(/databases/$(database)/documents/applicants/$(id))
+            && get(/databases/$(database)/documents/applicants/$(id)).data.ownerUid == request.auth.uid
+            && incoming().ownerUid == request.auth.uid
+            && incoming().status == existing().status
+            && incoming().diff(existing()).affectedKeys().hasOnly(['ownerUid', 'updatedAt']))
+        )
         && !('password' in incoming())
         && !('passwordHash' in incoming())
         && !('nidBirthReg' in incoming())
@@ -348,8 +359,21 @@ service cloud.firestore {
             incoming().status == existing().status &&
             incoming().diff(existing()).affectedKeys().hasOnly([
               'presentAddress', 'permanentAddress', 'studentEmail', 'bloodGroup',
-              'weightKg', 'heightFeet', 'heightInches', 'photo', 'updatedAt', 'passwordHash'
+              'weightKg', 'heightFeet', 'heightInches', 'photo',
+              'emergencyContactName', 'emergencyContactPhone',
+              'hasPendingEdits', 'pendingEditsId', 'updatedAt', 'passwordHash'
             ])
+          ) ||
+          (
+            isAuthenticatedUser() &&
+            isVerifiedEmail() &&
+            existing().ownerUid == 'public_applicant' &&
+            ('studentEmail' in existing()) &&
+            existing().studentEmail is string &&
+            existing().studentEmail.lower() == request.auth.token.email.lower() &&
+            incoming().ownerUid == request.auth.uid &&
+            incoming().status == existing().status &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['ownerUid', 'updatedAt'])
           )
         );
       allow delete: if isValidId(id) && isAdmin();
@@ -388,14 +412,28 @@ service cloud.firestore {
           )
         )
       );
-      allow update: if isValidId(id) && isModerator() && incoming().admissionStatus in ['Pending', 'Under Review', 'Approved', 'Admitted', 'Rejected'];
+      allow update: if isValidId(id) && (
+        (isModerator() && incoming().admissionStatus in ['Pending', 'Under Review', 'Approved', 'Admitted', 'Rejected']) ||
+        (isAuthenticatedUser()
+          && isVerifiedEmail()
+          && existing().ownerUid == 'public_applicant'
+          && exists(/databases/$(database)/documents/applicants/$(id))
+          && get(/databases/$(database)/documents/applicants/$(id)).data.ownerUid == request.auth.uid
+          && incoming().ownerUid == request.auth.uid
+          && incoming().admissionStatus == existing().admissionStatus
+          && incoming().diff(existing()).affectedKeys().hasOnly(['ownerUid', 'updatedAt']))
+      );
       allow delete: if isValidId(id) && isAdmin();
     }
 
     match /pending_profile_changes/{id} {
       allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
       allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
-      allow create: if isValidId(id) && isAuthenticatedUser() && incoming().ownerUid == request.auth.uid;
+      allow create: if isValidId(id)
+        && isAuthenticatedUser()
+        && incoming().ownerUid == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().size() <= 20;
       allow update: if isValidId(id) && isModerator();
       allow delete: if isValidId(id) && isAdmin();
     }
@@ -455,9 +493,12 @@ service cloud.firestore {
 
     // 7. Audit, Attendance & Password Reset Requests
     match /activity_logs/{id} {
-      allow get: if isValidId(id) && isModerator();
-      allow list: if isModerator();
-      allow create: if isValidId(id) && (isModerator() || (isAuthenticatedUser() && incoming().size() <= 12));
+      allow get: if isValidId(id) && (isModerator() || isOwner(existing()));
+      allow list: if isModerator() || (isAuthenticatedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(id) && (
+        isModerator() ||
+        (isAuthenticatedUser() && incoming().ownerUid == request.auth.uid && incoming().size() <= 14)
+      );
       allow update, delete: if isValidId(id) && isSuperAdmin();
     }
 
@@ -551,7 +592,7 @@ service cloud.firestore {
         isAdmin() ||
         (isAuthenticatedUser() && isOwner(existing()) && existing().status == 'in_progress'
           && incoming().ownerUid == existing().ownerUid
-          && incoming().status in ['in_progress', 'submitted'])
+          && incoming().status in ['in_progress', 'submitted', 'auto_submitted', 'expired'])
       );
       allow delete: if isValidId(id) && isAdmin();
     }

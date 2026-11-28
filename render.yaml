@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: cbcc-bncc-platoon-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: bncc-persistent-storage
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATA_DIR
+        value: /var/data/bncc-data
+      - key: MEDIA_DIR
+        value: /var/data/bncc-media
+      - key: FIREBASE_PROJECT_ID
+        value: gen-lang-client-0584243831
+      - key: VITE_ADMIN_EMAIL
+        value: sajondey102@gmail.com
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: EXAM_KEY_SECRET
+        generateValue: true
+      - key: ADMIN_LOGIN_PASSWORD
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

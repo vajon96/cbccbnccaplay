@@ -7,6 +7,7 @@ import {
 import { fetchAnswerScripts, fetchExams, deleteAttemptById } from "../../services/examService";
 import { ExamAttempt, ExamModel, EvaluationStatus } from "../../types";
 import { MarksheetViewer } from "./MarksheetViewer";
+import { resolveMediaUrl } from "../../lib/api";
 
 interface AnswerScriptsListProps {
   onSelectAttempt: (attemptId: string) => void;
@@ -320,7 +321,7 @@ export function AnswerScriptsList({ onSelectAttempt, onViewResult }: AnswerScrip
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-amber-400 overflow-hidden shrink-0">
                             {att.candidatePhoto && att.candidatePhoto.trim() !== "" ? (
-                              <img src={att.candidatePhoto} alt={att.candidateName || "Candidate"} className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(att.candidatePhoto)} alt={att.candidateName || "Candidate"} className="w-full h-full object-cover" />
                             ) : (
                               att.candidateName ? att.candidateName.substring(0, 2).toUpperCase() : "C"
                             )}

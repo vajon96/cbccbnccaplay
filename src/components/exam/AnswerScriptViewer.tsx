@@ -14,6 +14,8 @@ import {
   ExamAttempt, ExamModel, QuestionBankItem, ManualQuestionEvaluation, 
   AnswerScriptAuditLog, EvaluationStatus 
 } from "../../types";
+import { getServerAuthHeaders } from "../../lib/auth";
+import { apiFetch, resolveMediaUrl } from "../../lib/api";
 
 interface AnswerScriptViewerProps {
   attemptId: string;
@@ -319,9 +321,11 @@ export function AnswerScriptViewer({
     setMessage(null);
     try {
       const questionsList = attempt.questionSnapshot || [];
-      const res = await fetch("/api/gemini/evaluate-answer-script", {
+      const headers = await getServerAuthHeaders({ "Content-Type": "application/json" });
+      const res = await apiFetch("/api/gemini/evaluate-answer-script", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify({
           questions: questionsList,
           answers: attempt.answers || {},
@@ -605,7 +609,7 @@ export function AnswerScriptViewer({
         <div className="lg:col-span-2 bg-slate-900 border border-white/10 p-6 rounded-3xl shadow-xl flex flex-col sm:flex-row items-start sm:items-center gap-5">
           <div className="w-20 h-20 rounded-2xl bg-slate-800 border-2 border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow-lg">
             {attempt.candidatePhoto && attempt.candidatePhoto.trim() !== "" ? (
-              <img src={attempt.candidatePhoto} alt={attempt.candidateName || "Candidate"} className="w-full h-full object-cover" />
+              <img src={resolveMediaUrl(attempt.candidatePhoto)} alt={attempt.candidateName || "Candidate"} className="w-full h-full object-cover" />
             ) : (
               <span className="text-2xl font-black text-amber-400">
                 {attempt.candidateName ? attempt.candidateName.substring(0, 2).toUpperCase() : "C"}

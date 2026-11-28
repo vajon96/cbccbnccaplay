@@ -3,6 +3,7 @@ import { Phone, MapPin, Globe, Mail, X, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useCMS } from "../context/CMSContext";
 import { useLanguage } from "../context/LanguageContext";
+import { resolveMediaUrl } from "../lib/api";
 
 export function Footer() {
   const cms = useCMS();
@@ -28,7 +29,7 @@ export function Footer() {
                 aria-label="Cox's Bazar City College Website"
               >
                 <img
-                  src={cms.settings.collegeLogoUrl || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png"}
+                  src={resolveMediaUrl(cms.settings.collegeLogoUrl) || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png"}
                   alt="Cox's Bazar City College Logo"
                   className="h-10 w-auto"
                   referrerPolicy="no-referrer"
@@ -43,7 +44,7 @@ export function Footer() {
                 aria-label="BNCC Official Website"
               >
                 <img
-                  src={cms.settings.bnccLogoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
+                  src={resolveMediaUrl(cms.settings.bnccLogoUrl) || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
                   alt="BNCC Logo"
                   className="h-10 w-auto"
                   referrerPolicy="no-referrer"

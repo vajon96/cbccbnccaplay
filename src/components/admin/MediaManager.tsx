@@ -35,6 +35,7 @@ import {
   validateMediaFile,
 } from "../../services/mediaService";
 import { useCMS } from "../../context/CMSContext";
+import { resolveMediaUrl } from "../../lib/api";
 
 interface MediaManagerProps {
   applicants?: any[];
@@ -434,9 +435,10 @@ export function MediaManager({
   };
 
   const handleCopyUrl = async (asset: MediaAsset) => {
-    const fullUrl = asset.url.startsWith("http")
-      ? asset.url
-      : `${window.location.origin}${asset.url}`;
+    const resolved = resolveMediaUrl(asset.url);
+    const fullUrl = resolved.startsWith("http")
+      ? resolved
+      : `${window.location.origin}${resolved.startsWith("/") ? resolved : `/${resolved}`}`;
     try {
       await navigator.clipboard.writeText(fullUrl);
       setCopiedId(asset.id);
@@ -806,7 +808,7 @@ export function MediaManager({
                 >
                   {kind === "image" && !failedImages[item.id] ? (
                     <img
-                      src={item.url}
+                      src={resolveMediaUrl(item.url)}
                       alt={item.altText || item.title}
                       loading="lazy"
                       decoding="async"
@@ -896,7 +898,7 @@ export function MediaManager({
 
                     <div className="flex items-center justify-between gap-1.5">
                       <a
-                        href={item.url}
+                        href={resolveMediaUrl(item.url)}
                         download={item.fileName}
                         className="flex-1 py-1.5 px-2 bg-white/5 hover:bg-white/10 text-slate-200 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border border-white/10"
                         title="Download File"
@@ -904,7 +906,7 @@ export function MediaManager({
                         <Download size={13} /> Save
                       </a>
                       <a
-                        href={item.url}
+                        href={resolveMediaUrl(item.url)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1.5 bg-white/5 hover:bg-white/10 text-slate-200 rounded-lg border border-white/10"
@@ -981,7 +983,7 @@ export function MediaManager({
                           >
                             {kind === "image" && !failedImages[item.id] ? (
                               <img
-                                src={item.url}
+                                src={resolveMediaUrl(item.url)}
                                 alt={item.altText || item.title}
                                 loading="lazy"
                                 decoding="async"
@@ -1180,21 +1182,21 @@ export function MediaManager({
             <div className="bg-[#020B18] border border-white/10 rounded-xl p-4 flex items-center justify-center min-h-[220px]">
               {getAssetKind(previewAsset.mimeType) === "image" ? (
                 <img
-                  src={previewAsset.url}
+                  src={resolveMediaUrl(previewAsset.url)}
                   alt={previewAsset.altText || previewAsset.title}
                   referrerPolicy="no-referrer"
                   className="max-h-[360px] object-contain rounded"
                 />
               ) : getAssetKind(previewAsset.mimeType) === "video" ? (
-                <video src={previewAsset.url} controls className="max-h-[360px] w-full rounded" />
+                <video src={resolveMediaUrl(previewAsset.url)} controls className="max-h-[360px] w-full rounded" />
               ) : getAssetKind(previewAsset.mimeType) === "audio" ? (
-                <audio src={previewAsset.url} controls className="w-full" />
+                <audio src={resolveMediaUrl(previewAsset.url)} controls className="w-full" />
               ) : (
                 <div className="text-center space-y-3 py-6">
                   <FileText size={48} className="mx-auto text-amber-300" />
                   <p className="text-xs text-slate-300">{previewAsset.fileName}</p>
                   <a
-                    href={previewAsset.url}
+                    href={resolveMediaUrl(previewAsset.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-[#C5A059] text-[#002147] rounded-xl text-xs font-black"
@@ -1216,7 +1218,7 @@ export function MediaManager({
                   <Copy size={12} /> Copy URL
                 </button>
               </div>
-              <p className="font-mono text-[11px] text-slate-300 break-all select-all">{previewAsset.url}</p>
+              <p className="font-mono text-[11px] text-slate-300 break-all select-all">{resolveMediaUrl(previewAsset.url)}</p>
 
               <div className="pt-2 border-t border-white/10">
                 <p className="text-slate-400 font-semibold mb-1">Active Usage References:</p>

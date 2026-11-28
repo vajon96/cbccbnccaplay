@@ -108,6 +108,7 @@ export function ForgotPasswordModal({
               type: "PASSWORD_CHANGED",
               targetId: cleanId,
               actorId: auth.currentUser.uid,
+              ownerUid: auth.currentUser.uid,
               timestamp: Timestamp.now(),
               details: `Authenticated owner ${auth.currentUser.email || auth.currentUser.uid} updated password.`,
             }).catch(() => {});

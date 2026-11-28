@@ -83,6 +83,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useCMS } from "../context/CMSContext";
 import { isAdminRole, normalizeRole, UserRole } from "../lib/rbac";
+import { apiFetch, resolveMediaUrl } from "../lib/api";
 import { AuditLogs } from "../components/modular/AuditLogs";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { AdminQrCodeModal } from "../components/AdminQrCodeModal";
@@ -476,7 +477,7 @@ export function AdminDashboard() {
     setLoadingInquiries(true);
     try {
       const headers = await getServerAuthHeaders();
-      const res = await fetch("/api/contact", { credentials: "include", headers });
+      const res = await apiFetch("/api/contact", { credentials: "include", headers });
       if (res.ok) {
         const data = await res.json();
         setServerInquiries(Array.isArray(data?.inquiries) ? data.inquiries : []);
@@ -491,7 +492,7 @@ export function AdminDashboard() {
   const loadServerPasswordResets = async () => {
     try {
       const headers = await getServerAuthHeaders();
-      const res = await fetch("/api/auth/password-resets", {
+      const res = await apiFetch("/api/auth/password-resets", {
         credentials: "include",
         headers,
       });
@@ -617,7 +618,7 @@ export function AdminDashboard() {
   const fetchServerApplicants = async (quiet = false) => {
     try {
       let headers = await getServerAuthHeaders();
-      let res = await fetch("/api/applications", {
+      let res = await apiFetch("/api/applications", {
         credentials: "include",
         headers,
       });
@@ -630,19 +631,19 @@ export function AdminDashboard() {
           if (idToken && localSess) {
             await syncServerSession(localSess, idToken);
             headers = await getServerAuthHeaders();
-            res = await fetch("/api/applications", {
+            res = await apiFetch("/api/applications", {
               credentials: "include",
               headers,
             });
           }
         } else {
-          const sessRes = await fetch("/api/auth/session", { credentials: "include" }).catch(() => null);
+          const sessRes = await apiFetch("/api/auth/session", { credentials: "include" }).catch(() => null);
           if (sessRes?.ok) {
             const sessData = await sessRes.json().catch(() => null);
             if (sessData?.authenticated && sessData?.token) {
               setServerAuthToken(sessData.token);
               headers = await getServerAuthHeaders();
-              res = await fetch("/api/applications", {
+              res = await apiFetch("/api/applications", {
                 credentials: "include",
                 headers,
               });
@@ -871,7 +872,7 @@ export function AdminDashboard() {
               });
               getServerAuthHeaders({ "Content-Type": "application/json" })
                 .then((headers) =>
-                  fetch("/api/applications/sync-batch", {
+                  apiFetch("/api/applications/sync-batch", {
                     method: "POST",
                     headers,
                     credentials: "include",
@@ -978,7 +979,7 @@ export function AdminDashboard() {
               if (adminDocs.length > 0) {
                 void getServerAuthHeaders({ "Content-Type": "application/json" })
                   .then((headers) =>
-                    fetch("/api/auth/staff/sync-batch", {
+                    apiFetch("/api/auth/staff/sync-batch", {
                       method: "POST",
                       headers,
                       credentials: "include",
@@ -1027,7 +1028,7 @@ export function AdminDashboard() {
         createdAt: Timestamp.now(),
       });
       const staffHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      await fetch("/api/auth/staff", {
+      await apiFetch("/api/auth/staff", {
         method: "POST",
         headers: staffHeaders,
         credentials: "include",
@@ -1092,7 +1093,7 @@ export function AdminDashboard() {
         createdAt: Timestamp.now(),
       });
       const staffHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      await fetch("/api/auth/staff", {
+      await apiFetch("/api/auth/staff", {
         method: "POST",
         headers: staffHeaders,
         credentials: "include",
@@ -1126,7 +1127,7 @@ export function AdminDashboard() {
       const targetAdmin = admins.find((a) => a.id === id);
       await deleteDoc(doc(db, "admins", id));
       const delHeaders = await getServerAuthHeaders();
-      await fetch(`/api/auth/staff/${encodeURIComponent(targetAdmin?.username || id)}`, {
+      await apiFetch(`/api/auth/staff/${encodeURIComponent(targetAdmin?.username || id)}`, {
         method: "DELETE",
         headers: delHeaders,
         credentials: "include",
@@ -1146,7 +1147,7 @@ export function AdminDashboard() {
       const targetAdmin = admins.find((a) => a.id === editingAdminId);
       if (targetAdmin?.username) {
         const staffHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
-        await fetch("/api/auth/staff", {
+        await apiFetch("/api/auth/staff", {
           method: "POST",
           headers: staffHeaders,
           credentials: "include",
@@ -1163,6 +1164,7 @@ export function AdminDashboard() {
         type: "ADMIN_PERMISSIONS_UPDATED",
         targetId: editingAdminId,
         actorId: adminSession?.id || "super_admin",
+        ownerUid: firebaseUser?.uid || adminSession?.uid || adminSession?.id || "super_admin",
         timestamp: Timestamp.now(),
         details: `Super Admin updated permissions for admin ID: ${editingAdminId}`,
       });
@@ -1193,7 +1195,7 @@ export function AdminDashboard() {
       if (firebaseUser) {
         await updateDoc(doc(db, "applicants", showPasswordReset), {
           passwordHash: hashedPassword,
-          password: hashedPassword,
+          updatedAt: Timestamp.now(),
         })
           .then(() => {
             updated = true;
@@ -1203,12 +1205,13 @@ export function AdminDashboard() {
           type: "PASSWORD_RESET_BY_ADMIN",
           targetId: showPasswordReset,
           actorId: adminSession?.id || "admin",
+          ownerUid: firebaseUser.uid,
           timestamp: Timestamp.now(),
           details: `Admin reset password for user ${showPasswordReset}`,
         }).catch(() => {});
       }
       const patchHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch(`/api/applications/${encodeURIComponent(showPasswordReset)}`, {
+      const res = await apiFetch(`/api/applications/${encodeURIComponent(showPasswordReset)}`, {
         method: "PATCH",
         headers: patchHeaders,
         credentials: "include",
@@ -1265,6 +1268,17 @@ export function AdminDashboard() {
         await setDoc(
           doc(db, "public_qr_cards", id),
           {
+            id,
+            cadetId: id,
+            ownerUid: targetOwnerUid,
+            ...(targetApp?.fullNameEnglish ? { fullNameEnglish: targetApp.fullNameEnglish } : {}),
+            ...(targetApp?.fullNameBangla ? { fullNameBangla: targetApp.fullNameBangla } : {}),
+            ...(targetApp?.registrationNumber ? { registrationNumber: targetApp.registrationNumber } : { registrationNumber: id }),
+            ...(targetApp?.studyStatus ? { studyStatus: targetApp.studyStatus } : {}),
+            ...(targetApp?.session ? { session: targetApp.session } : {}),
+            ...(targetApp?.collegeName ? { collegeName: targetApp.collegeName } : {}),
+            platoonName: "Cox's Bazar City College BNCC Platoon",
+            ...(typeof targetApp?.photo === "string" && targetApp.photo.length <= 450000 ? { photo: targetApp.photo } : {}),
             status,
             isValidCadet: isApprovedDecision,
             updatedAt: Timestamp.now(),
@@ -1301,7 +1315,7 @@ export function AdminDashboard() {
     }
     try {
       const patchHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+      const res = await apiFetch(`/api/applications/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: patchHeaders,
         credentials: "include",
@@ -1345,6 +1359,7 @@ export function AdminDashboard() {
           type: nextActive ? "ACCOUNT_ACTIVATED" : "ACCOUNT_SUSPENDED",
           targetId: app.id,
           actorId: adminSession?.id || "super_admin",
+          ownerUid: firebaseUser.uid,
           timestamp: Timestamp.now(),
           details: `Admin set account ${app.id} to ${nextAccountStatus}`,
         }).catch(() => {});
@@ -1354,7 +1369,7 @@ export function AdminDashboard() {
     }
     try {
       const patchHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch(`/api/applications/${encodeURIComponent(app.id)}`, {
+      const res = await apiFetch(`/api/applications/${encodeURIComponent(app.id)}`, {
         method: "PATCH",
         headers: patchHeaders,
         credentials: "include",
@@ -1387,6 +1402,7 @@ export function AdminDashboard() {
       try {
         await deleteDoc(doc(db, "applicants", id));
         await deleteDoc(doc(db, "public_qr_cards", id)).catch(() => {});
+        await deleteDoc(doc(db, "admissions", id)).catch(() => {});
         deleted = true;
       } catch (err) {
         reportFirestoreListenerError(err, OperationType.DELETE, `applicants/${id}`);
@@ -1394,7 +1410,7 @@ export function AdminDashboard() {
     }
     try {
       const delHeaders = await getServerAuthHeaders();
-      const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+      const res = await apiFetch(`/api/applications/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: delHeaders,
         credentials: "include",
@@ -1435,6 +1451,17 @@ export function AdminDashboard() {
             batch.set(
               qrRef,
               {
+                id,
+                cadetId: id,
+                ownerUid: appOwnerUid,
+                ...(appObj?.fullNameEnglish ? { fullNameEnglish: appObj.fullNameEnglish } : {}),
+                ...(appObj?.fullNameBangla ? { fullNameBangla: appObj.fullNameBangla } : {}),
+                registrationNumber: appObj?.registrationNumber || id,
+                ...(appObj?.studyStatus ? { studyStatus: appObj.studyStatus } : {}),
+                ...(appObj?.session ? { session: appObj.session } : {}),
+                ...(appObj?.collegeName ? { collegeName: appObj.collegeName } : {}),
+                platoonName: "Cox's Bazar City College BNCC Platoon",
+                ...(typeof appObj?.photo === "string" && appObj.photo.length <= 450000 ? { photo: appObj.photo } : {}),
                 status: nextStatus,
                 isValidCadet: nextStatus === "Approved",
                 updatedAt: Timestamp.now(),
@@ -1478,6 +1505,7 @@ export function AdminDashboard() {
           type: `BULK_${action.toUpperCase()}`,
           targetId: "MULTIPLE",
           actorId: adminSession?.id || "admin",
+          ownerUid: firebaseUser.uid,
           timestamp: Timestamp.now(),
           details: `Admin performed bulk ${action} on ${ids.length} candidates.`,
         }).catch(() => {});
@@ -1487,7 +1515,7 @@ export function AdminDashboard() {
     }
     try {
       const bulkHeaders = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch("/api/applications/bulk", {
+      const res = await apiFetch("/api/applications/bulk", {
         method: "POST",
         headers: bulkHeaders,
         credentials: "include",
@@ -2969,7 +2997,7 @@ export function AdminDashboard() {
                           const headers = await getServerAuthHeaders({
                             "Content-Type": "application/json",
                           });
-                          const res = await fetch("/api/auth/staff", {
+                          const res = await apiFetch("/api/auth/staff", {
                             method: "POST",
                             headers,
                             credentials: "include",
@@ -3038,7 +3066,7 @@ export function AdminDashboard() {
                           )}
                           {reset.photo && (
                             <img
-                              src={reset.photo}
+                              src={resolveMediaUrl(reset.photo)}
                               alt="Security snapshot"
                               referrerPolicy="no-referrer"
                               className="w-full h-36 object-cover rounded-xl bg-black"
@@ -3071,7 +3099,7 @@ export function AdminDashboard() {
                                     }
                                     if (reset._fromServer) {
                                       const delHeaders = await getServerAuthHeaders();
-                                      await fetch(`/api/auth/password-resets/${encodeURIComponent(reset.id)}`, {
+                                      await apiFetch(`/api/auth/password-resets/${encodeURIComponent(reset.id)}`, {
                                         method: "DELETE",
                                         headers: delHeaders,
                                         credentials: "include",
@@ -3107,7 +3135,7 @@ export function AdminDashboard() {
                                     const patchHeaders = await getServerAuthHeaders({
                                       "Content-Type": "application/json",
                                     });
-                                    await fetch(`/api/auth/password-resets/${encodeURIComponent(reset.id)}`, {
+                                    await apiFetch(`/api/auth/password-resets/${encodeURIComponent(reset.id)}`, {
                                       method: "PATCH",
                                       headers: patchHeaders,
                                       credentials: "include",

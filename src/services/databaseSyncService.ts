@@ -19,6 +19,7 @@ import {
   OperationType,
 } from "../firebase";
 import { getServerAuthHeaders } from "../lib/auth";
+import { apiFetch, assetUrl } from "../lib/api";
 import { CMSService, sanitizeCmsDocId } from "./cmsService";
 import { seedDefaultQuestionsIfEmpty } from "./examService";
 import { DEFAULT_GUIDE_DATA } from "../components/modular/AIGuideManager";
@@ -105,6 +106,20 @@ export async function getDatabaseCollectionCounts(): Promise<CollectionStat[]> {
   return results;
 }
 
+function safeTimestamp(val: any): Timestamp {
+  if (val instanceof Timestamp) return val;
+  if (typeof val === "number" && Number.isFinite(val) && val > 0) {
+    return Timestamp.fromMillis(val);
+  }
+  if (val) {
+    const parsed = new Date(val);
+    if (!Number.isNaN(parsed.getTime())) {
+      return Timestamp.fromDate(parsed);
+    }
+  }
+  return Timestamp.now();
+}
+
 export async function isPortalDatabaseSeeded(): Promise<boolean> {
   if (!auth.currentUser) return true;
   try {
@@ -121,7 +136,7 @@ export async function isPortalDatabaseSeeded(): Promise<boolean> {
       examSettingSnap.exists()
     );
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -261,7 +276,7 @@ export async function syncAllPortalDataToDatabase(options?: {
     let exAdded = 0;
 
     try {
-      const qRes = await fetch("/api/exam/questions", { headers, credentials: "include" });
+      const qRes = await apiFetch("/api/exam/questions", { headers, credentials: "include" });
       if (qRes.ok) {
         const qJson = await qRes.json();
         const serverQuestions = Array.isArray(qJson?.questions) ? qJson.questions : [];
@@ -283,7 +298,7 @@ export async function syncAllPortalDataToDatabase(options?: {
     try {
       const exSnap = await getDocs(collection(db, "exams"));
       const existingExIds = new Set(exSnap.docs.map((d) => d.id));
-      const exRes = await fetch("/api/exam/exams", { headers, credentials: "include" });
+      const exRes = await apiFetch("/api/exam/exams", { headers, credentials: "include" });
       if (exRes.ok) {
         const exJson = await exRes.json();
         const serverExams = Array.isArray(exJson?.exams) ? exJson.exams : [];
@@ -323,7 +338,7 @@ export async function syncAllPortalDataToDatabase(options?: {
     const mediaMap = new Map<string, Record<string, any>>();
 
     try {
-      const manifestRes = await fetch("/assets-manifest.json");
+      const manifestRes = await fetch(assetUrl("/assets-manifest.json"));
       if (manifestRes.ok) {
         const manifest = await manifestRes.json();
         const items = Array.isArray(manifest?.items) ? manifest.items : [];
@@ -358,7 +373,7 @@ export async function syncAllPortalDataToDatabase(options?: {
 
     try {
       const headers = await getServerAuthHeaders();
-      const mediaListRes = await fetch("/api/media/list", { headers, credentials: "include" });
+      const mediaListRes = await apiFetch("/api/media/list", { headers, credentials: "include" });
       if (mediaListRes.ok) {
         const listJson = await mediaListRes.json();
         const items = Array.isArray(listJson?.items) ? listJson.items : [];
@@ -451,14 +466,16 @@ export async function syncAllPortalDataToDatabase(options?: {
   onProgress?.("Syncing Server Records (Applicants, Admissions, Inquiries, Messages)...");
   try {
     const headers = await getServerAuthHeaders();
-    const [existingApplicantsSnap, existingAdmissionsSnap, existingCounterSnap] = await Promise.all([
+    const [existingApplicantsSnap, existingAdmissionsSnap, existingQrSnap, existingCounterSnap] = await Promise.all([
       getDocs(collection(db, "applicants")),
       getDocs(collection(db, "admissions")),
+      getDocs(collection(db, "public_qr_cards")).catch(() => ({ docs: [] as any[] })),
       getDoc(doc(db, "counters", "applicant_id")),
     ]);
 
     const existingApplicantIds = new Set(existingApplicantsSnap.docs.map((d) => d.id));
     const existingAdmissionIds = new Set(existingAdmissionsSnap.docs.map((d) => d.id));
+    const existingQrIds = new Set(existingQrSnap.docs.map((d: any) => d.id));
 
     let maxNumericId = existingCounterSnap.exists()
       ? Number(existingCounterSnap.data()?.currentId || 1110)
@@ -477,7 +494,7 @@ export async function syncAllPortalDataToDatabase(options?: {
     let admAdded = 0;
 
     try {
-      const appsRes = await fetch("/api/applications", { headers, credentials: "include" });
+      const appsRes = await apiFetch("/api/applications", { headers, credentials: "include" });
       if (appsRes.ok) {
         const appsJson = await appsRes.json();
         const serverApps = Array.isArray(appsJson?.applications) ? appsJson.applications : [];
@@ -503,12 +520,26 @@ export async function syncAllPortalDataToDatabase(options?: {
           if (overwrite || !existingApplicantIds.has(safeId)) {
             const safeRole = app.role === "cadet" ? "cadet" : "user";
             const photoStr =
-              typeof app.photo === "string" && app.photo.length <= 500000 ? app.photo : "";
+              typeof app.photo === "string" && app.photo.length <= 450000 ? app.photo : "";
+            const { password: _pw, ...appWithoutPlaintextPw } = app;
+            const rawDocs = Array.isArray(app.uploadedDocuments) ? app.uploadedDocuments : [];
+            const sanitizedDocs = rawDocs.map((docItem: any) => {
+              if (docItem && typeof docItem.dataUrl === "string" && docItem.dataUrl.length > 20000) {
+                return {
+                  name: docItem.name,
+                  type: docItem.type,
+                  size: docItem.size,
+                  storedOnServer: true,
+                };
+              }
+              return docItem;
+            });
 
             parityWrites.push({
               ref: doc(db, "applicants", safeId),
               data: {
-                ...app,
+                ...appWithoutPlaintextPw,
+                uploadedDocuments: sanitizedDocs,
                 id: safeId,
                 fullNameEnglish: fullName,
                 studentPhone: fullPhone,
@@ -516,7 +547,7 @@ export async function syncAllPortalDataToDatabase(options?: {
                 ownerUid,
                 role: safeRole,
                 photo: photoStr,
-                createdAt: app.createdAtIso ? Timestamp.fromDate(new Date(app.createdAtIso)) : Timestamp.now(),
+                createdAt: safeTimestamp(app.createdAtIso || app.createdAt),
               },
             });
             appAdded++;
@@ -538,20 +569,25 @@ export async function syncAllPortalDataToDatabase(options?: {
             admAdded++;
           }
 
-          if (!existingApplicantIds.has(safeId)) {
+          if (overwrite || !existingQrIds.has(safeId)) {
             parityWrites.push({
               ref: doc(db, "public_qr_cards", safeId),
               data: {
                 id: safeId,
+                cadetId: safeId,
                 registrationNumber: String(app.registrationNumber || safeId),
                 fullNameEnglish: fullName,
                 fullNameBangla: String(app.fullNameBangla || ""),
+                studyStatus: String(app.studyStatus || ""),
+                session: String(app.session || ""),
+                collegeName: String(app.collegeName || "Cox's Bazar City College"),
+                platoonName: "Cox's Bazar City College BNCC Platoon",
                 bloodGroup: String(app.bloodGroup || ""),
                 department: String(app.classYear || app.department || ""),
                 status: normalizedStatus,
                 isValidCadet: normalizedStatus === "Approved",
                 ownerUid,
-                photo: typeof app.photo === "string" && app.photo.length <= 500000 ? app.photo : "",
+                photo: typeof app.photo === "string" && app.photo.length <= 450000 ? app.photo : "",
                 updatedAt: Timestamp.now(),
               },
             });
@@ -591,7 +627,7 @@ export async function syncAllPortalDataToDatabase(options?: {
     const headers = await getServerAuthHeaders();
     const [existingContactSnap, contactRes] = await Promise.all([
       getDocs(collection(db, "contact_messages")),
-      fetch("/api/contact", { headers, credentials: "include" }),
+      apiFetch("/api/contact", { headers, credentials: "include" }),
     ]);
     const existingContactIds = new Set(existingContactSnap.docs.map((d) => d.id));
     let contactAdded = 0;
@@ -616,10 +652,8 @@ export async function syncAllPortalDataToDatabase(options?: {
             subject: String(inq.subject || "Contact Inquiry").slice(0, 200),
             message: String(inq.message || "Contact message").slice(0, 5000),
             status: "unread",
-            ownerUid: "public_visitor",
-            createdAt: inq.createdAtIso
-              ? Timestamp.fromDate(new Date(inq.createdAtIso))
-              : Timestamp.now(),
+            ownerUid: String(inq.ownerUid || "public_visitor").slice(0, 128),
+            createdAt: safeTimestamp(inq.createdAtIso),
           });
           if (targetStatus !== "unread") {
             await updateDoc(doc(db, "contact_messages", safeId), {
@@ -643,7 +677,7 @@ export async function syncAllPortalDataToDatabase(options?: {
     const headers = await getServerAuthHeaders();
     const [existingMsgSnap, msgRes] = await Promise.all([
       getDocs(collection(db, "messages")),
-      fetch("/api/messages", { headers, credentials: "include" }),
+      apiFetch("/api/messages", { headers, credentials: "include" }),
     ]);
     const existingMsgIds = new Set(existingMsgSnap.docs.map((d) => d.id));
     const msgWrites: Array<{ ref: ReturnType<typeof doc>; data: Record<string, any> }> = [];
@@ -663,7 +697,10 @@ export async function syncAllPortalDataToDatabase(options?: {
               ownerUid: String(m.ownerUid || "ALL"),
               ...(m.candidateId ? { candidateId: String(m.candidateId) } : {}),
               content: String(m.content).slice(0, 5000),
-              timestamp: m.timestampMs ? Timestamp.fromMillis(Number(m.timestampMs)) : Timestamp.now(),
+              timestamp:
+                Number.isFinite(Number(m.timestampMs)) && Number(m.timestampMs) > 0
+                  ? Timestamp.fromMillis(Number(m.timestampMs))
+                  : safeTimestamp(m.timestampIso || m.timestamp),
               role: String(m.role || "admin"),
               isRead: Boolean(m.isRead),
             },
@@ -686,6 +723,9 @@ export async function syncAllPortalDataToDatabase(options?: {
   try {
     await addDoc(collection(db, "activity_logs"), {
       type: "FULL_DATABASE_SYNC",
+      targetId: "DATABASE_SYNC",
+      actorId,
+      ownerUid: auth.currentUser?.uid || actorId,
       details: `Synchronized ${totalWritten} portal records into Cloud Firestore (overwrite=${overwrite}).`,
       timestamp: Timestamp.now(),
       performedBy: actorId,

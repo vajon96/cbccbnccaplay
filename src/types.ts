@@ -66,8 +66,10 @@ export interface CadetProfile {
   otherCoCurricularActivity?: string;
 
   // Auth & System
+  ownerUid?: string;
   photo?: string;
   password?: string;
+  passwordHash?: string;
   createdAt?: any;
   updatedAt?: any;
 
@@ -79,6 +81,8 @@ export interface CadetProfile {
 export interface PendingProfileChange {
   id: string;
   cadetId: string;
+  ownerUid?: string;
+  actorUid?: string;
   cadetName: string;
   registrationNumber: string;
   changes: Record<string, { old: any; new: any }>;
@@ -95,6 +99,7 @@ export interface ProfileAuditLog {
   type: string;
   targetId: string;
   actorId: string;
+  ownerUid?: string;
   actorName?: string;
   timestamp: any;
   details: string;

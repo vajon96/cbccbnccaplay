@@ -1,4 +1,5 @@
 import { useCMS } from "../../context/CMSContext";
+import { resolveMediaUrl } from "../../lib/api";
 
 const DEFAULT_COLLEGE_LOGO = "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png";
 const DEFAULT_BNCC_LOGO = "https://i.ibb.co/Fb3R6wR/Bncc-logo.png";
@@ -9,8 +10,8 @@ interface AuthLogoMarkProps {
 
 export function AuthLogoMark({ compact = false }: AuthLogoMarkProps) {
   const { settings } = useCMS();
-  const collegeLogo = settings?.collegeLogoUrl || DEFAULT_COLLEGE_LOGO;
-  const bnccLogo = settings?.bnccLogoUrl || DEFAULT_BNCC_LOGO;
+  const collegeLogo = resolveMediaUrl(settings?.collegeLogoUrl || DEFAULT_COLLEGE_LOGO);
+  const bnccLogo = resolveMediaUrl(settings?.bnccLogoUrl || DEFAULT_BNCC_LOGO);
 
   return (
     <div className="flex items-center justify-center gap-3">

@@ -12,6 +12,7 @@ import { AdmissionGuideModal } from "../components/AdmissionGuideModal";
 import { useCMS } from "../context/CMSContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { resolveMediaUrl } from "../lib/api";
 
 export function Home() {
   const cms = useCMS();
@@ -161,7 +162,7 @@ export function Home() {
       <section className="relative overflow-hidden bg-[#002147] border-b border-[#C5A059]/25">
         <div className="absolute inset-0 z-0">
           <img
-            src={bgImage}
+            src={resolveMediaUrl(bgImage)}
             className="w-full h-full object-cover object-center opacity-20 filter brightness-75"
             alt="Cox's Bazar City College BNCC Platoon in Parade"
             referrerPolicy="no-referrer"
@@ -259,7 +260,7 @@ export function Home() {
               <div className="rounded-2xl overflow-hidden border border-[#C5A059]/35 bg-[#061830] shadow-2xl">
                 <div className="relative h-64 sm:h-72 overflow-hidden bg-[#00152e]">
                   <img
-                    src="/assets/aistudio/dd__1__02ef1095.jpg"
+                    src={resolveMediaUrl("/assets/aistudio/dd__1__02ef1095.jpg")}
                     alt="Cox's Bazar City College BNCC Platoon Parade Drill"
                     className="w-full h-full object-cover object-center"
                     referrerPolicy="no-referrer"
@@ -383,7 +384,7 @@ export function Home() {
           <div className="lg:col-span-5">
             <div className="rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white">
               <img
-                src="/assets/aistudio/dddf__1__7ebcab35.jpg"
+                src={resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg")}
                 alt="Cox's Bazar City College BNCC Platoon Formation"
                 className="w-full h-80 object-cover"
                 referrerPolicy="no-referrer"
@@ -448,12 +449,12 @@ export function Home() {
             <div className="md:col-span-4 flex justify-center">
               <div className="w-48 h-60 rounded-xl overflow-hidden border-2 border-[#C5A059] shadow-2xl bg-[#00152e]">
                 <img
-                  src={commander.photoUrl || "/assets/aistudio/POU_7647ec14.png"}
+                  src={resolveMediaUrl(commander.photoUrl || "/assets/aistudio/POU_7647ec14.png")}
                   alt={commander.name || "Platoon Commander"}
                   className="w-full h-full object-cover object-top"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/assets/aistudio/POU_7647ec14.png";
+                    (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/POU_7647ec14.png");
                   }}
                 />
               </div>
@@ -567,7 +568,7 @@ export function Home() {
             className="flex items-center gap-3"
           >
             <img
-              src={cms.settings.collegeLogoUrl || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png"}
+              src={resolveMediaUrl(cms.settings.collegeLogoUrl || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png")}
               alt="Cox's Bazar City College"
               className="h-14 w-auto"
               referrerPolicy="no-referrer"
@@ -589,7 +590,7 @@ export function Home() {
             className="flex items-center gap-3"
           >
             <img
-              src={cms.settings.bnccLogoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
+              src={resolveMediaUrl(cms.settings.bnccLogoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png")}
               alt="BNCC"
               className="h-14 w-auto"
               referrerPolicy="no-referrer"

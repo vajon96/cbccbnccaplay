@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cox's Bazar City College BNCC Platoon | Redirecting...</title>
+    <script>
+      // SPA redirect handler for GitHub Pages (project subpaths, root user sites, and custom domains).
+      // Value is injected at build time from VITE_BASE_PATH by vite.config.ts.
+      (function () {
+        var l = window.location;
+        var configuredSegments = "__VITE_BASE_SEGMENTS__";
+        var pathSegmentsToKeep;
+        if (typeof configuredSegments === "number" && !isNaN(configuredSegments)) {
+          pathSegmentsToKeep = configuredSegments;
+        } else {
+          var isGithubProjectPage =
+            l.hostname.endsWith(".github.io") &&
+            l.pathname.split("/").filter(Boolean).length >= 1;
+          pathSegmentsToKeep = isGithubProjectPage ? 1 : 0;
+        }
+
+        l.replace(
+          l.protocol +
+            "//" +
+            l.hostname +
+            (l.port ? ":" + l.port : "") +
+            l.pathname
+              .split("/")
+              .slice(0, 1 + pathSegmentsToKeep)
+              .join("/") +
+            "/?/" +
+            l.pathname
+              .slice(1)
+              .split("/")
+              .slice(pathSegmentsToKeep)
+              .join("/")
+              .replace(/&/g, "~and~") +
+            (l.search ? "&" + l.search.slice(1).replace(/&/g, "~and~") : "") +
+            l.hash
+        );
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

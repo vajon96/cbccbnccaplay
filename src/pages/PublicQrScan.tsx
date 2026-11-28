@@ -7,9 +7,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { db, doc, getDoc, setDoc, collection, Timestamp } from "../firebase";
+import { auth, db, doc, getDoc, setDoc, collection, Timestamp } from "../firebase";
 import { getSession } from "../lib/auth";
 import { isAdminRole } from "../lib/rbac";
+import { apiFetch, resolveMediaUrl } from "../lib/api";
 
 export function PublicQrScan() {
   const [loading, setLoading] = useState(false);
@@ -233,7 +234,7 @@ export function PublicQrScan() {
                 id: cadetId,
                 fullNameEnglish: rawData.fullNameEnglish,
                 fullNameBangla: rawData.fullNameBangla,
-                academicYear: rawData.academicYear,
+                academicYear: rawData.session || rawData.academicYear || "N/A",
                 studyStatus: rawData.studyStatus,
                 photo: rawData.photo,
                 status: isRevoked ? "Revoked" : rawData.status,
@@ -634,18 +635,28 @@ export function PublicQrScan() {
                         setTimeout(() => setError(null), 5000);
                         setLoading(false);
 
-                        // Log event
-                        try {
-                          await setDoc(doc(collection(db, "security_logs")), {
-                            attemptType: "Manual Access Blocked",
-                            timestamp: Timestamp.now(),
-                            userRole: session?.role || "public_user",
-                            userId: session?.id || session?.username || "anonymous",
-                            reason: "Manual lookup attempted by public user or unauthorized role",
-                            attemptedId: inputId
-                          });
-                        } catch (logErr) {
-                          console.error("Failed to write safety security_log:", logErr);
+                        // Log event (server audit always; Firestore when authenticated)
+                        const secEvent = {
+                          attemptType: "Manual Access Blocked",
+                          userRole: session?.role || "public_user",
+                          userId: session?.id || session?.username || "anonymous",
+                          reason: "Manual lookup attempted by public user or unauthorized role",
+                          attemptedId: inputId,
+                        };
+                        void apiFetch("/api/security-log", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(secEvent),
+                        }).catch(() => {});
+                        if (auth.currentUser && !auth.currentUser.isAnonymous) {
+                          try {
+                            await setDoc(doc(collection(db, "security_logs")), {
+                              ...secEvent,
+                              timestamp: Timestamp.now(),
+                            });
+                          } catch {
+                            // Server audit already recorded
+                          }
                         }
                         return;
                       }
@@ -684,18 +695,28 @@ export function PublicQrScan() {
                             setError("Access Restricted - Female cadet profiles can only be verified via secure QR Scan. নিরাপত্তা নীতিমালায় নারী ক্যাডেটদের ম্যানুয়াল সার্চ সম্পূর্ণ নিষিদ্ধ।");
                             setTimeout(() => setError(null), 6000);
 
-                            // Log event
-                            try {
-                              await setDoc(doc(collection(db, "security_logs")), {
-                                attemptType: "Manual Access Blocked",
-                                timestamp: Timestamp.now(),
-                                userRole: session?.role || "unknown",
-                                userId: session?.id || session?.username || "unknown",
-                                reason: "Manual ID lookup of female cadet was completely blocked",
-                                attemptedId: inputId
-                              });
-                            } catch (logErr) {
-                              console.error("Failed to write safety security_log:", logErr);
+                            // Log event (server audit always; Firestore when authenticated)
+                            const secFemaleEvent = {
+                              attemptType: "Manual Access Blocked",
+                              userRole: session?.role || "unknown",
+                              userId: session?.id || session?.username || "unknown",
+                              reason: "Manual ID lookup of female cadet was completely blocked",
+                              attemptedId: inputId,
+                            };
+                            void apiFetch("/api/security-log", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(secFemaleEvent),
+                            }).catch(() => {});
+                            if (auth.currentUser && !auth.currentUser.isAnonymous) {
+                              try {
+                                await setDoc(doc(collection(db, "security_logs")), {
+                                  ...secFemaleEvent,
+                                  timestamp: Timestamp.now(),
+                                });
+                              } catch {
+                                // Server audit already recorded
+                              }
                             }
                             return;
                           }
@@ -706,7 +727,7 @@ export function PublicQrScan() {
                             id: cleanInputId,
                             fullNameEnglish: rawData.fullNameEnglish,
                             fullNameBangla: rawData.fullNameBangla,
-                            academicYear: rawData.academicYear,
+                            academicYear: rawData.session || rawData.academicYear || "N/A",
                             studyStatus: rawData.studyStatus,
                             photo: rawData.photo,
                             status: isRevoked ? "Revoked" : rawData.status,
@@ -791,7 +812,7 @@ export function PublicQrScan() {
               <div className="space-y-4 p-5 bg-slate-950 rounded-2xl border border-white/5">
                 <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-emerald-500 mx-auto shadow-xl bg-slate-900">
                   {cadetData.photo && cadetData.photo.trim() !== "" ? (
-                    <img src={cadetData.photo} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                    <img src={resolveMediaUrl(cadetData.photo)} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <User className="w-10 h-10 text-slate-700" />

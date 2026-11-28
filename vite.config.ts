@@ -1,11 +1,19 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
+  const rawBase = (process.env.VITE_BASE_PATH || '/').trim();
+  const trimmedBase = rawBase.replace(/^\/+|\/+$/g, '');
+  const basePath = trimmedBase ? `/${trimmedBase}/` : '/';
+  const baseSegmentsCount = trimmedBase ? trimmedBase.split('/').filter(Boolean).length : 0;
+  const escapedBase = basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   return {
+    base: basePath,
     plugins: [
       react(),
       tailwindcss(),
@@ -21,21 +29,21 @@ export default defineConfig(() => {
           background_color: '#f8fafc',
           display: 'standalone',
           orientation: 'portrait-primary',
-          scope: '/',
-          start_url: '/',
+          scope: basePath,
+          start_url: basePath,
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: `${basePath}pwa-192x192.png`,
               sizes: '192x192',
               type: 'image/png',
             },
             {
-              src: '/pwa-512x512.png',
+              src: `${basePath}pwa-512x512.png`,
               sizes: '512x512',
               type: 'image/png',
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: `${basePath}pwa-maskable-512x512.png`,
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -46,11 +54,11 @@ export default defineConfig(() => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           globIgnores: ['**/assets/aistudio/**', '**/assets-manifest.json'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//],
+          navigateFallback: `${basePath}index.html`,
+          navigateFallbackDenylist: [/^\/api\//, new RegExp(`^${escapedBase}api/`)],
           runtimeCaching: [
             {
-              urlPattern: /^\/api\/.*/i,
+              urlPattern: /\/api\/.*/i,
               handler: 'NetworkOnly',
             },
             {
@@ -85,6 +93,17 @@ export default defineConfig(() => {
           enabled: false,
         },
       }),
+      {
+        name: 'inject-base-segments-404',
+        closeBundle() {
+          const out404 = path.resolve(__dirname, 'dist', '404.html');
+          if (fs.existsSync(out404)) {
+            const content = fs.readFileSync(out404, 'utf8');
+            const updated = content.replace(/"__VITE_BASE_SEGMENTS__"/g, String(baseSegmentsCount));
+            fs.writeFileSync(out404, updated, 'utf8');
+          }
+        },
+      },
     ],
     resolve: {
       alias: {

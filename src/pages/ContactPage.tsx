@@ -14,6 +14,7 @@ import {
   reportFirestoreListenerError,
   OperationType,
 } from "../firebase";
+import { apiFetch } from "../lib/api";
 
 export function ContactPage() {
   useDocumentMeta({
@@ -101,7 +102,7 @@ export function ContactPage() {
     let serverSaved = false;
     let serverErrMsg = "";
     try {
-      const res = await fetch("/api/contact", {
+      const res = await apiFetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

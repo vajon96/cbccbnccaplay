@@ -27,13 +27,14 @@ import {
   reportFirestoreListenerError,
   OperationType,
 } from "../firebase";
-import { getSession, setSession, logoutEverywhere } from "../lib/auth";
+import { getSession, setSession, logoutEverywhere, getServerAuthHeaders } from "../lib/auth";
 import { isCadetRole, normalizeRole } from "../lib/rbac";
 import { useAuth } from "../context/AuthContext";
 import { NotificationCenter } from "../components/modular/NotificationCenter";
 import { CadetProfileView } from "../components/cadet/CadetProfileView";
 import { CadetProfile } from "../types";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { apiFetch } from "../lib/api";
 
 export function UserDashboard() {
   useDocumentMeta({
@@ -131,8 +132,28 @@ export function UserDashboard() {
         },
         (err) => {
           reportFirestoreListenerError(err, OperationType.GET, `applicants/${targetApplicantId}`);
-          setDbError("ক্যাডেট প্রোফাইল লোড করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে।");
-          setLoading(false);
+          void getServerAuthHeaders()
+            .then((headers) =>
+              apiFetch(`/api/applications/${encodeURIComponent(targetApplicantId)}`, {
+                headers,
+                credentials: "include",
+              })
+            )
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+              if (data?.application) {
+                setUser(data.application as CadetProfile);
+                setDbError(null);
+              } else {
+                setDbError("ক্যাডেট প্রোফাইল লোড করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে।");
+              }
+            })
+            .catch(() => {
+              setDbError("ক্যাডেট প্রোফাইল লোড করতে অনুমতি বা নেটওয়ার্ক সমস্যা হয়েছে।");
+            })
+            .finally(() => {
+              setLoading(false);
+            });
         }
       );
     } else if (uid) {

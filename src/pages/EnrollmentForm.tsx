@@ -7,6 +7,7 @@ import { analyzeEnrollment, analyzePhoto } from "../services/geminiService";
 import { generatePassword, hashPassword, setSession, syncServerSession, getSession } from "../lib/auth";
 import { isAdminRole } from "../lib/rbac";
 import { useCMS } from "../context/CMSContext";
+import { apiFetch } from "../lib/api";
 
 export function EnrollmentForm() {
   const { settings: cmsSettings, loading: cmsLoading } = useCMS();
@@ -311,21 +312,38 @@ export function EnrollmentForm() {
       const hashedPassword = await hashPassword(rawPassword);
       const createdAtIso = new Date().toISOString();
 
-      const buildApplicantPayload = (targetId: string, useServerTs: boolean) => ({
-        ...formData,
-        id: targetId,
-        registrationNumber: formData.registrationNumber.trim() || targetId,
-        ownerUid,
-        studentEmail: formData.studentEmail.trim() || (hasFirebaseUser ? auth.currentUser?.email || "" : ""),
-        passwordHash: hashedPassword,
-        role: "user",
-        status: "Pending",
-        isActive: true,
-        accountStatus: "Active",
-        attendanceStatus: "Absent",
-        createdAtIso,
-        createdAt: useServerTs ? serverTimestamp() : Timestamp.now(),
-      });
+      const buildApplicantPayload = (targetId: string, useServerTs: boolean) => {
+        const rawDocs = Array.isArray(formData.uploadedDocuments) ? formData.uploadedDocuments : [];
+        const approxTotalLen =
+          (formData.photo?.length || 0) +
+          rawDocs.reduce((acc, d) => acc + (d.dataUrl?.length || 0), 0);
+        const safeFirestoreDocs =
+          approxTotalLen > 650000
+            ? rawDocs.map((d) => ({
+                name: d.name,
+                type: d.type,
+                size: d.size,
+                storedOnServer: true,
+              }))
+            : rawDocs;
+
+        return {
+          ...formData,
+          uploadedDocuments: safeFirestoreDocs,
+          id: targetId,
+          registrationNumber: formData.registrationNumber.trim() || targetId,
+          ownerUid,
+          studentEmail: formData.studentEmail.trim() || (hasFirebaseUser ? auth.currentUser?.email || "" : ""),
+          passwordHash: hashedPassword,
+          role: "user",
+          status: "Pending",
+          isActive: true,
+          accountStatus: "Active",
+          attendanceStatus: "Absent",
+          createdAtIso,
+          createdAt: useServerTs ? serverTimestamp() : Timestamp.now(),
+        };
+      };
 
       let firestoreSaved = false;
       let lastFirestoreError: any = null;
@@ -362,7 +380,7 @@ export function EnrollmentForm() {
           createdAtIso,
           firestoreSynced: firestoreSaved,
         };
-        const apiRes = await fetch("/api/applications", {
+        const apiRes = await apiFetch("/api/applications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -370,7 +388,7 @@ export function EnrollmentForm() {
         });
         if (apiRes.ok) {
           const data = await apiRes.json();
-          if (data?.application?.id) {
+          if (!firestoreSaved && data?.application?.id) {
             id = data.application.id;
           }
           serverSaved = true;
@@ -395,6 +413,8 @@ export function EnrollmentForm() {
         await setDoc(doc(db, "public_qr_cards", id), {
           id,
           cadetId: id,
+          registrationNumber: regNumber,
+          session: formData.session,
           ownerUid,
           fullNameEnglish: formData.fullNameEnglish,
           fullNameBangla: formData.fullNameBangla,
@@ -433,6 +453,7 @@ export function EnrollmentForm() {
             type: "ACCOUNT_CREATED",
             targetId: id,
             actorId: ownerUid,
+            ownerUid,
             timestamp: serverTimestamp(),
             details: "New applicant submitted via enrollment form",
           }).catch(() => {});

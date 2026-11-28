@@ -10,6 +10,7 @@ import { getSession, getServerAuthHeaders } from "../lib/auth";
 import { getExamById, startExamAttempt } from "../services/examService";
 import { ExamModel } from "../types";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
+import { apiFetch } from "../lib/api";
 
 export function ExamInstructions() {
   const { examId } = useParams<{ examId: string }>();
@@ -53,7 +54,7 @@ export function ExamInstructions() {
               return null;
             }
             const headers = await getServerAuthHeaders();
-            const res = await fetch(`/api/applications/${encodeURIComponent(session.id)}`, {
+            const res = await apiFetch(`/api/applications/${encodeURIComponent(session.id)}`, {
               headers,
               credentials: "include",
             });

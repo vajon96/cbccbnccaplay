@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, Clock, User, Eye, Loader2, RefreshCw } from "lucide-react";
-import { db, collection, query, where, onSnapshot, doc, updateDoc, Timestamp, addDoc, handleFirestoreError, reportFirestoreListenerError, OperationType } from "../../firebase";
+import { db, collection, query, where, onSnapshot, doc, getDoc, setDoc, updateDoc, Timestamp, addDoc, handleFirestoreError, reportFirestoreListenerError, OperationType } from "../../firebase";
 import { PendingProfileChange } from "../../types";
 import { FIELD_LABELS } from "../../lib/profileUtils";
 import { useAuth } from "../../context/AuthContext";
@@ -38,13 +38,23 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
     return () => unsub();
   }, [authLoading, firebaseUser]);
 
+  const resolveApplicantOwnerUid = async (req: PendingProfileChange): Promise<string> => {
+    if ((req as any).ownerUid) return String((req as any).ownerUid);
+    const snap = await getDoc(doc(db, "applicants", req.cadetId)).catch(() => null);
+    return snap?.exists() ? String(snap.data()?.ownerUid || req.cadetId) : req.cadetId;
+  };
+
   const handleApprove = async (req: PendingProfileChange) => {
     setProcessingId(req.id);
     try {
+      const targetOwnerUid = await resolveApplicantOwnerUid(req);
+
       // 1. Build update payload for cadet's profile document
       const approvedUpdates: Record<string, any> = {};
       Object.entries(req.changes).forEach(([key, val]) => {
-        approvedUpdates[key] = val.new;
+        if (key !== "height" && key !== "password") {
+          approvedUpdates[key] = val.new;
+        }
       });
       approvedUpdates.hasPendingEdits = false;
       approvedUpdates.pendingEditsId = null;
@@ -52,6 +62,19 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
 
       // Update applicant document
       await updateDoc(doc(db, "applicants", req.cadetId), approvedUpdates);
+
+      // Sync non-PII public QR card and admissions projection if relevant fields changed
+      const qrUpdates: Record<string, any> = { updatedAt: Timestamp.now() };
+      if (approvedUpdates.fullNameEnglish) qrUpdates.fullNameEnglish = approvedUpdates.fullNameEnglish;
+      if (approvedUpdates.fullNameBangla) qrUpdates.fullNameBangla = approvedUpdates.fullNameBangla;
+      if (approvedUpdates.registrationNumber) qrUpdates.registrationNumber = approvedUpdates.registrationNumber;
+      if (approvedUpdates.collegeName) qrUpdates.collegeName = approvedUpdates.collegeName;
+      if (approvedUpdates.studyStatus) qrUpdates.studyStatus = approvedUpdates.studyStatus;
+      if (approvedUpdates.session) qrUpdates.session = approvedUpdates.session;
+      if (Object.keys(qrUpdates).length > 1) {
+        await setDoc(doc(db, "public_qr_cards", req.cadetId), qrUpdates, { merge: true }).catch(() => {});
+        await setDoc(doc(db, "admissions", req.cadetId), qrUpdates, { merge: true }).catch(() => {});
+      }
 
       // 2. Mark pending request as approved
       await updateDoc(doc(db, "pending_profile_changes", req.id), {
@@ -64,6 +87,7 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
       await addDoc(collection(db, "activity_logs"), {
         type: "PROFILE_CHANGE_APPROVED",
         targetId: req.cadetId,
+        ownerUid: targetOwnerUid,
         actorId: adminSession.id || "admin",
         actorName: adminSession.username || adminSession.name || "Admin",
         timestamp: Timestamp.now(),
@@ -71,12 +95,14 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
         changes: req.changes
       });
 
-      // 4. Send notification to Cadet
+      // 4. Send notification to Cadet (with ownerUid so cadet can read it under security rules)
       await addDoc(collection(db, "notifications"), {
         targetId: req.cadetId,
+        ownerUid: targetOwnerUid,
         type: "Announcement",
         title: "Profile Changes Approved",
         message: "Your sensitive profile information update request has been approved by the Platoon Commander.",
+        isRead: false,
         timestamp: Timestamp.now()
       });
 
@@ -92,6 +118,8 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
     const reason = rejectReason[req.id] || "Request rejected by Admin.";
     setProcessingId(req.id);
     try {
+      const targetOwnerUid = await resolveApplicantOwnerUid(req);
+
       // 1. Clear pending flag on applicant
       await updateDoc(doc(db, "applicants", req.cadetId), {
         hasPendingEdits: false,
@@ -110,18 +138,21 @@ export const PendingProfileApprovals: React.FC<PendingProfileApprovalsProps> = (
       await addDoc(collection(db, "activity_logs"), {
         type: "PROFILE_CHANGE_REJECTED",
         targetId: req.cadetId,
+        ownerUid: targetOwnerUid,
         actorId: adminSession.id || "admin",
         actorName: adminSession.username || adminSession.name || "Admin",
         timestamp: Timestamp.now(),
         details: `Rejected profile change request for Cadet ${req.cadetName}. Reason: ${reason}`
       });
 
-      // 4. Notify Cadet
+      // 4. Notify Cadet (with ownerUid so cadet can read it under security rules)
       await addDoc(collection(db, "notifications"), {
         targetId: req.cadetId,
+        ownerUid: targetOwnerUid,
         type: "Alert",
         title: "Profile Changes Declined",
         message: `Your requested profile changes were not approved. Reason: ${reason}`,
+        isRead: false,
         timestamp: Timestamp.now()
       });
 

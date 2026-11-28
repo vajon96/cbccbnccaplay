@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, RefreshCw, Calendar, Shield, Check, Copy, Printer, Download } from "lucide-react";
 import { db, doc, setDoc, getDocs, deleteDoc, collection, query, where, Timestamp } from "../firebase";
 import { getServerAuthHeaders } from "../lib/auth";
+import { apiFetch } from "../lib/api";
 
 interface AdminQrCodeModalProps {
   isOpen: boolean;
@@ -36,7 +37,7 @@ export function AdminQrCodeModal({ isOpen, onClose, admin }: AdminQrCodeModalPro
   }) => {
     try {
       const headers = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      await fetch("/api/auth/qr-token", {
+      await apiFetch("/api/auth/qr-token", {
         method: "POST",
         headers,
         credentials: "include",

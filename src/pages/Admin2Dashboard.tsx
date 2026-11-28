@@ -31,6 +31,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { getServerAuthHeaders } from "../lib/auth";
 import { isQrInspectorRole, getRoleLabel } from "../lib/rbac";
+import { apiFetch, appRouteUrl } from "../lib/api";
 
 export function Admin2Dashboard() {
   const { user: authUser, firebaseUser, loading: authLoading, logout } = useAuth();
@@ -132,7 +133,7 @@ export function Admin2Dashboard() {
           });
           // Best-effort mirror to server store
           const headers = await getServerAuthHeaders({ "Content-Type": "application/json" });
-          void fetch("/api/qr/attendance", {
+          void apiFetch("/api/qr/attendance", {
             method: "POST",
             headers,
             credentials: "include",
@@ -155,7 +156,7 @@ export function Admin2Dashboard() {
     // 2. Server-verified attendance endpoint (works for credential & QR-token officers too)
     try {
       const headers = await getServerAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch("/api/qr/attendance", {
+      const res = await apiFetch("/api/qr/attendance", {
         method: "POST",
         headers,
         credentials: "include",
@@ -210,7 +211,7 @@ export function Admin2Dashboard() {
           const querySnapshot = await getDocs(q);
           attendanceData = querySnapshot.docs.map((snap) => {
             const data = snap.data();
-            const admitCardUrl = `${window.location.origin}/admit-card/${data.id || snap.id}`;
+            const admitCardUrl = appRouteUrl(`/admit-card/${data.id || snap.id}`);
             return {
               Name: data.fullNameEnglish || data.fullNameBangla || "",
               "ID / Roll": `${data.id || snap.id} / ${data.classRoll || "N/A"}`,
@@ -229,7 +230,7 @@ export function Admin2Dashboard() {
 
       if (attendanceData.length === 0) {
         const headers = await getServerAuthHeaders();
-        const res = await fetch("/api/qr/attendance-report", {
+        const res = await apiFetch("/api/qr/attendance-report", {
           headers,
           credentials: "include",
         });
@@ -242,7 +243,7 @@ export function Admin2Dashboard() {
             "উপস্থিতির সময়": r.attendanceTime
               ? new Date(r.attendanceTime).toLocaleString()
               : "N/A",
-            "Photo (Link)": `${window.location.origin}/admit-card/${r.id}`,
+            "Photo (Link)": appRouteUrl(`/admit-card/${r.id}`),
           }));
         }
       }

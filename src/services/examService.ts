@@ -3,6 +3,7 @@ import {
   query, where, orderBy, limit, writeBatch, handleFirestoreError, OperationType
 } from "../firebase";
 import { getServerAuthHeaders, getSession, isAuthorizedAdmin } from "../lib/auth";
+import { apiFetch } from "../lib/api";
 import {
   QuestionBankItem, QuestionType, QuestionDifficulty, ExamModel, ExamStatus,
   ExamAttempt, ExamResult, ExamSetting, ExamActivityLog, RandomQuestionRule, AttemptStatus,
@@ -21,7 +22,7 @@ function isFirestorePermissionError(error: any): boolean {
 
 async function examApiFetch(path: string, init?: RequestInit): Promise<Response> {
   const headers = await getAuthHeaders();
-  return fetch(path, {
+  return apiFetch(path, {
     ...init,
     headers: {
       ...headers,

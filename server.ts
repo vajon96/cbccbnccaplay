@@ -1,5 +1,7 @@
+import "dotenv/config";
 import express from "express";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
@@ -23,10 +25,78 @@ function resolvePort(): number {
 }
 
 const PORT = resolvePort();
-const FIREBASE_PROJECT_ID = "gen-lang-client-0584243831";
+
+function loadBundledFirebaseProjectId(): string {
+  try {
+    const cfgPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(cfgPath)) {
+      const parsed = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
+      if (typeof parsed?.projectId === "string" && parsed.projectId.trim()) {
+        return parsed.projectId.trim();
+      }
+    }
+  } catch {
+    // Fallback below
+  }
+  return "gen-lang-client-0584243831";
+}
+
+const FIREBASE_PROJECT_ID = (
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.VITE_FIREBASE_PROJECT_ID ||
+  loadBundledFirebaseProjectId()
+).trim();
 const SUPER_ADMIN_EMAIL = (process.env.VITE_ADMIN_EMAIL || "sajondey102@gmail.com").trim().toLowerCase();
 
-const DATA_ROOT_DIR = path.join(process.cwd(), ".bncc-data");
+type StorageDirMode = "configured" | "local" | "ephemeral_tmp";
+interface ResolvedStorageDir {
+  dir: string;
+  mode: StorageDirMode;
+  persistent: boolean;
+}
+
+function resolveWritableStorageDir(
+  envValue: string | undefined,
+  defaultSubdir: string,
+  tmpFallbackName: string
+): ResolvedStorageDir {
+  const trimmed = (envValue || "").trim();
+  const primary = path.resolve(trimmed || path.join(process.cwd(), defaultSubdir));
+  const primaryMode: StorageDirMode = trimmed ? "configured" : "local";
+  const probeWritable = (dir: string): boolean => {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const probeFile = path.join(dir, `.probe-${process.pid}-${Date.now()}`);
+      fs.writeFileSync(probeFile, "ok", "utf8");
+      fs.unlinkSync(probeFile);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (probeWritable(primary)) {
+    return { dir: primary, mode: primaryMode, persistent: true };
+  }
+  const tmpFallback = path.join(os.tmpdir(), tmpFallbackName);
+  probeWritable(tmpFallback);
+  console.warn(
+    `[STORAGE WARNING] Target directory "${primary}" is not writable; falling back to ephemeral directory "${tmpFallback}".`
+  );
+  return { dir: tmpFallback, mode: "ephemeral_tmp", persistent: false };
+}
+
+const DATA_STORAGE = resolveWritableStorageDir(
+  process.env.DATA_DIR,
+  ".bncc-data",
+  "cbcc-bncc-data"
+);
+const MEDIA_STORAGE = resolveWritableStorageDir(
+  process.env.MEDIA_DIR,
+  ".bncc-media",
+  "cbcc-bncc-media"
+);
+
+const DATA_ROOT_DIR = DATA_STORAGE.dir;
 const STAFF_AUTH_FILE = path.join(DATA_ROOT_DIR, "staff-auth.json");
 const QR_TOKENS_FILE = path.join(DATA_ROOT_DIR, "qr-tokens.json");
 const PASSWORD_RESETS_FILE = path.join(DATA_ROOT_DIR, "password-resets.json");
@@ -92,6 +162,118 @@ app.use((_req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
   next();
+});
+
+// Strict CORS Allowlist Middleware for Static Frontend + External API Deployments
+function normalizeOriginEntry(entry: string): string {
+  const trimmed = entry.trim().replace(/\/+$/, "");
+  if (!trimmed || trimmed === "*") return "";
+  if (!trimmed.includes("*")) {
+    try {
+      return new URL(trimmed).origin;
+    } catch {
+      return "";
+    }
+  }
+  const match = trimmed.match(/^(https?:\/\/[^/]+)/i);
+  return match ? match[1] : "";
+}
+
+function parseAllowedOriginPatterns(): string[] {
+  const raw = [
+    process.env.ALLOWED_ORIGINS || "",
+    process.env.CORS_ORIGINS || "",
+    process.env.FRONTEND_URL || "",
+  ]
+    .filter(Boolean)
+    .join(",");
+  return Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((entry) => normalizeOriginEntry(entry))
+        .filter((entry) => entry.length > 0)
+    )
+  );
+}
+
+const configuredOriginPatterns = parseAllowedOriginPatterns();
+
+function matchesConfiguredOrigin(origin: string): boolean {
+  let normalized = "";
+  try {
+    normalized = new URL(origin).origin;
+  } catch {
+    return false;
+  }
+  for (const pattern of configuredOriginPatterns) {
+    if (!pattern.includes("*")) {
+      if (normalized === pattern) return true;
+      continue;
+    }
+    const escaped = pattern
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, "[a-zA-Z0-9.-]+");
+    if (new RegExp(`^${escaped}$`).test(normalized)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isSameHostOrigin(req: express.Request, origin: string): boolean {
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim();
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function isOriginAllowed(req: express.Request, origin: string): boolean {
+  if (isSameHostOrigin(req, origin)) return true;
+  if (matchesConfiguredOrigin(origin)) return true;
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const parsed = new URL(origin);
+      if (
+        (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") &&
+        (parsed.protocol === "http:" || parsed.protocol === "https:")
+      ) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+app.use("/api", (req, res, next) => {
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin.trim() : "";
+  if (origin) {
+    res.setHeader("Vary", "Origin");
+    if (!isOriginAllowed(req, origin)) {
+      if (req.method === "OPTIONS") {
+        return res.status(403).json({ error: "Origin not allowed by CORS policy" });
+      }
+      return res.status(403).json({ error: "Cross-origin request rejected" });
+    }
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+    res.setHeader("Access-Control-Max-Age", "86400");
+  }
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  return next();
 });
 
 app.use(express.json({ limit: "15mb" }));
@@ -2036,16 +2218,21 @@ function writeStoredMessages(items: StoredPlatoonMessage[]) {
 }
 
 function verifySameOriginMutation(req: express.Request): boolean {
-  const origin = req.headers.origin;
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin.trim() : "";
   if (!origin) return true;
-  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
-  if (!host) return false;
-  try {
-    const parsedOrigin = new URL(origin);
-    return parsedOrigin.host === host;
-  } catch {
-    return false;
-  }
+  if (isSameHostOrigin(req, origin)) return true;
+  if (!isOriginAllowed(req, origin)) return false;
+
+  // Cross-origin mutations from allowlisted hosts require an explicit JS/API header
+  // so plain HTML form submissions cannot bypass CSRF checks.
+  const xRequestedWith = String(req.headers["x-requested-with"] || "").trim().toLowerCase();
+  const authHeader = String(req.headers.authorization || "").trim();
+  const contentType = String(req.headers["content-type"] || "").trim().toLowerCase();
+  return (
+    xRequestedWith === "xmlhttprequest" ||
+    authHeader.startsWith("Bearer ") ||
+    contentType.includes("application/json")
+  );
 }
 
 app.get("/api/messages", requireAuth(), (req, res) => {
@@ -2153,7 +2340,7 @@ app.delete("/api/messages/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
 // AUTHENTICATED MEDIA MANAGEMENT VAULT (PUBLIC VS PRIVATE ISOLATION)
 // =========================================================================
 
-const MEDIA_ROOT_DIR = path.join(process.cwd(), ".bncc-media");
+const MEDIA_ROOT_DIR = MEDIA_STORAGE.dir;
 const MEDIA_PUBLIC_DIR = path.join(MEDIA_ROOT_DIR, "public");
 const MEDIA_PRIVATE_DIR = path.join(MEDIA_ROOT_DIR, "private");
 const MEDIA_TRASH_PUBLIC_DIR = path.join(MEDIA_ROOT_DIR, "deleted-public");
@@ -2614,6 +2801,9 @@ app.post(
   rateLimit(5 * 60 * 1000, 120),
   requireAuth(FULL_ADMIN_ROLES),
   (req, res) => {
+    if (!verifySameOriginMutation(req)) {
+      return res.status(403).json({ error: "Cross-origin request rejected" });
+    }
     try {
       const serverUser = (req as any).serverUser as ServerSessionUser;
       const {
@@ -2736,7 +2926,11 @@ app.post(
       }
       writeMediaMetaList(currentItems);
 
-      return res.status(201).json({ item: record, duplicateDetected: false });
+      return res.status(201).json({
+        item: record,
+        duplicateDetected: false,
+        ephemeralStorageWarning: !MEDIA_STORAGE.persistent,
+      });
     } catch (err: any) {
       return res.status(500).json({ error: err?.message || "Media upload failed" });
     }
@@ -2744,6 +2938,9 @@ app.post(
 );
 
 app.patch("/api/media/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
   const id = sanitizeMediaFilename(String(req.params.id || ""));
   const { title, altText, description, category, tags, visibility, fileName } = req.body || {};
 
@@ -2822,6 +3019,9 @@ app.patch("/api/media/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
 });
 
 app.delete("/api/media/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) => {
+  if (!verifySameOriginMutation(req)) {
+    return res.status(403).json({ error: "Cross-origin request rejected" });
+  }
   const id = sanitizeMediaFilename(String(req.params.id || ""));
 
   if (id.startsWith("ext_")) {
@@ -3308,6 +3508,41 @@ app.delete("/api/applications/:id", requireAuth(FULL_ADMIN_ROLES), (req, res) =>
   }
   writeStoredApplicants(next);
   return res.json({ success: true });
+});
+
+app.post("/api/applicants/check-duplicate", rateLimit(5 * 60 * 1000, 60), (req, res) => {
+  const field = String(req.body?.field || "").trim();
+  const value = safeCleanText(req.body?.value, 160);
+  const excludeId = safeCleanText(req.body?.excludeId, 128);
+  const allowedFields = new Set(["studentPhone", "studentEmail", "registrationNumber", "emisId"]);
+  if (!allowedFields.has(field) || !value) {
+    return res.status(400).json({ error: "Invalid field or empty value", duplicate: false });
+  }
+  const normalizedVal = field === "studentEmail" ? value.toLowerCase() : value;
+  const all = readStoredApplicants();
+  const duplicate = all.some((app) => {
+    if (excludeId && app.id === excludeId) return false;
+    const raw = (app as any)[field];
+    if (!raw) return false;
+    const cand = field === "studentEmail" ? String(raw).trim().toLowerCase() : String(raw).trim();
+    return cand === normalizedVal;
+  });
+  return res.json({ duplicate });
+});
+
+app.post("/api/security-log", rateLimit(5 * 60 * 1000, 40), async (req, res) => {
+  const session = await resolveRequestSession(req);
+  const attemptType = safeCleanText(req.body?.attemptType || "SECURITY_EVENT", 80);
+  const reason = safeCleanText(req.body?.reason || "", 300);
+  const attemptedId = safeCleanText(req.body?.attemptedId || "", 128);
+  appendSecurityAudit({
+    event: attemptType,
+    actorId: session?.uid || session?.id || "anonymous",
+    targetId: attemptedId || undefined,
+    role: session?.role || "public_user",
+    details: reason || `Security event recorded (${attemptType})`,
+  });
+  return res.status(201).json({ success: true });
 });
 
 app.post("/api/auth/cadet-login", rateLimit(10 * 60 * 1000, 30), async (req, res) => {
@@ -4277,7 +4512,22 @@ app.get("/api/exam/health", (_req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", service: "CBCC BNCC Platoon Portal", timestamp: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    service: "CBCC BNCC Platoon Portal",
+    firebaseProjectId: FIREBASE_PROJECT_ID,
+    corsConfigured: configuredOriginPatterns.length > 0,
+    allowedOriginCount: configuredOriginPatterns.length,
+    storageConfigured: {
+      dataDir: Boolean((process.env.DATA_DIR || "").trim()),
+      mediaDir: Boolean((process.env.MEDIA_DIR || "").trim()),
+      dataMode: DATA_STORAGE.mode,
+      mediaMode: MEDIA_STORAGE.mode,
+      persistentDataStorage: DATA_STORAGE.persistent,
+      persistentMediaStorage: MEDIA_STORAGE.persistent,
+    },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 async function startServer() {
@@ -4306,10 +4556,35 @@ async function startServer() {
 
     app.use(vite.middlewares);
   } else {
+    if (!DATA_STORAGE.persistent || !MEDIA_STORAGE.persistent) {
+      console.warn(
+        "[STORAGE WARNING] Running with ephemeral /tmp storage fallback because DATA_DIR or MEDIA_DIR was not writable."
+      );
+    } else if (!(process.env.DATA_DIR || "").trim() || !(process.env.MEDIA_DIR || "").trim()) {
+      console.warn(
+        "[STORAGE INFO] DATA_DIR or MEDIA_DIR is not explicitly set in production; mount persistent volumes for server-local JSON/media files or rely on Firebase Firestore & Storage."
+      );
+    }
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    const distIndexPath = path.join(distPath, "index.html");
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+    }
+    app.use("/api", (_req, res) => {
+      res.status(404).json({ error: "API endpoint not found" });
+    });
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        return next();
+      }
+      if (fs.existsSync(distIndexPath)) {
+        return res.sendFile(distIndexPath);
+      }
+      return res.json({
+        status: "ok",
+        service: "CBCC BNCC Platoon Backend API",
+        health: "/api/health",
+      });
     });
   }
 

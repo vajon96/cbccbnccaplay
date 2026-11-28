@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useCMS } from "../context/CMSContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { resolveMediaUrl } from "../lib/api";
 
 interface MediaItem {
   id: string;
@@ -252,12 +253,12 @@ export function Gallery() {
                 className="group relative text-left bg-[#061830] rounded-xl overflow-hidden border border-white/10 hover:border-[#C5A059]/60 transition-colors shadow-xl cursor-pointer aspect-[4/3] flex flex-col"
               >
                 <img
-                  src={item.url || "/assets/aistudio/dddf__1__7ebcab35.jpg"}
+                  src={resolveMediaUrl(item.url || "/assets/aistudio/dddf__1__7ebcab35.jpg")}
                   alt={item.title || "Gallery image"}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/assets/aistudio/dddf__1__7ebcab35.jpg";
+                    (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg");
                   }}
                 />
 
@@ -309,7 +310,7 @@ export function Gallery() {
                   </span>
                   <div className="flex items-center gap-3">
                     <a
-                      href={filteredItems[selectedImage].url}
+                      href={resolveMediaUrl(filteredItems[selectedImage].url)}
                       download
                       className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
                       aria-label="ছবি ডাউনলোড করুন"
@@ -329,12 +330,12 @@ export function Gallery() {
 
                 <div className="relative rounded-2xl overflow-hidden bg-[#020B18] flex items-center justify-center max-h-[70vh] border border-white/15">
                   <img
-                    src={filteredItems[selectedImage]?.url || "/assets/aistudio/dddf__1__7ebcab35.jpg"}
+                    src={resolveMediaUrl(filteredItems[selectedImage]?.url || "/assets/aistudio/dddf__1__7ebcab35.jpg")}
                     alt={filteredItems[selectedImage]?.title || "Gallery photo"}
                     referrerPolicy="no-referrer"
                     className="max-h-[70vh] w-auto max-w-full object-contain"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/assets/aistudio/dddf__1__7ebcab35.jpg";
+                      (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg");
                     }}
                   />
 

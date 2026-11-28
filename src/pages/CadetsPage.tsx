@@ -10,6 +10,7 @@ import {
 import { useCMS } from "../context/CMSContext";
 import { CMSCadetProfile } from "../types/cms";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { resolveMediaUrl } from "../lib/api";
 
 export function CadetsPage() {
   useDocumentMeta({
@@ -181,7 +182,7 @@ export function CadetsPage() {
                 {/* Photo Area */}
                 <div className="relative h-60 w-full overflow-hidden bg-slate-950">
                   <img 
-                    src={cadet.photo || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"} 
+                    src={resolveMediaUrl(cadet.photo || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png")} 
                     alt={cadet.name}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
@@ -291,7 +292,7 @@ export function CadetsPage() {
                   <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                     <div className="relative w-36 h-44 rounded-2xl overflow-hidden border-2 border-amber-500/40 shadow-xl bg-slate-950 shrink-0">
                       <img 
-                        src={selectedCadet.photo || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"} 
+                        src={resolveMediaUrl(selectedCadet.photo || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png")} 
                         alt={selectedCadet.name}
                         className="w-full h-full object-cover object-top"
                         onError={(e) => {

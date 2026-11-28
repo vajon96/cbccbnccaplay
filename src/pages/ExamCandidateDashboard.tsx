@@ -11,6 +11,7 @@ import { fetchExams, getUserAttempts, getResultByAttemptId } from "../services/e
 import { ExamModel, ExamAttempt, ExamResult } from "../types";
 import { ExamNavbar } from "../components/exam/ExamNavbar";
 import { MarksheetViewer } from "../components/exam/MarksheetViewer";
+import { apiFetch, resolveMediaUrl } from "../lib/api";
 
 export function ExamCandidateDashboard() {
   const session = getSession();
@@ -49,7 +50,7 @@ export function ExamCandidateDashboard() {
             }
           } else {
             const headers = await getServerAuthHeaders();
-            const res = await fetch(`/api/applications/${encodeURIComponent(session.id)}`, {
+            const res = await apiFetch(`/api/applications/${encodeURIComponent(session.id)}`, {
               headers,
               credentials: "include",
             });
@@ -102,7 +103,7 @@ export function ExamCandidateDashboard() {
           <div className="flex items-center gap-5 w-full md:w-auto">
             <div className="w-20 h-20 rounded-2xl bg-slate-800 border-2 border-primary overflow-hidden shrink-0 flex items-center justify-center">
               {candidateProfile?.passportPhoto && candidateProfile.passportPhoto.trim() !== "" ? (
-                <img src={candidateProfile.passportPhoto} alt="Candidate" className="w-full h-full object-cover" />
+                <img src={resolveMediaUrl(candidateProfile.passportPhoto)} alt="Candidate" className="w-full h-full object-cover" />
               ) : (
                 <User size={36} className="text-slate-500" />
               )}

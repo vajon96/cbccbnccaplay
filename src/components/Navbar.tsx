@@ -12,6 +12,7 @@ import { useCMS } from "../context/CMSContext";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getDefaultLandingRoute, hasPermission } from "../lib/rbac";
+import { resolveMediaUrl } from "../lib/api";
 
 export function Navbar() {
   const cms = useCMS();
@@ -98,7 +99,7 @@ export function Navbar() {
               className="shrink-0"
             >
               <img
-                src={cms.settings.collegeLogoUrl || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png"}
+                src={resolveMediaUrl(cms.settings.collegeLogoUrl) || "https://i.ibb.co/SBfzG9K/logo-removebg-preview-2.png"}
                 alt="Cox's Bazar City College Logo"
                 className="h-9 w-auto"
                 referrerPolicy="no-referrer"
@@ -120,7 +121,7 @@ export function Navbar() {
               className="shrink-0 border-l border-white/15 pl-2.5 ml-0.5"
             >
               <img
-                src={cms.settings.bnccLogoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
+                src={resolveMediaUrl(cms.settings.bnccLogoUrl) || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
                 alt="BNCC Logo"
                 className="h-9 w-auto"
                 referrerPolicy="no-referrer"

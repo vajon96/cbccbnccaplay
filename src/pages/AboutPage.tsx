@@ -6,6 +6,7 @@ import {
 import { Link } from "react-router-dom";
 import { useCMS } from "../context/CMSContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { resolveMediaUrl } from "../lib/api";
 
 export function AboutPage() {
   useDocumentMeta({
@@ -54,7 +55,7 @@ export function AboutPage() {
         {/* Flag Ribbon Graphic */}
         <div className="w-full flex justify-center py-2">
           <img 
-            src="/assets/aistudio/New_Project__2__6a6c0725.png" 
+            src={resolveMediaUrl("/assets/aistudio/New_Project__2__6a6c0725.png")} 
             alt="BNCC Flag Ribbon" 
             referrerPolicy="no-referrer"
             className="max-h-16 w-auto object-contain filter drop-shadow-lg"
@@ -94,7 +95,7 @@ export function AboutPage() {
 
           <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#061830]">
             <img 
-              src="/assets/aistudio/dddf__1__7ebcab35.jpg" 
+              src={resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg")} 
               alt="Platoon in Parade"
               referrerPolicy="no-referrer"
               className="w-full h-80 object-cover object-center"
@@ -146,12 +147,12 @@ export function AboutPage() {
         <div className="p-8 sm:p-12 rounded-2xl bg-[#002147] border border-[#C5A059]/30 shadow-2xl flex flex-col md:flex-row items-center gap-8">
           <div className="w-40 h-48 rounded-xl overflow-hidden border-2 border-[#C5A059] shadow-xl shrink-0 bg-[#00152e]">
             <img 
-              src={commander.photoUrl || "/assets/aistudio/POU_7647ec14.png"} 
+              src={resolveMediaUrl(commander.photoUrl || "/assets/aistudio/POU_7647ec14.png")} 
               alt={commander.name || "Platoon Commander"}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover object-top"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "/assets/aistudio/POU_7647ec14.png";
+                (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/POU_7647ec14.png");
               }}
             />
           </div>

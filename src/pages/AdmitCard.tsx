@@ -8,6 +8,7 @@ import { db, doc, getDoc } from "../firebase";
 import { getServerAuthHeaders } from "../lib/auth";
 import { motion } from "framer-motion";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { apiFetch, resolveMediaUrl } from "../lib/api";
 
 export function AdmitCard() {
   useDocumentMeta({
@@ -63,7 +64,7 @@ export function AdmitCard() {
       if (!found) {
         try {
           const headers = await getServerAuthHeaders();
-          const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+          const res = await apiFetch(`/api/applications/${encodeURIComponent(id)}`, {
             credentials: "include",
             headers,
           });
@@ -364,7 +365,7 @@ export function AdmitCard() {
                     <div className="w-[1.2in] h-[1.5in] border border-black overflow-hidden bg-gray-50 flex items-center justify-center">
                       {applicant.photo && applicant.photo.trim() !== "" ? (
                         <img 
-                          src={applicant.photo} 
+                          src={resolveMediaUrl(applicant.photo)} 
                           className="w-full h-full object-cover" 
                           alt="Candidate" 
                           referrerPolicy="no-referrer" 

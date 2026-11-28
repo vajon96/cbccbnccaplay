@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CadetProfile } from "../../types";
-import { db, doc, updateDoc, Timestamp, collection, addDoc, handleFirestoreError, OperationType } from "../../firebase";
+import { auth, db, doc, updateDoc, Timestamp, collection, addDoc, handleFirestoreError, OperationType } from "../../firebase";
 import { hashPassword } from "../../lib/auth";
 import { 
   SENSITIVE_FIELDS, 
@@ -22,6 +22,7 @@ import {
   checkDuplicateField 
 } from "../../lib/profileUtils";
 import { ChangeHistoryModal } from "./ChangeHistoryModal";
+import { resolveMediaUrl } from "../../lib/api";
 
 interface CadetProfileViewProps {
   user: CadetProfile;
@@ -100,18 +101,55 @@ export const CadetProfileView: React.FC<CadetProfileViewProps> = ({
     }
   };
 
+  const compressProfilePhoto = (dataUrl: string): Promise<string> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        let quality = 0.82;
+        let out = canvas.toDataURL("image/jpeg", quality);
+        while (out.length > 350000 && quality > 0.35) {
+          quality -= 0.12;
+          out = canvas.toDataURL("image/jpeg", quality);
+        }
+        resolve(out);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
   const handlePhotoUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 3 * 1024 * 1024) {
-        alert("ছবি সাইজ সর্বোচ্চ 3MB হতে পারবে।");
+      if (file.size > 5 * 1024 * 1024) {
+        alert("ছবি সাইজ সর্বোচ্চ 5MB হতে পারবে।");
         return;
       }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPhotoPreview(result);
-        setFormData(prev => ({ ...prev, photo: result }));
+      reader.onloadend = async () => {
+        const raw = reader.result as string;
+        const compressed = await compressProfilePhoto(raw);
+        if (compressed.length > 420000) {
+          alert("ছবিটি অতিরিক্ত বড়; অনুগ্রহ করে ছোট ছবি নির্বাচন করুন।");
+          return;
+        }
+        setPhotoPreview(compressed);
+        setFormData(prev => ({ ...prev, photo: compressed }));
       };
       reader.readAsDataURL(file);
     }
@@ -173,19 +211,53 @@ export const CadetProfileView: React.FC<CadetProfileViewProps> = ({
       }
 
       const docRef = doc(db, "applicants", user.id);
+      const effectiveOwnerUid = auth.currentUser?.uid || user.ownerUid || user.id;
 
-      // Separate directly editable fields from sensitive fields
+      // Fields strictly allowlisted for direct self-update by cadets in firestore.rules
+      const DIRECT_EDITABLE_FIELDS = new Set<string>([
+        "presentAddress",
+        "permanentAddress",
+        "studentEmail",
+        "bloodGroup",
+        "weightKg",
+        "heightFeet",
+        "heightInches",
+        "photo",
+        "emergencyContactName",
+        "emergencyContactPhone",
+      ]);
+
+      const SKIPPED_SYSTEM_FIELDS = new Set<string>([
+        "id",
+        "ownerUid",
+        "password",
+        "passwordHash",
+        "height",
+        "hasPendingEdits",
+        "pendingEditsId",
+        "createdAt",
+        "updatedAt",
+        "createdAtIso",
+        "updatedAtIso",
+        "status",
+        "role",
+        "isActive",
+        "accountStatus",
+      ]);
+
+      // Separate directly editable fields from admin-reviewed fields
       const sensitiveDeltas: Record<string, { old: any; new: any }> = {};
       const directUpdates: Record<string, any> = {};
       const directDeltas: Record<string, { old: any; new: any }> = {};
 
       Object.keys(formData).forEach((key) => {
         const k = key as keyof CadetProfile;
+        if (SKIPPED_SYSTEM_FIELDS.has(key)) return;
         const oldVal = user[k];
         const newVal = formData[k];
 
-        if (oldVal !== newVal && k !== "password") {
-          if (SENSITIVE_FIELDS.includes(k) && !isAdminView) {
+        if (oldVal !== newVal) {
+          if (!isAdminView && (!DIRECT_EDITABLE_FIELDS.has(key) || SENSITIVE_FIELDS.includes(k))) {
             sensitiveDeltas[k] = { old: oldVal ?? "", new: newVal ?? "" };
           } else {
             directUpdates[k] = newVal;
@@ -201,22 +273,33 @@ export const CadetProfileView: React.FC<CadetProfileViewProps> = ({
         directUpdates.updatedAt = Timestamp.now();
         await updateDoc(docRef, directUpdates);
 
+        if (directUpdates.photo && effectiveOwnerUid) {
+          await updateDoc(doc(db, "public_qr_cards", user.id), {
+            photo: directUpdates.photo,
+            ownerUid: effectiveOwnerUid,
+            updatedAt: Timestamp.now(),
+          }).catch(() => {});
+        }
+
         // Log direct activity
         await addDoc(collection(db, "activity_logs"), {
           type: "PROFILE_UPDATED",
           targetId: user.id,
           actorId: user.id,
+          ownerUid: effectiveOwnerUid,
           actorName: user.fullNameEnglish || user.id,
           timestamp: Timestamp.now(),
           details: `Directly updated profile fields: ${Object.keys(directUpdates).join(", ")}`,
           changes: directDeltas
-        });
+        }).catch(() => {});
       }
 
-      // 2. If sensitive fields were edited by a cadet, submit a pending change request for Admin approval!
+      // 2. If sensitive/restricted fields were edited by a cadet, submit a pending change request for Admin approval
       if (Object.keys(sensitiveDeltas).length > 0 && !isAdminView) {
         const pendingDoc = await addDoc(collection(db, "pending_profile_changes"), {
           cadetId: user.id,
+          ownerUid: effectiveOwnerUid,
+          actorUid: effectiveOwnerUid,
           cadetName: user.fullNameEnglish || user.fullNameBangla,
           registrationNumber: user.registrationNumber || user.id,
           changes: sensitiveDeltas,
@@ -233,15 +316,6 @@ export const CadetProfileView: React.FC<CadetProfileViewProps> = ({
 
         updatedUserObj.hasPendingEdits = true;
         updatedUserObj.pendingEditsId = pendingDoc.id;
-
-        // Notify Admins
-        await addDoc(collection(db, "notifications"), {
-          targetId: "ALL",
-          type: "Alert",
-          title: "Sensitive Profile Edits Pending Approval",
-          message: `Cadet ${user.fullNameEnglish} (${user.registrationNumber || user.id}) requested changes to sensitive profile information.`,
-          timestamp: Timestamp.now()
-        });
 
         alert("আপনার কিছু সংবেদনশীল তথ্য (যেমন নাম, জন্ম তারিখ, রেজিস্ট্রেশন ইত্যাদি) অ্যাডমিন অনুমোদনের জন্য পেন্ডিং রিকোয়েস্ট হিসেবে পাঠানো হয়েছে। অনুমোদিত হলে প্রোফাইলে হালনাগাদ হবে।");
       } else if (isAdminView && Object.keys(sensitiveDeltas).length > 0) {
@@ -260,7 +334,7 @@ export const CadetProfileView: React.FC<CadetProfileViewProps> = ({
       alert("প্রোফাইল সফলভাবে সংরক্ষণ করা হয়েছে!");
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `applicants/${user.id}`);
-    } fontally: {
+    } finally {
       setSaving(false);
     }
   };
@@ -282,15 +356,16 @@ export const CadetProfileView: React.FC<CadetProfileViewProps> = ({
     try {
       const hashedPassword = await hashPassword(newPassword);
       const docRef = doc(db, "applicants", user.id);
-      await updateDoc(docRef, { password: hashedPassword, updatedAt: Timestamp.now() });
+      await updateDoc(docRef, { passwordHash: hashedPassword, updatedAt: Timestamp.now() });
 
       await addDoc(collection(db, "activity_logs"), {
         type: "PASSWORD_CHANGED",
         targetId: user.id,
         actorId: user.id,
+        ownerUid: auth.currentUser?.uid || user.ownerUid || user.id,
         timestamp: Timestamp.now(),
         details: "Cadet updated account password"
-      });
+      }).catch(() => {});
 
       setPasswordSuccess("পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!");
       setTimeout(() => {
@@ -384,7 +459,7 @@ export const CadetProfileView: React.FC<CadetProfileViewProps> = ({
             <div className="lg:col-span-4 flex flex-col items-center text-center space-y-4">
               <div className="relative group w-36 h-40 rounded-3xl border-4 border-amber-500/30 overflow-hidden bg-slate-950 shadow-2xl">
                 {photoPreview ? (
-                  <img src={photoPreview} alt="Cadet Photo" className="w-full h-full object-cover" />
+                  <img src={resolveMediaUrl(photoPreview)} alt="Cadet Photo" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 p-2">
                     <User size={48} />

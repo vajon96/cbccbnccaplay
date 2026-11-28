@@ -17,6 +17,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 import { ExamPortalGate } from "./components/exam/ExamPortalGate";
+import { getRouterBasename } from "./lib/api";
 
 const LAZY_RELOAD_KEY = "cbcc_lazy_reload_ts";
 
@@ -172,7 +173,7 @@ export default function App() {
       <LanguageProvider>
         <AuthProvider>
           <CMSProvider>
-            <Router>
+            <Router basename={getRouterBasename()}>
               <div className="min-h-screen flex flex-col">
                 <a
                   href="#main-content"

@@ -1,12 +1,14 @@
 // Client-side Gemini API service proxies that safely delegate calls to the backend Express server
 // This protects secret keys and adheres to security guidelines.
 
+import { apiFetch } from "../lib/api";
+
 export async function getChatResponse(
   message: string,
   history: { role: "user" | "model"; parts: { text: string }[] }[]
 ): Promise<string> {
   try {
-    const response = await fetch("/api/gemini/chat", {
+    const response = await apiFetch("/api/gemini/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, history }),
@@ -24,7 +26,7 @@ export async function getChatResponse(
 
 export async function analyzeEnrollment(formData: any): Promise<string> {
   try {
-    const response = await fetch("/api/gemini/analyze-enrollment", {
+    const response = await apiFetch("/api/gemini/analyze-enrollment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ formData }),
@@ -42,7 +44,7 @@ export async function analyzeEnrollment(formData: any): Promise<string> {
 
 export async function analyzePhoto(base64Image: string): Promise<string> {
   try {
-    const response = await fetch("/api/gemini/analyze-photo", {
+    const response = await apiFetch("/api/gemini/analyze-photo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ base64Image }),
@@ -60,7 +62,7 @@ export async function analyzePhoto(base64Image: string): Promise<string> {
 
 export async function getAdminInsights(applicants: any[]): Promise<string> {
   try {
-    const response = await fetch("/api/gemini/admin-insights", {
+    const response = await apiFetch("/api/gemini/admin-insights", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ applicants }),
@@ -78,7 +80,7 @@ export async function getAdminInsights(applicants: any[]): Promise<string> {
 
 export async function getApplicantSummary(applicant: any): Promise<string> {
   try {
-    const response = await fetch("/api/gemini/applicant-summary", {
+    const response = await apiFetch("/api/gemini/applicant-summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ applicant }),
@@ -96,7 +98,7 @@ export async function getApplicantSummary(applicant: any): Promise<string> {
 
 export async function getQuickFAQ(question: string): Promise<string> {
   try {
-    const response = await fetch("/api/gemini/quick-faq", {
+    const response = await apiFetch("/api/gemini/quick-faq", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
@@ -118,7 +120,7 @@ export async function generateAICircular(
   refNumber: string
 ): Promise<any> {
   try {
-    const response = await fetch("/api/gemini/generate-circular", {
+    const response = await apiFetch("/api/gemini/generate-circular", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ startDate, deadlineDate, refNumber }),
@@ -139,7 +141,7 @@ export async function generateAIGuide(
   refNumber: string
 ): Promise<any> {
   try {
-    const response = await fetch("/api/gemini/generate-guide", {
+    const response = await apiFetch("/api/gemini/generate-guide", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ promptInstruction, refNumber }),

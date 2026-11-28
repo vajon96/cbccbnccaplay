@@ -6,6 +6,7 @@ import {
 import { Link } from "react-router-dom";
 import { useCMS } from "../context/CMSContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { resolveMediaUrl } from "../lib/api";
 
 export function ActivitiesPage() {
   useDocumentMeta({
@@ -45,12 +46,12 @@ export function ActivitiesPage() {
               <div>
                 <div className="relative h-48 w-full overflow-hidden bg-[#00152e]">
                   <img 
-                    src={act.image || "/assets/aistudio/dddf__1__7ebcab35.jpg"} 
+                    src={resolveMediaUrl(act.image || "/assets/aistudio/dddf__1__7ebcab35.jpg")} 
                     alt={act.title || "Activity"}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/assets/aistudio/dddf__1__7ebcab35.jpg";
+                      (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg");
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#061830] via-transparent to-transparent" />

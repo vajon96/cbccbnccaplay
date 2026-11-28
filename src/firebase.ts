@@ -37,9 +37,36 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import firebaseConfig from "../firebase-applet-config.json";
+import bundledFirebaseConfig from "../firebase-applet-config.json";
 
-const app = initializeApp(firebaseConfig);
+const resolvedProjectId = (
+  import.meta.env.VITE_FIREBASE_PROJECT_ID || bundledFirebaseConfig.projectId
+).trim();
+const isSameBundledProject = resolvedProjectId === bundledFirebaseConfig.projectId;
+
+const resolvedFirebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || bundledFirebaseConfig.apiKey,
+  authDomain:
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+    (isSameBundledProject
+      ? bundledFirebaseConfig.authDomain
+      : `${resolvedProjectId}.firebaseapp.com`),
+  projectId: resolvedProjectId,
+  storageBucket:
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    (isSameBundledProject
+      ? bundledFirebaseConfig.storageBucket
+      : `${resolvedProjectId}.firebasestorage.app`),
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || bundledFirebaseConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || bundledFirebaseConfig.appId,
+  measurementId:
+    import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || bundledFirebaseConfig.measurementId,
+  firestoreDatabaseId:
+    import.meta.env.VITE_FIREBASE_DATABASE_ID || bundledFirebaseConfig.firestoreDatabaseId,
+};
+
+const app = initializeApp(resolvedFirebaseConfig);
 export const auth = getAuth(app);
 
 function initFirestoreDb(): Firestore {
@@ -51,10 +78,10 @@ function initFirestoreDb(): Firestore {
         localCache: memoryLocalCache(),
         ignoreUndefinedProperties: true,
       },
-      firebaseConfig.firestoreDatabaseId
+      resolvedFirebaseConfig.firestoreDatabaseId
     );
   } catch {
-    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    return getFirestore(app, resolvedFirebaseConfig.firestoreDatabaseId);
   }
 }
 

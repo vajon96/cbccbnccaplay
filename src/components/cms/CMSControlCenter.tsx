@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCMS } from "../../context/CMSContext";
 import { syncAllPortalDataToDatabase } from "../../services/databaseSyncService";
+import { resolveMediaUrl } from "../../lib/api";
 import { 
   CMSContentItem, 
   CMSCadetProfile, 
@@ -964,7 +965,7 @@ function CMSHomepageTab({ showNotification }: { showNotification: (msg: string, 
         {heroForm.bgImage && (
           <div className="relative h-24 rounded-2xl overflow-hidden border border-slate-700 bg-slate-900">
             <img 
-              src={heroForm.bgImage} 
+              src={resolveMediaUrl(heroForm.bgImage)} 
               alt="Hero Preview" 
               className="w-full h-full object-cover opacity-60" 
             />
@@ -1070,11 +1071,11 @@ function CMSHomepageTab({ showNotification }: { showNotification: (msg: string, 
         {/* Commander Photo & Quote Live Preview */}
         <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-900 border border-slate-800">
           <img
-            src={commanderForm.photoUrl || "/assets/aistudio/POU_7647ec14.png"}
+            src={resolveMediaUrl(commanderForm.photoUrl || "/assets/aistudio/POU_7647ec14.png")}
             alt={commanderForm.name || "Commander"}
             className="w-14 h-14 rounded-full object-cover border-2 border-amber-400 shrink-0"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = "/assets/aistudio/POU_7647ec14.png";
+              (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/POU_7647ec14.png");
             }}
           />
           <div className="space-y-0.5">
@@ -1225,11 +1226,11 @@ function CMSCadetsTab({ showNotification }: { showNotification: (msg: string, ty
           >
             <div className="flex items-start gap-3.5">
               <img
-                src={c.photo || "/assets/aistudio/dddf__1__7ebcab35.jpg"}
+                src={resolveMediaUrl(c.photo || "/assets/aistudio/dddf__1__7ebcab35.jpg")}
                 alt={c.name}
                 className="w-14 h-14 rounded-2xl object-cover object-top border border-slate-700 shrink-0 bg-slate-900"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/assets/aistudio/dddf__1__7ebcab35.jpg";
+                  (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg");
                 }}
               />
               <div className="space-y-1 min-w-0">
@@ -1510,7 +1511,7 @@ function CMSInchargesTab({ showNotification }: { showNotification: (msg: string,
 
             <div className="flex items-center gap-4">
               <img
-                src={item.photoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
+                src={resolveMediaUrl(item.photoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png")}
                 alt={item.name || "In-Charge"}
                 className="w-16 h-16 rounded-2xl object-cover object-top border-2 border-amber-400/60 shrink-0 bg-slate-900"
                 onError={(e) => {
@@ -1519,7 +1520,7 @@ function CMSInchargesTab({ showNotification }: { showNotification: (msg: string,
               />
               {Boolean(item.coPhotoUrl && item.coPhotoUrl.trim() !== "") && (
                 <img
-                  src={item.coPhotoUrl}
+                  src={resolveMediaUrl(item.coPhotoUrl)}
                   alt="Co-In-Charge"
                   className="w-16 h-16 rounded-2xl object-cover object-top border-2 border-amber-400/60 shrink-0 bg-slate-900"
                   onError={(e) => {
@@ -1953,11 +1954,11 @@ function CMSActivitiesTab({ showNotification }: { showNotification: (msg: string
           >
             <div className="relative h-36 bg-slate-900">
               <img
-                src={a.image || "/assets/aistudio/dddf__1__7ebcab35.jpg"}
+                src={resolveMediaUrl(a.image || "/assets/aistudio/dddf__1__7ebcab35.jpg")}
                 alt={a.title || "Activity"}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/assets/aistudio/dddf__1__7ebcab35.jpg";
+                  (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg");
                 }}
               />
               <span className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-950/80 text-amber-300 backdrop-blur-sm border border-amber-400/30">
@@ -2137,11 +2138,11 @@ function CMSGalleryTab({ showNotification }: { showNotification: (msg: string, t
           >
             <div className="relative aspect-video bg-slate-900">
               <img
-                src={g.url || "/assets/aistudio/dddf__1__7ebcab35.jpg"}
+                src={resolveMediaUrl(g.url || "/assets/aistudio/dddf__1__7ebcab35.jpg")}
                 alt={g.title || "Gallery image"}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/assets/aistudio/dddf__1__7ebcab35.jpg";
+                  (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/dddf__1__7ebcab35.jpg");
                 }}
               />
               <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] font-bold bg-slate-950/80 text-amber-300">

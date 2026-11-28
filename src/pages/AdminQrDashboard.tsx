@@ -16,8 +16,9 @@ import {
   db, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, collection, Timestamp,
   onSnapshot, reportFirestoreListenerError, OperationType, orderBy 
 } from "../firebase";
-import { getSession, clearSession, isAuthorizedAdmin } from "../lib/auth";
+import { getSession, isAuthorizedAdmin } from "../lib/auth";
 import { useAuth } from "../context/AuthContext";
+import { resolveMediaUrl } from "../lib/api";
 
 export function AdminQrDashboard() {
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -79,7 +80,7 @@ export function AdminQrDashboard() {
   const [audioEnabled, setAudioEnabled] = useState(true);
 
   const navigate = useNavigate();
-  const { firebaseUser, loading: authLoading } = useAuth();
+  const { firebaseUser, loading: authLoading, logout } = useAuth();
   const todayStr = new Date().toISOString().split("T")[0];
 
   // Auth Verification
@@ -516,6 +517,13 @@ export function AdminQrDashboard() {
       const heightFormatted = `${heightFeet}'${heightInches}" (${Math.round((parseInt(heightFeet || "0") * 30.48) + (parseInt(heightInches || "0") * 2.54))} cm)`;
       const weightFormatted = `${weightKg} kg`;
 
+      const {
+        password: _pw,
+        passwordHash: _ph,
+        uploadedDocuments: _docs,
+        ...safeCadetFields
+      } = scannedCadet;
+
       const snapshotPayload = {
         id: recordId,
         studentId: scannedCadet.id,
@@ -620,9 +628,8 @@ export function AdminQrDashboard() {
           serviceDuration: scannedCadet.serviceDuration || "N/A",
 
           subject: scannedCadet.subject || "N/A",
-          password: scannedCadet.password || "N/A",
 
-          ...scannedCadet,
+          ...safeCadetFields,
           editedHeight: heightFormatted,
           editedWeight: weightFormatted,
           editedAttendance: attendance,
@@ -938,8 +945,8 @@ export function AdminQrDashboard() {
         {/* Footer Logout */}
         <div className="p-4 border-t border-white/10">
           <button
-            onClick={() => {
-              clearSession();
+            onClick={async () => {
+              await logout();
               navigate("/login");
             }}
             className="w-full py-3 bg-red-500/15 border border-red-500/30 text-red-300 rounded-xl hover:bg-red-500 hover:text-white transition-all text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
@@ -1442,7 +1449,7 @@ export function AdminQrDashboard() {
                 <div className="bg-[#002147] text-white p-6 flex flex-col sm:flex-row items-center gap-6 relative">
                   <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-[#C5A059] overflow-hidden bg-slate-900 shadow-2xl shrink-0 flex items-center justify-center">
                     {scannedCadet.photo && scannedCadet.photo.trim() !== "" ? (
-                      <img src={scannedCadet.photo} className="w-full h-full object-cover" alt="" />
+                      <img src={resolveMediaUrl(scannedCadet.photo)} className="w-full h-full object-cover" alt="" />
                     ) : (
                       <User className="w-16 h-16 text-slate-600" />
                     )}

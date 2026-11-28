@@ -6,6 +6,7 @@ import {
 import { Link } from "react-router-dom";
 import { useCMS } from "../context/CMSContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { resolveMediaUrl } from "../lib/api";
 
 export function HallOfInchargesPage() {
   useDocumentMeta({
@@ -40,12 +41,12 @@ export function HallOfInchargesPage() {
             <div className="shrink-0 space-y-3 text-center">
               <div className="w-44 h-52 sm:w-52 sm:h-64 rounded-xl overflow-hidden border-2 border-[#C5A059] shadow-2xl bg-[#00152e] mx-auto">
                 <img
-                  src={commander.photoUrl || "/assets/aistudio/POU_7647ec14.png"}
+                  src={resolveMediaUrl(commander.photoUrl || "/assets/aistudio/POU_7647ec14.png")}
                   alt={commander.name || "Platoon Commander"}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover object-top"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/assets/aistudio/POU_7647ec14.png";
+                    (e.target as HTMLImageElement).src = resolveMediaUrl("/assets/aistudio/POU_7647ec14.png");
                   }}
                 />
               </div>
@@ -134,7 +135,7 @@ export function HallOfInchargesPage() {
                     <div className="flex items-center -space-x-3 shrink-0">
                       <div className="w-20 h-24 rounded-xl overflow-hidden border-2 border-[#C5A059]/70 shadow-lg bg-[#020B18]">
                         <img
-                          src={record.photoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png"}
+                          src={resolveMediaUrl(record.photoUrl || "https://i.ibb.co/Fb3R6wR/Bncc-logo.png")}
                           alt={record.name || "In-Charge"}
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover object-top"
@@ -146,7 +147,7 @@ export function HallOfInchargesPage() {
                       {Boolean(record.coPhotoUrl && record.coPhotoUrl.trim() !== "") && (
                         <div className="w-20 h-24 rounded-xl overflow-hidden border-2 border-white/40 shadow-lg bg-[#020B18]">
                           <img
-                            src={record.coPhotoUrl}
+                            src={resolveMediaUrl(record.coPhotoUrl)}
                             alt="Co-In-Charge"
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover object-top"
@@ -171,7 +172,7 @@ export function HallOfInchargesPage() {
                       <div className="flex items-center gap-2 pt-1">
                         {Boolean(record.rankBadgeUrl && record.rankBadgeUrl.trim() !== "") && (
                           <img
-                            src={record.rankBadgeUrl}
+                            src={resolveMediaUrl(record.rankBadgeUrl)}
                             alt="Rank Badge"
                             referrerPolicy="no-referrer"
                             className="h-6 w-auto object-contain"

@@ -15,6 +15,7 @@ import { getSession, getServerAuthHeaders } from "../lib/auth";
 import { isAdminRole } from "../lib/rbac";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentMeta } from "../hooks/useDocumentMeta";
+import { apiFetch } from "../lib/api";
 
 interface Message {
   id: string;
@@ -48,6 +49,7 @@ export function Messenger() {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const firestoreMsgIdsRef = useRef<Set<string>>(new Set());
 
   const { firebaseUser, loading: authLoading } = useAuth();
   const session = getSession();
@@ -130,7 +132,8 @@ export function Messenger() {
 
     const loadServerMessages = async () => {
       try {
-        const res = await fetch("/api/messages", { credentials: "include" });
+        const headers = await getServerAuthHeaders();
+        const res = await apiFetch("/api/messages", { credentials: "include", headers });
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && Array.isArray(data?.messages)) {
@@ -149,12 +152,13 @@ export function Messenger() {
         void loadServerMessages();
       }, 4000);
     } else if (isAdmin) {
-      const qAll = query(collection(db, "messages"), orderBy("timestamp", "asc"), limit(200));
+      const qAll = query(collection(db, "messages"), orderBy("timestamp", "desc"), limit(300));
       unsubscribers.push(
         onSnapshot(
           qAll,
           (snapshot) => {
-            const msgs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as Message));
+            const msgs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as Message)).reverse();
+            firestoreMsgIdsRef.current = new Set(msgs.map((m) => m.id));
             setMessages(msgs);
             setLoading(false);
           },
@@ -166,12 +170,17 @@ export function Messenger() {
       );
     } else {
       const authUid = firebaseUser.uid || auth.currentUser?.uid;
-      const mergedMap = new Map<string, Message>();
+      let broadcastDocs: Message[] = [];
+      let privateDocs: Message[] = [];
 
       const flushMerged = () => {
+        const mergedMap = new Map<string, Message>();
+        broadcastDocs.forEach((m) => mergedMap.set(m.id, m));
+        privateDocs.forEach((m) => mergedMap.set(m.id, m));
         const list = Array.from(mergedMap.values()).sort(
           (a, b) => toMillis(a.timestamp || a.timestampMs || a.timestampIso) - toMillis(b.timestamp || b.timestampMs || b.timestampIso)
         );
+        firestoreMsgIdsRef.current = new Set(list.map((m) => m.id));
         setMessages(list);
         setLoading(false);
       };
@@ -181,7 +190,7 @@ export function Messenger() {
         onSnapshot(
           qBroadcast,
           (snapshot) => {
-            snapshot.docs.forEach((d) => mergedMap.set(d.id, { ...d.data(), id: d.id } as Message));
+            broadcastDocs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as Message));
             flushMerged();
           },
           (err) => {
@@ -197,7 +206,7 @@ export function Messenger() {
           onSnapshot(
             qPrivate,
             (snapshot) => {
-              snapshot.docs.forEach((d) => mergedMap.set(d.id, { ...d.data(), id: d.id } as Message));
+              privateDocs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as Message));
               flushMerged();
             },
             (err) => {
@@ -270,16 +279,21 @@ export function Messenger() {
     visibleMessages.forEach((m) => {
       if (!m.isRead && m.senderId !== myUid && m.senderId !== user?.id) {
         if (isAdmin || m.recipientId === myUid || m.ownerUid === myUid) {
-          if (useFirestore) {
+          if (useFirestore && firestoreMsgIdsRef.current.has(m.id)) {
             void updateDoc(doc(db, "messages", m.id), {
               isRead: true,
               readAt: new Date().toISOString(),
             }).catch(() => {});
           } else {
-            void fetch(`/api/messages/${encodeURIComponent(m.id)}/read`, {
-              method: "PATCH",
-              credentials: "include",
-            }).catch(() => {});
+            void getServerAuthHeaders()
+              .then((headers) =>
+                apiFetch(`/api/messages/${encodeURIComponent(m.id)}/read`, {
+                  method: "PATCH",
+                  headers,
+                  credentials: "include",
+                })
+              )
+              .catch(() => {});
           }
         }
       }
@@ -321,7 +335,7 @@ export function Messenger() {
 
         await addDoc(collection(db, "messages"), payload);
         void getServerAuthHeaders({ "Content-Type": "application/json" }).then((headers) =>
-          fetch("/api/messages", {
+          apiFetch("/api/messages", {
             method: "POST",
             headers,
             credentials: "include",
@@ -332,9 +346,10 @@ export function Messenger() {
           })
         ).catch(() => {});
       } else {
-        const res = await fetch("/api/messages", {
+        const headers = await getServerAuthHeaders({ "Content-Type": "application/json" });
+        const res = await apiFetch("/api/messages", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           credentials: "include",
           body: JSON.stringify({
             content: text,
@@ -371,15 +386,17 @@ export function Messenger() {
       if (useFirestore) {
         await deleteDoc(doc(db, "messages", id));
         void getServerAuthHeaders().then((headers) =>
-          fetch(`/api/messages/${encodeURIComponent(id)}`, {
+          apiFetch(`/api/messages/${encodeURIComponent(id)}`, {
             method: "DELETE",
             headers,
             credentials: "include",
           })
         ).catch(() => {});
       } else {
-        const res = await fetch(`/api/messages/${encodeURIComponent(id)}`, {
+        const headers = await getServerAuthHeaders();
+        const res = await apiFetch(`/api/messages/${encodeURIComponent(id)}`, {
           method: "DELETE",
+          headers,
           credentials: "include",
         });
         if (!res.ok) throw new Error("বার্তা মুছে ফেলা যায়নি।");

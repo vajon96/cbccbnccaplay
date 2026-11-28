@@ -28,6 +28,7 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
+import { appRouteUrl } from "../../lib/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -165,11 +166,10 @@ export function AdmissionQrWorkspace({
 
   const qrPayloadUrl = useMemo(() => {
     if (!selectedCandidate) return "";
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
     if (qrMode === "admit") {
-      return `${origin}/admit-card/${selectedCandidate.id}?v=${currentVersion}`;
+      return appRouteUrl(`/admit-card/${selectedCandidate.id}?v=${currentVersion}`);
     }
-    return `${origin}/qr-scan?id=${encodeURIComponent(selectedCandidate.id)}&type=${qrMode}&v=${currentVersion}`;
+    return appRouteUrl(`/qr-scan?id=${encodeURIComponent(selectedCandidate.id)}&type=${qrMode}&v=${currentVersion}`);
   }, [selectedCandidate, qrMode, currentVersion]);
 
   const handleDownloadSvg = () => {

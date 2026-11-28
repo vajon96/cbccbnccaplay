@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { History, X, Clock, ShieldCheck, UserCheck, AlertCircle, Loader2 } from "lucide-react";
-import { db, collection, query, where, orderBy, getDocs } from "../../firebase";
+import { History, X, Clock, ShieldCheck, Loader2 } from "lucide-react";
+import { auth, db, collection, query, where, getDocs } from "../../firebase";
 import { FIELD_LABELS } from "../../lib/profileUtils";
+import { getSession, isAuthorizedAdmin } from "../../lib/auth";
 
 interface ChangeHistoryModalProps {
   cadetId: string;
@@ -15,14 +16,30 @@ export const ChangeHistoryModal: React.FC<ChangeHistoryModalProps> = ({ cadetId,
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const q = query(
-          collection(db, "activity_logs"),
-          where("targetId", "==", cadetId),
-          orderBy("timestamp", "desc")
-        );
+        const session = getSession();
+        const isStaff = Boolean(session && isAuthorizedAdmin(session.role));
+        const uid = auth.currentUser?.uid;
+
+        const q = isStaff
+          ? query(collection(db, "activity_logs"), where("targetId", "==", cadetId))
+          : uid
+          ? query(collection(db, "activity_logs"), where("ownerUid", "==", uid))
+          : null;
+
+        if (!q) {
+          setLogs([]);
+          return;
+        }
+
         const snap = await getDocs(q);
-        const data = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        setLogs(data);
+        const raw = snap.docs
+          .map((d) => ({ ...d.data(), id: d.id }))
+          .filter((item: any) => isStaff || item.targetId === cadetId || !item.targetId);
+
+        const toMs = (ts: any) =>
+          ts?.toMillis?.() || ts?.toDate?.()?.getTime?.() || new Date(ts || 0).getTime() || 0;
+        raw.sort((a: any, b: any) => toMs(b.timestamp) - toMs(a.timestamp));
+        setLogs(raw);
       } catch (err) {
         console.error("Error loading activity logs:", err);
       } finally {

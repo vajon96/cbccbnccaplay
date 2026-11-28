@@ -24,6 +24,7 @@ import {
   hasPermission,
   PermissionKey,
 } from "../lib/rbac";
+import { apiFetch } from "../lib/api";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const local = getSession();
     try {
       const headers = await getServerAuthHeaders();
-      const res = await fetch("/api/auth/session", { credentials: "include", headers });
+      const res = await apiFetch("/api/auth/session", { credentials: "include", headers });
       if (res.ok) {
         const data = await res.json();
         if (data?.authenticated && data.user) {
@@ -117,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return;
             }
           }
-          const fbRes = await fetch("/api/auth/firebase", {
+          const fbRes = await apiFetch("/api/auth/firebase", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
